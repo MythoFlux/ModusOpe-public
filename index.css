@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .btn-glossy {
+    @apply text-white font-semibold py-2 px-4 rounded-lg shadow-md border border-gray-500;
+    background-image: linear-gradient(to bottom, #6b7280, #1f2937);
+  }
+  .btn-glossy:hover {
+    background-image: linear-gradient(to bottom, #a1a1aa, #4b5563);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+  }
+  
+  /* LUOKKA TEKSTIN VALINNAN ESTOON */
+  .noselect {
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10+ and Edge */
+    user-select: none; /* Standard */
+  }
+}
