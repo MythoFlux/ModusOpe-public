@@ -1,13 +1,15 @@
+// src/components/Modals/ScheduleTemplateModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Clock, Type, FileText, Palette, Trash2 } from 'lucide-react';
+import { nanoid } from 'nanoid'; // <-- LISÄTTY IMPORTTI
 import { useApp } from '../../contexts/AppContext';
 import { ScheduleTemplate } from '../../types';
-import { useConfirmation } from '../../hooks/useConfirmation'; // UUSI
+import { useConfirmation } from '../../hooks/useConfirmation';
 
 export default function ScheduleTemplateModal() {
   const { state, dispatch } = useApp();
   const { showScheduleTemplateModal, selectedScheduleTemplate } = state;
-  const { getConfirmation } = useConfirmation(); // UUSI
+  const { getConfirmation } = useConfirmation();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -67,7 +69,7 @@ export default function ScheduleTemplateModal() {
     e.preventDefault();
     
     const templateData: ScheduleTemplate = {
-      id: selectedScheduleTemplate?.id || Date.now().toString(),
+      id: selectedScheduleTemplate?.id || nanoid(), // <-- KORJATTU KOHTA
       name: formData.name,
       description: formData.description,
       dayOfWeek: formData.dayOfWeek,
@@ -85,7 +87,6 @@ export default function ScheduleTemplateModal() {
     dispatch({ type: 'CLOSE_MODALS' });
   };
 
-  // UUSI: handleDelete käyttää nyt omaa modaalia
   const handleDelete = async () => {
     if (selectedScheduleTemplate) {
         const confirmed = await getConfirmation({
@@ -101,7 +102,6 @@ export default function ScheduleTemplateModal() {
 
   if (!showScheduleTemplateModal) return null;
 
-  // ...komponentin loppuosa pysyy samana...
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
