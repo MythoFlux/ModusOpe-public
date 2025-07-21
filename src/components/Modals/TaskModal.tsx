@@ -1,9 +1,9 @@
 // src/components/Modals/TaskModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Type, FileText, Calendar, AlertCircle, Bookmark, Plus, Trash2, File } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid'; // <-- MUUTETTU: nanoid -> uuid
 import { useApp } from '../../contexts/AppContext';
 import { Task, Subtask, FileAttachment } from '../../types';
-import { nanoid } from 'nanoid'; // <-- LISÄTTY IMPORTTI
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import AttachmentSection from '../Shared/AttachmentSection';
 import FormInput from '../Forms/FormInput';
@@ -64,7 +64,7 @@ export default function TaskModal() {
   const handleAddSubtask = () => {
     if (newSubtaskTitle.trim() === '') return;
     const newSubtask: Subtask = {
-      id: nanoid(),
+      id: uuidv4(), // <-- KORJATTU
       title: newSubtaskTitle,
       completed: false,
     };
@@ -86,7 +86,7 @@ export default function TaskModal() {
     e.preventDefault();
 
     const taskData: Task = {
-      id: selectedTask?.id || nanoid(), // <-- KORJATTU KOHTA
+      id: selectedTask?.id || uuidv4(), // <-- KORJATTU
       title: formData.title,
       description: formData.description,
       completed: (selectedTask && selectedTask.id && selectedTask.completed) || false,
