@@ -1,6 +1,7 @@
 // src/components/Modals/ProjectModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, BookOpen, FileText, Calendar, Plus, Trash2, File } from 'lucide-react';
+import { nanoid } from 'nanoid'; // <-- LISÄTTY IMPORTTI
 import { useApp } from '../../contexts/AppContext';
 import { Project, Task, FileAttachment } from '../../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
@@ -73,7 +74,8 @@ export default function ProjectModal() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const projectId = selectedProject?.id || Date.now().toString();
+    // KORJATTU KOHTA: Käytetään nanoid-funktiota UUID:n sijaan
+    const projectId = selectedProject?.id || nanoid();
     
     const projectData: Project = {
       id: projectId,
@@ -100,7 +102,7 @@ export default function ProjectModal() {
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
     const taskData: Task = {
-      id: Date.now().toString(),
+      id: nanoid(), // <-- KORJATTU MYÖS TÄÄLLÄ
       title: newTask.title,
       description: newTask.description,
       completed: false,
