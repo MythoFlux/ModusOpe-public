@@ -1,7 +1,7 @@
 // src/components/Modals/EventModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, Type, FileText, Palette, Users, CalendarRange, File } from 'lucide-react';
-import { nanoid } from 'nanoid'; // <-- LISÄTTY IMPORTTI
+import { v4 as uuidv4 } from 'uuid'; // <-- MUUTETTU: nanoid -> uuid
 import { useApp } from '../../contexts/AppContext';
 import { Event, FileAttachment } from '../../types';
 import AttachmentSection from '../Shared/AttachmentSection';
@@ -99,7 +99,7 @@ export default function EventModal() {
     }
 
     const eventData: Event = {
-      id: selectedEvent?.id || nanoid(), // <-- KORJATTU KOHTA
+      id: selectedEvent?.id || uuidv4(), // <-- KORJATTU
       title: formData.title,
       description: formData.description,
       date: eventDate,
