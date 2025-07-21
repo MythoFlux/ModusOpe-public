@@ -1,7 +1,7 @@
 // src/components/Modals/RecurringClassModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Type, FileText, Clock, File } from 'lucide-react';
-import { nanoid } from 'nanoid'; // <-- LISÄTTY IMPORTTI
+import { v4 as uuidv4 } from 'uuid'; // <-- MUUTETTU: nanoid -> uuid
 import { useApp } from '../../contexts/AppContext';
 import { RecurringClass, FileAttachment } from '../../types';
 import AttachmentSection from '../Shared/AttachmentSection';
@@ -74,7 +74,7 @@ export default function RecurringClassModal() {
 
     selectedTemplates.forEach((template, index) => {
       const classData: RecurringClass = {
-        id: selectedRecurringClass?.id || nanoid(), // <-- KORJATTU KOHTA
+        id: selectedRecurringClass?.id || uuidv4(), // <-- KORJATTU
         title: formData.title,
         description: formData.description,
         scheduleTemplateId: template.id,
