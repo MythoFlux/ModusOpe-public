@@ -1,7 +1,7 @@
 // src/components/Modals/ScheduleTemplateModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Clock, Type, FileText, Palette, Trash2 } from 'lucide-react';
-import { nanoid } from 'nanoid'; // <-- LISÄTTY IMPORTTI
+import { v4 as uuidv4 } from 'uuid'; // <-- MUUTETTU: nanoid -> uuid
 import { useApp } from '../../contexts/AppContext';
 import { ScheduleTemplate } from '../../types';
 import { useConfirmation } from '../../hooks/useConfirmation';
@@ -69,7 +69,7 @@ export default function ScheduleTemplateModal() {
     e.preventDefault();
     
     const templateData: ScheduleTemplate = {
-      id: selectedScheduleTemplate?.id || nanoid(), // <-- KORJATTU KOHTA
+      id: selectedScheduleTemplate?.id || uuidv4(), // <-- KORJATTU
       name: formData.name,
       description: formData.description,
       dayOfWeek: formData.dayOfWeek,
