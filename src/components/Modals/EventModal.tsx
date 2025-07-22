@@ -196,7 +196,7 @@ export default function EventModal() {
         </div>
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'details' ? (
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form id="event-details-form" onSubmit={handleSubmit} className="p-6 space-y-4">
               <FormInput
                 id="event-title"
                 label="Otsikko"
