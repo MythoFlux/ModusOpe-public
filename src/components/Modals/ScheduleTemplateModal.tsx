@@ -1,14 +1,15 @@
 // src/components/Modals/ScheduleTemplateModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Clock, Type, FileText, Palette, Trash2 } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid'; // <-- MUUTETTU: nanoid -> uuid
+import { v4 as uuidv4 } from 'uuid';
 import { useApp } from '../../contexts/AppContext';
 import { ScheduleTemplate } from '../../types';
 import { useConfirmation } from '../../hooks/useConfirmation';
 
 export default function ScheduleTemplateModal() {
+  // --- LISÄTTY: session-tieto haetaan kontekstista ---
   const { state, dispatch } = useApp();
-  const { showScheduleTemplateModal, selectedScheduleTemplate } = state;
+  const { showScheduleTemplateModal, selectedScheduleTemplate, session } = state;
   const { getConfirmation } = useConfirmation();
 
   const [formData, setFormData] = useState({
@@ -68,8 +69,14 @@ export default function ScheduleTemplateModal() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const templateData: ScheduleTemplate = {
-      id: selectedScheduleTemplate?.id || uuidv4(), // <-- KORJATTU
+    // --- LISÄTTY: Varmistus, että käyttäjä on kirjautunut ---
+    if (!session?.user && !selectedScheduleTemplate) {
+        alert("Sinun täytyy olla kirjautunut luodaksesi tuntiryhmän.");
+        return;
+    }
+
+    const templateData: any = { // <-- MUUTETTU: any, jotta user_id voidaan lisätä
+      id: selectedScheduleTemplate?.id || uuidv4(),
       name: formData.name,
       description: formData.description,
       dayOfWeek: formData.dayOfWeek,
@@ -77,6 +84,11 @@ export default function ScheduleTemplateModal() {
       endTime: formData.endTime,
       color: formData.color
     };
+
+    // --- LISÄTTY: Käyttäjän ID:n lisääminen, jos luodaan uusi ---
+    if (!selectedScheduleTemplate) {
+        templateData.user_id = session.user.id;
+    }
 
     if (selectedScheduleTemplate) {
       dispatch({ type: 'UPDATE_SCHEDULE_TEMPLATE', payload: templateData });
