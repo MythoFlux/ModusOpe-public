@@ -1,5 +1,5 @@
 // src/reducers/projectReducer.ts
-import { nanoid } from 'nanoid';
+import { v4 as uuidv4 } from 'uuid'; // MUUTOS: nanoid -> uuid
 import { AppAction, AppState, GENERAL_TASKS_PROJECT_ID } from '../contexts/AppContext';
 import { KanbanColumn } from '../types';
 import { createProjectWithTemplates } from '../utils/projectUtils';
@@ -12,10 +12,10 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
     case 'ADD_PROJECT': {
       // KORJAUS: Varmistetaan, että projektilla on aina ID.
       // Jos action.payload ei sisällä ID:tä (kuten uutta kurssia luodessa),
-      // luodaan se tässä nanoid-kirjastolla.
+      // luodaan se tässä uuid-kirjastolla.
       const projectWithId = {
         ...action.payload,
-        id: action.payload.id || nanoid(),
+        id: action.payload.id || uuidv4(), // MUUTOS: nanoid() -> uuidv4()
       };
 
       const addProjectAsync = async () => {
