@@ -1,3 +1,4 @@
+// src/components/Forms/ColorSelector.tsx
 import React from 'react';
 import { COLOR_OPTIONS } from '../../constants/colors';
 
@@ -10,9 +11,10 @@ interface ColorSelectorProps {
 export default function ColorSelector({ label, selectedColor, onChange }: ColorSelectorProps) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      {/* KORJAUS: Muutettu <label> -> <div>, koska tämä ei ole yhdistetty yksittäiseen input-kenttään */}
+      <div className="block text-sm font-medium text-gray-700 mb-2">
         {label}
-      </label>
+      </div>
       <div className="grid grid-cols-6 sm:grid-cols-12 gap-2">
         {COLOR_OPTIONS.map((color) => (
           <button
