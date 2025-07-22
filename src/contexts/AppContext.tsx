@@ -7,10 +7,10 @@ import { supabase } from '../supabaseClient';
 import { projectReducerLogic } from '../reducers/projectReducer';
 import { eventReducerLogic } from '../reducers/eventReducer';
 import { uiReducerLogic } from '../reducers/uiReducer';
-import { updateDeadlineEvents } from '../utils/eventUtils';
+import { updateDeadlineEvents, generateRecurringEvents } from '../utils/eventUtils'; // Lisätty generateRecurringEvents
 
-// getInitialEvents ja generalTasksProject pysyvät samoina...
-function getInitialEvents(projects: Project[]): Event[] {
+// Funktio pysyy samana...
+function getInitialEvents(projects: Project[], recurringClasses: RecurringClass[], templates: ScheduleTemplate[]): Event[] {
   const projectDeadlines = projects
     .filter(project => project.end_date && project.type !== 'course')
     .map(project => ({
@@ -32,9 +32,16 @@ function getInitialEvents(projects: Project[]): Event[] {
         color: '#F59E0B',
         projectId: task.projectId,
     }));
+    
+  // Generoidaan tapahtumat toistuvista tunneista
+  const recurringEvents = recurringClasses.flatMap(rc => {
+      const template = templates.find(t => t.id === rc.scheduleTemplateId);
+      return template ? generateRecurringEvents(rc, template) : [];
+  });
 
-  return [...projectDeadlines, ...taskDeadlines];
+  return [...projectDeadlines, ...taskDeadlines, ...recurringEvents];
 }
+
 
 export const GENERAL_TASKS_PROJECT_ID = 'general_tasks_project';
 
@@ -92,7 +99,7 @@ export interface AppState {
 
 export type AppAction =
   | { type: 'SET_SESSION'; payload: Session | null }
-  | { type: 'INITIALIZE_DATA'; payload: { projects: Project[] } }
+  | { type: 'INITIALIZE_DATA'; payload: { projects: Project[]; scheduleTemplates: ScheduleTemplate[]; recurringClasses: RecurringClass[] } }
   | { type: 'ADD_EVENT'; payload: Event }
   | { type: 'UPDATE_EVENT'; payload: Event }
   | { type: 'DELETE_EVENT'; payload: string }
@@ -164,25 +171,26 @@ const initialState: AppState = {
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'SET_SESSION':
-      // Estetään turha uudelleenlataus, jos sessio on sama
       if (state.session === action.payload) return state;
       return { ...state, session: action.payload };
     case 'INITIALIZE_DATA':
-      const initialProjectsWithGeneral = [generalTasksProject, ...action.payload.projects];
+      const { projects, scheduleTemplates, recurringClasses } = action.payload;
+      const initialProjectsWithGeneral = [generalTasksProject, ...projects];
       return {
         ...state,
         projects: initialProjectsWithGeneral,
-        events: getInitialEvents(initialProjectsWithGeneral),
+        scheduleTemplates,
+        recurringClasses,
+        events: getInitialEvents(initialProjectsWithGeneral, recurringClasses, scheduleTemplates),
         loading: false,
       };
     default:
-      // Yhdistetään muiden reducereeiden logiikka
       const stateAfterUi = uiReducerLogic(state, action);
       const stateAfterEvent = eventReducerLogic(stateAfterUi, action);
       const stateAfterProject = projectReducerLogic(stateAfterEvent, action);
       let finalState = stateAfterProject;
 
-      if (finalState.projects !== state.projects || finalState.events !== state.events) {
+      if (finalState.projects !== state.projects || finalState.events !== state.events || finalState.recurringClasses !== state.recurringClasses) {
           finalState = {
               ...finalState,
               events: updateDeadlineEvents(finalState.projects, finalState.events)
@@ -197,61 +205,68 @@ const AppContext = createContext<{ state: AppState; dispatch: React.Dispatch<App
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // KOUKKU 1: Session tilan hallinta. Ajetaan vain kerran.
   useEffect(() => {
-    // 1. Haetaan olemassaoleva sessio käynnistyksessä
     supabase.auth.getSession().then(({ data: { session } }) => {
       dispatch({ type: 'SET_SESSION', payload: session });
     });
 
-    // 2. Asetetaan kuuntelija, joka reagoi sisään- ja uloskirjautumisiin
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       dispatch({ type: 'SET_SESSION', payload: session });
     });
 
-    // 3. Siivotaan kuuntelija, kun komponentti poistuu
     return () => subscription.unsubscribe();
-  }, []); // <-- Tyhjä riippuvuustaulukko varmistaa, että tämä ajetaan vain kerran
+  }, []);
 
-  // KOUKKU 2: Datan haku session perusteella.
   useEffect(() => {
-    // Funktio datan hakemiseksi
     const fetchInitialData = async () => {
-        const { data: projects, error } = await supabase
-            .from('projects')
-            .select('*');
+      if (!state.session) return;
+      
+      const [projectsRes, templatesRes, recurringRes] = await Promise.all([
+          supabase.from('projects').select('*'),
+          supabase.from('schedule_templates').select('*'),
+          supabase.from('recurring_classes').select('*')
+      ]);
 
-        if (error) {
-            console.error('Error fetching projects:', error);
-            // Varmistetaan, ettei lataustila jää jumiin virhetilanteessa
-            dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [] } });
-        } else if (projects) {
-            // --- TÄMÄ OSIO ON KORJATTU ---
-            const formattedProjects = projects.map((p: any) => ({
-                ...p,
-                // Muunnetaan merkkijonot Date-olioiksi oikeilla kentänimillä
-                start_date: new Date(p.start_date),
-                end_date: p.end_date ? new Date(p.end_date) : undefined,
-                parent_course_id: p.parent_course_id,
-                tasks: [],
-                columns: [
-                    { id: 'todo', title: 'Suunnitteilla' },
-                    { id: 'inProgress', title: 'Työn alla' },
-                    { id: 'done', title: 'Valmis' },
-                ]
-            }));
-            dispatch({ type: 'INITIALIZE_DATA', payload: { projects: formattedProjects } });
-        }
+      if (projectsRes.error || templatesRes.error || recurringRes.error) {
+        console.error('Error fetching data:', projectsRes.error || templatesRes.error || recurringRes.error);
+        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [] } });
+        return;
+      }
+      
+      const formattedProjects = (projectsRes.data || []).map((p: any) => ({
+        ...p,
+        start_date: new Date(p.start_date),
+        end_date: p.end_date ? new Date(p.end_date) : undefined,
+        tasks: [],
+        columns: [
+          { id: 'todo', title: 'Suunnitteilla' },
+          { id: 'inProgress', title: 'Työn alla' },
+          { id: 'done', title: 'Valmis' },
+        ]
+      }));
+
+      const formattedRecurring = (recurringRes.data || []).map((rc: any) => ({
+        ...rc,
+        startDate: new Date(rc.startDate),
+        endDate: new Date(rc.endDate),
+      }));
+
+      dispatch({ 
+        type: 'INITIALIZE_DATA', 
+        payload: { 
+          projects: formattedProjects, 
+          scheduleTemplates: templatesRes.data || [], 
+          recurringClasses: formattedRecurring
+        } 
+      });
     };
 
-    // Haetaan data vain jos käyttäjä on kirjautunut sisään (sessio on olemassa)
     if (state.session) {
       fetchInitialData();
     } else {
-      // Jos käyttäjä kirjautuu ulos (sessio on null), tyhjennetään data ja lopetetaan lataus
-      dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [] }});
+      dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [] }});
     }
-  }, [state.session]); // <-- Tämä koukku ajetaan aina, kun sessio muuttuu
+  }, [state.session]);
 
   return (<AppContext.Provider value={{ state, dispatch }}>{children}</AppContext.Provider>);
 }
