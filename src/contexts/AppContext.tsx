@@ -1,3 +1,4 @@
+// src/contexts/AppContext.tsx
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Event, Project, Task, CalendarView, ScheduleTemplate, RecurringClass, KanbanColumn, Subtask } from '../types';
@@ -11,11 +12,11 @@ import { updateDeadlineEvents } from '../utils/eventUtils';
 // getInitialEvents ja generalTasksProject pysyvät samoina...
 function getInitialEvents(projects: Project[]): Event[] {
   const projectDeadlines = projects
-    .filter(project => project.endDate && project.type !== 'course')
+    .filter(project => project.end_date && project.type !== 'course')
     .map(project => ({
       id: `project-deadline-${project.id}`,
       title: `DL: ${project.name}`,
-      date: new Date(project.endDate!),
+      date: new Date(project.end_date!),
       type: 'deadline',
       color: '#EF4444',
       projectId: project.id,
@@ -43,7 +44,7 @@ const generalTasksProject: Project = {
   description: 'Tänne kerätään kaikki tehtävät, joita ei ole liitetty mihinkään tiettyyn projektiin.',
   type: 'none',
   color: '#6B7280',
-  startDate: new Date(),
+  start_date: new Date(),
   tasks: [],
   columns: [
     { id: 'todo', title: 'Suunnitteilla' },
@@ -225,11 +226,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             // Varmistetaan, ettei lataustila jää jumiin virhetilanteessa
             dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [] } });
         } else if (projects) {
-            const formattedProjects = projects.map(p => ({
+            // --- TÄMÄ OSIO ON KORJATTU ---
+            const formattedProjects = projects.map((p: any) => ({
                 ...p,
-                startDate: new Date(p.startDate),
-                endDate: p.endDate ? new Date(p.endDate) : undefined,
-                parentCourseId: p.parentCourseId,
+                // Muunnetaan merkkijonot Date-olioiksi oikeilla kentänimillä
+                start_date: new Date(p.start_date),
+                end_date: p.end_date ? new Date(p.end_date) : undefined,
+                parent_course_id: p.parent_course_id,
                 tasks: [],
                 columns: [
                     { id: 'todo', title: 'Suunnitteilla' },
