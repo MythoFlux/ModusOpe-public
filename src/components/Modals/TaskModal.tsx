@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Type, FileText, Calendar, AlertCircle, Bookmark, Plus, Trash2, File } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useApp } from '../../contexts/AppContext';
+import { useConfirmation } from '../../hooks/useConfirmation'; // <-- LISÄTTY
 import { Task, Subtask, FileAttachment } from '../../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import AttachmentSection from '../Shared/AttachmentSection';
@@ -13,6 +14,7 @@ import FormSelect from '../Forms/FormSelect';
 export default function TaskModal() {
   const { state, dispatch } = useApp();
   const { showTaskModal, selectedTask, projects, session } = state;
+  const { getConfirmation } = useConfirmation(); // <-- LISÄTTY
 
   const [activeTab, setActiveTab] = useState<'details' | 'files'>('details');
   const [formData, setFormData] = useState({
@@ -117,10 +119,17 @@ export default function TaskModal() {
     dispatch({ type: 'CLOSE_MODALS' });
   };
   
-  const handleDelete = () => {
+  // --- KOKO FUNKTIO MUOKATTU ASYNKRONISEKSI JA KÄYTTÄMÄÄN VAHVISTUSTA ---
+  const handleDelete = async () => {
     if (selectedTask) {
-      dispatch({ type: 'DELETE_TASK', payload: { projectId: selectedTask.projectId, taskId: selectedTask.id } });
-      dispatch({ type: 'CLOSE_MODALS' });
+      const confirmed = await getConfirmation({
+        title: 'Vahvista poisto',
+        message: `Haluatko varmasti poistaa tehtävän "${selectedTask.title}"? Toimintoa ei voi perua.`
+      });
+      if (confirmed) {
+        dispatch({ type: 'DELETE_TASK', payload: { projectId: selectedTask.projectId, taskId: selectedTask.id } });
+        dispatch({ type: 'CLOSE_MODALS' });
+      }
     }
   };
 
