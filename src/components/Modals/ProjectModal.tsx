@@ -1,16 +1,21 @@
 // src/components/Modals/ProjectModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, BookOpen, FileText, Calendar, Plus, Trash2, File } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid'; // <-- MUUTETTU: nanoid -> uuid
+import { v4 as uuidv4 } from 'uuid';
 import { useApp } from '../../contexts/AppContext';
 import { Project, Task, FileAttachment } from '../../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { useConfirmation } from '../../hooks/useConfirmation';
 import AttachmentSection from '../Shared/AttachmentSection';
+import FormInput from '../Forms/FormInput';
+import FormTextarea from '../Forms/FormTextarea';
+import FormSelect from '../Forms/FormSelect';
+import ColorSelector from '../Forms/ColorSelector';
 
 export default function ProjectModal() {
+  // --- LISÄTTY: session-tieto haetaan kontekstista ---
   const { state, dispatch } = useApp();
-  const { showProjectModal, selectedProjectId, projects } = state;
+  const { showProjectModal, selectedProjectId, projects, session } = state;
   const { getConfirmation } = useConfirmation();
 
   const selectedProject = selectedProjectId
@@ -74,10 +79,17 @@ export default function ProjectModal() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // KORJATTU KOHTA: Käytetään uuidv4-funktiota
+
+    // --- LISÄTTY: Varmistus, että käyttäjä on kirjautunut ---
+    if (!session?.user && !selectedProject) {
+      alert("Sinun täytyy olla kirjautunut luodaksesi projektin.");
+      return;
+    }
+    
     const projectId = selectedProject?.id || uuidv4();
     
-    const projectData: Project = {
+    // --- MUUTETTU: 'any' tyyppi sallii user_id:n lisäämisen väliaikaisesti ---
+    const projectData: any = {
       id: projectId,
       name: formData.name,
       description: formData.description,
@@ -91,6 +103,11 @@ export default function ProjectModal() {
       columns: selectedProject?.columns || []
     };
 
+    // --- LISÄTTY: Käyttäjän ID:n lisääminen, jos luodaan uusi projekti ---
+    if (!selectedProject) {
+        projectData.user_id = session.user.id;
+    }
+
     if (selectedProject) {
       dispatch({ type: 'UPDATE_PROJECT', payload: projectData });
     } else {
@@ -102,7 +119,7 @@ export default function ProjectModal() {
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
     const taskData: Task = {
-      id: uuidv4(), // <-- KORJATTU MYÖS TÄÄLLÄ
+      id: uuidv4(),
       title: newTask.title,
       description: newTask.description,
       completed: false,
@@ -138,8 +155,6 @@ export default function ProjectModal() {
   };
   
   if (!showProjectModal) return null;
-
-  const colorOptions = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#6B7280'];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -185,30 +200,23 @@ export default function ProjectModal() {
               {activeTab === 'details' ? (
                   <div>
                       <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                           <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <BookOpen className="w-4 h-4 inline mr-2" />
-                    Projektin nimi
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Projektin nimi"
-                  />
-                </div>
+                           <FormInput
+                              id="project-name"
+                              label="Projektin nimi"
+                              icon={<BookOpen className="w-4 h-4 inline mr-2" />}
+                              type="text"
+                              required
+                              value={formData.name}
+                              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                              placeholder="Projektin nimi"
+                           />
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <BookOpen className="w-4 h-4 inline mr-2" />
-                    Liitä kurssiin (valinnainen)
-                  </label>
-                  <select
+                <FormSelect
+                    id="project-course"
+                    label="Liitä kurssiin (valinnainen)"
+                    icon={<BookOpen className="w-4 h-4 inline mr-2" />}
                     value={formData.parentCourseId}
                     onChange={(e) => setFormData({ ...formData, parentCourseId: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">Ei liitetty kurssiin</option>
                     {courses.map(course => (
@@ -216,84 +224,51 @@ export default function ProjectModal() {
                         {course.name}
                       </option>
                     ))}
-                  </select>
-                </div>
+                  </FormSelect>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <FileText className="w-4 h-4 inline mr-2" />
-                    Muistiinpanot
-                  </label>
-                  <textarea
+                <FormTextarea
+                    id="project-description"
+                    label="Muistiinpanot"
+                    icon={<FileText className="w-4 h-4 inline mr-2" />}
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     rows={10}
                     placeholder="Kirjoita kuvaus tai lisää muistiinpanoja"
+                />
+                <div className="grid grid-cols-2 gap-4">
+                <FormSelect
+                  id="project-type"
+                  label="Tyyppi"
+                  value={formData.type}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as Project['type'] })}
+                >
+                  <option value="administrative">Hallinnollinen</option>
+                  <option value="personal">Henkilökohtainen</option>
+                </FormSelect>
+
+                <ColorSelector
+                  label="Väri"
+                  selectedColor={formData.color}
+                  onChange={(color) => setFormData({ ...formData, color })}
+                />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormInput
+                    id="start-date"
+                    label="Alkupäivä"
+                    icon={<Calendar className="w-4 h-4 inline mr-2" />}
+                    type="date"
+                    required
+                    value={formData.startDate}
+                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Tyyppi
-                    </label>
-                    <select
-                      value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value as Project['type'] })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="course">Kurssi</option>
-                      <option value="research">Tutkimus</option>
-                      <option value="administrative">Hallinnollinen</option>
-                      <option value="personal">Henkilökohtainen</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Väri
-                    </label>
-                    <div className="flex space-x-2">
-                      {colorOptions.map(color => (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => setFormData({ ...formData, color })}
-                          className={`w-8 h-8 rounded-full border-2 transition-all ${
-                            formData.color === color ? 'border-gray-400 scale-110' : 'border-gray-200'
-                          }`}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <Calendar className="w-4 h-4 inline mr-2" />
-                      Alkupäivä
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.startDate}
-                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Loppupäivä (valinnainen)
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.endDate}
-                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
+                  <FormInput
+                    id="end-date"
+                    label="Loppupäivä (valinnainen)"
+                    type="date"
+                    value={formData.endDate}
+                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                  />
                 </div>
                           <div className="flex justify-between pt-4">
                               {selectedProject && selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
