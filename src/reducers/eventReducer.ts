@@ -1,16 +1,83 @@
+// src/reducers/eventReducer.ts
 import { AppAction, AppState } from '../contexts/AppContext';
 import { generateRecurringEvents } from '../utils/eventUtils';
 import { supabase } from '../supabaseClient';
+import { createProjectWithTemplates } from '../utils/projectUtils';
 
 export function eventReducerLogic(state: AppState, action: AppAction): AppState {
   switch (action.type) {
+    case 'ADD_PROJECT': {
+      const projectPayload = action.payload;
+
+      if (projectPayload.type !== 'course' || !projectPayload.templateGroupName) {
+        return state;
+      }
+
+      const newProject = state.projects[state.projects.length - 1];
+      if (!newProject) return state;
+
+      const { newRecurringClasses } = createProjectWithTemplates(
+        { ...projectPayload, id: newProject.id },
+        state.scheduleTemplates
+      );
+
+      const newEvents = newRecurringClasses.flatMap(rc => {
+        const template = state.scheduleTemplates.find(t => t.id === rc.scheduleTemplateId);
+        return template ? generateRecurringEvents(rc, template) : [];
+      });
+
+      // Lisätään uudet toistuvat tunnit tietokantaan
+      const addRecurringClassesAsync = async () => {
+        const classesWithUserId = newRecurringClasses.map(rc => ({
+          ...rc,
+          user_id: state.session?.user.id
+        }));
+        const { error } = await supabase.from('recurring_classes').insert(classesWithUserId);
+        if (error) console.error("Error adding recurring classes:", error);
+      };
+      if (newRecurringClasses.length > 0) {
+        addRecurringClassesAsync();
+      }
+
+      return {
+        ...state,
+        recurringClasses: [...state.recurringClasses, ...newRecurringClasses],
+        events: [...state.events, ...newEvents]
+      };
+    }
+
+    case 'DELETE_PROJECT': {
+      const projectId = action.payload;
+      const projectToDelete = state.projects.find(p => p.id === projectId);
+
+      if (projectToDelete && projectToDelete.type === 'course') {
+        // Poistetaan kurssiin liittyvät toistuvat tunnit myös tietokannasta
+        const deleteRecurringClassesAsync = async () => {
+            const { error } = await supabase
+                .from('recurring_classes')
+                .delete()
+                .match({ project_id: projectId });
+            if (error) console.error("Error deleting recurring classes:", error);
+        };
+        deleteRecurringClassesAsync();
+
+        return {
+          ...state,
+          recurringClasses: state.recurringClasses.filter(rc => rc.projectId !== projectId),
+          events: state.events.filter(event => event.projectId !== projectId)
+        }
+      }
+
+      return {
+          ...state,
+          events: state.events.filter(event => event.projectId !== projectId)
+      };
+    }
+
     case 'ADD_EVENT':
-      // Tähän voisi lisätä tietokantakutsun, jos yksittäiset tapahtumat halutaan tallentaa.
-      // Toistaiseksi ne generoidaan lennosta, mikä on OK.
       return { ...state, events: [...state.events, action.payload] };
     
     case 'UPDATE_EVENT':
-      // Kuten yllä, tämä muokkaa vain paikallista tilaa.
       return { ...state, events: state.events.map(event => event.id === action.payload.id ? action.payload : event) };
     
     case 'DELETE_EVENT':
@@ -93,7 +160,7 @@ export function eventReducerLogic(state: AppState, action: AppAction): AppState 
       );
 
       const eventsWithoutOldRecurring = state.events.filter(
-        event => !(event.scheduleTemplateId && event.id.startsWith(`recurring-${updatedClass.id}-`))
+        event => !(event.scheduleTemplateId && event.id.startsWith(`recurring-${updatedClass.groupName}-${updatedClass.scheduleTemplateId}`))
       );
       const newEvents = generateRecurringEvents(updatedClass, template);
       
@@ -106,6 +173,7 @@ export function eventReducerLogic(state: AppState, action: AppAction): AppState 
 
     case 'DELETE_RECURRING_CLASS': {
       const classId = action.payload;
+      const classToDelete = state.recurringClasses.find(rc => rc.id === classId);
 
       const deleteClassAsync = async () => {
           const { error } = await supabase.from('recurring_classes').delete().match({ id: classId });
@@ -113,10 +181,12 @@ export function eventReducerLogic(state: AppState, action: AppAction): AppState 
       };
       deleteClassAsync();
 
+      if (!classToDelete) return state;
+
       return { 
         ...state, 
         recurringClasses: state.recurringClasses.filter(rc => rc.id !== classId), 
-        events: state.events.filter(event => !event.id.startsWith(`recurring-${classId}-`)) 
+        events: state.events.filter(event => !(event.groupName === classToDelete.groupName && event.scheduleTemplateId === classToDelete.scheduleTemplateId))
       };
     }
 
