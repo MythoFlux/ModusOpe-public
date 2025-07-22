@@ -1,56 +1,101 @@
 import { AppAction, AppState } from '../contexts/AppContext';
 import { generateRecurringEvents } from '../utils/eventUtils';
+import { supabase } from '../supabaseClient';
 
 export function eventReducerLogic(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'ADD_EVENT':
+      // Tähän voisi lisätä tietokantakutsun, jos yksittäiset tapahtumat halutaan tallentaa.
+      // Toistaiseksi ne generoidaan lennosta, mikä on OK.
       return { ...state, events: [...state.events, action.payload] };
     
     case 'UPDATE_EVENT':
+      // Kuten yllä, tämä muokkaa vain paikallista tilaa.
       return { ...state, events: state.events.map(event => event.id === action.payload.id ? action.payload : event) };
     
     case 'DELETE_EVENT':
       return { ...state, events: state.events.filter(event => event.id !== action.payload) };
 
-    case 'ADD_SCHEDULE_TEMPLATE':
+    case 'ADD_SCHEDULE_TEMPLATE': {
+      const newTemplate = { ...action.payload, user_id: state.session?.user.id };
+
+      const addTemplateAsync = async () => {
+        const { error } = await supabase.from('schedule_templates').insert([newTemplate]);
+        if (error) console.error("Error adding schedule template:", error);
+      };
+      addTemplateAsync();
+
       return { ...state, scheduleTemplates: [...state.scheduleTemplates, action.payload] };
+    }
 
     case 'UPDATE_SCHEDULE_TEMPLATE': {
+      const updatedTemplate = action.payload;
+
+      const updateTemplateAsync = async () => {
+        const { error } = await supabase.from('schedule_templates').update(updatedTemplate).match({ id: updatedTemplate.id });
+        if (error) console.error("Error updating schedule template:", error);
+      };
+      updateTemplateAsync();
+
       const newTemplates = state.scheduleTemplates.map(template =>
-        template.id === action.payload.id ? action.payload : template
+        template.id === updatedTemplate.id ? updatedTemplate : template
       );
-      // Huom: Tämä ei vielä päivitä olemassa olevia tapahtumia. Se vaatisi laajempaa logiikkaa.
+      
       return { ...state, scheduleTemplates: newTemplates };
     }
 
     case 'DELETE_SCHEDULE_TEMPLATE': {
+      const templateId = action.payload;
+
+      const deleteTemplateAsync = async () => {
+        const { error } = await supabase.from('schedule_templates').delete().match({ id: templateId });
+        if (error) console.error("Error deleting schedule template:", error);
+      };
+      deleteTemplateAsync();
+      
       return {
         ...state,
-        scheduleTemplates: state.scheduleTemplates.filter(template => template.id !== action.payload),
-        recurringClasses: state.recurringClasses.filter(rc => rc.scheduleTemplateId !== action.payload),
-        events: state.events.filter(event => event.scheduleTemplateId !== action.payload)
+        scheduleTemplates: state.scheduleTemplates.filter(template => template.id !== templateId),
+        recurringClasses: state.recurringClasses.filter(rc => rc.scheduleTemplateId !== templateId),
+        events: state.events.filter(event => event.scheduleTemplateId !== templateId)
       };
     }
 
     case 'ADD_RECURRING_CLASS': {
-      const template = state.scheduleTemplates.find(t => t.id === action.payload.scheduleTemplateId);
+       const newClass = { ...action.payload, user_id: state.session?.user.id };
+
+      const addClassAsync = async () => {
+        const { error } = await supabase.from('recurring_classes').insert([newClass]);
+        if (error) console.error("Error adding recurring class:", error);
+      };
+      addClassAsync();
+
+      const template = state.scheduleTemplates.find(t => t.id === newClass.scheduleTemplateId);
       if (!template) return state;
-      const newEvents = generateRecurringEvents(action.payload, template);
-      return { ...state, recurringClasses: [...state.recurringClasses, action.payload], events: [...state.events, ...newEvents] };
+      const newEvents = generateRecurringEvents(newClass, template);
+      return { ...state, recurringClasses: [...state.recurringClasses, newClass], events: [...state.events, ...newEvents] };
     }
 
     case 'UPDATE_RECURRING_CLASS': {
-      const template = state.scheduleTemplates.find(t => t.id === action.payload.scheduleTemplateId);
+      const updatedClass = action.payload;
+      
+      const updateClassAsync = async () => {
+          const { error } = await supabase.from('recurring_classes').update(updatedClass).match({ id: updatedClass.id });
+          if (error) console.error("Error updating recurring class:", error);
+      };
+      updateClassAsync();
+
+      const template = state.scheduleTemplates.find(t => t.id === updatedClass.scheduleTemplateId);
       if (!template) return state;
       
       const updatedRecurringClasses = state.recurringClasses.map(rc => 
-        rc.id === action.payload.id ? action.payload : rc
+        rc.id === updatedClass.id ? updatedClass : rc
       );
 
       const eventsWithoutOldRecurring = state.events.filter(
-        event => !(event.scheduleTemplateId && event.id.startsWith(`recurring-${action.payload.id}-`))
+        event => !(event.scheduleTemplateId && event.id.startsWith(`recurring-${updatedClass.id}-`))
       );
-      const newEvents = generateRecurringEvents(action.payload, template);
+      const newEvents = generateRecurringEvents(updatedClass, template);
       
       return { 
         ...state, 
@@ -60,10 +105,18 @@ export function eventReducerLogic(state: AppState, action: AppAction): AppState 
     }
 
     case 'DELETE_RECURRING_CLASS': {
+      const classId = action.payload;
+
+      const deleteClassAsync = async () => {
+          const { error } = await supabase.from('recurring_classes').delete().match({ id: classId });
+          if (error) console.error("Error deleting recurring class:", error);
+      };
+      deleteClassAsync();
+
       return { 
         ...state, 
-        recurringClasses: state.recurringClasses.filter(rc => rc.id !== action.payload), 
-        events: state.events.filter(event => !event.id.startsWith(`recurring-${action.payload}-`)) 
+        recurringClasses: state.recurringClasses.filter(rc => rc.id !== classId), 
+        events: state.events.filter(event => !event.id.startsWith(`recurring-${classId}-`)) 
       };
     }
 
