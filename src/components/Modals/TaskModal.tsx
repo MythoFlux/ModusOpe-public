@@ -12,7 +12,6 @@ import FormSelect from '../Forms/FormSelect';
 
 export default function TaskModal() {
   const { state, dispatch } = useApp();
-  // --- LISÄTTY: session-tieto haetaan kontekstista ---
   const { showTaskModal, selectedTask, projects, session } = state;
 
   const [activeTab, setActiveTab] = useState<'details' | 'files'>('details');
@@ -20,8 +19,8 @@ export default function TaskModal() {
     title: '',
     description: '',
     priority: 'medium' as Task['priority'],
-    dueDate: '',
-    projectId: '',
+    due_date: '',
+    project_id: '',
     subtasks: [] as Subtask[],
   });
   
@@ -34,8 +33,8 @@ export default function TaskModal() {
         title: selectedTask.title,
         description: selectedTask.description || '',
         priority: selectedTask.priority,
-        dueDate: selectedTask.dueDate ? new Date(selectedTask.dueDate).toISOString().split('T')[0] : '',
-        projectId: selectedTask.projectId,
+        due_date: selectedTask.dueDate ? new Date(selectedTask.dueDate).toISOString().split('T')[0] : '',
+        project_id: selectedTask.projectId,
         subtasks: selectedTask.subtasks || [],
       });
       setFiles(selectedTask.files || []);
@@ -44,8 +43,8 @@ export default function TaskModal() {
         title: '',
         description: '',
         priority: 'medium',
-        dueDate: '',
-        projectId: selectedTask?.projectId || '',
+        due_date: '',
+        project_id: selectedTask?.projectId || '',
         subtasks: [],
       });
       setFiles([]);
@@ -85,8 +84,7 @@ export default function TaskModal() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // --- LISÄTTY: Varmistus, että käyttäjä on kirjautunut ---
+
     if (!session?.user && !(selectedTask && selectedTask.id)) {
         alert("Sinun täytyy olla kirjautunut luodaksesi tehtävän.");
         return;
@@ -99,13 +97,12 @@ export default function TaskModal() {
       completed: (selectedTask && selectedTask.id && selectedTask.completed) || false,
       columnId: selectedTask?.columnId || 'todo',
       priority: formData.priority,
-      dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
-      projectId: formData.projectId,
+      dueDate: formData.due_date ? new Date(formData.due_date) : undefined,
+      projectId: formData.project_id,
       subtasks: formData.subtasks,
       files: files
     };
-    
-    // --- LISÄTTY: Käyttäjän ID:n lisääminen uuteen tehtävään ---
+
     if (!(selectedTask && selectedTask.id)) {
         taskData.user_id = session.user.id;
     }
@@ -178,8 +175,8 @@ export default function TaskModal() {
                 id="task-project"
                 label="Projekti (valinnainen)"
                 icon={<Bookmark className="w-4 h-4 inline mr-2" />}
-                value={formData.projectId}
-                onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                value={formData.project_id}
+                onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
               >
                 <option value="">Ei projektia (Yleiset tehtävät)</option>
                 {projects
@@ -229,8 +226,8 @@ export default function TaskModal() {
                   label="Määräpäivä"
                   icon={<Calendar className="w-4 h-4 inline mr-2" />}
                   type="date"
-                  value={formData.dueDate}
-                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  value={formData.due_date}
+                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
                 />
               </div>
               
