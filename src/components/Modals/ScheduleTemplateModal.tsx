@@ -1,133 +1,87 @@
-// src/components/Modals/RecurringClassModal.tsx
+// src/components/Modals/ScheduleTemplateModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Type, FileText, Clock, File } from 'lucide-react';
+import { X, Clock, Type, FileText } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useApp } from '../../contexts/AppContext';
-import { RecurringClass, FileAttachment } from '../../types';
-import AttachmentSection from '../Shared/AttachmentSection';
+import { ScheduleTemplate } from '../../types';
+import { DEFAULT_COLOR } from '../../constants/colors';
 import FormInput from '../Forms/FormInput';
 import FormTextarea from '../Forms/FormTextarea';
 import FormSelect from '../Forms/FormSelect';
+import ColorSelector from '../Forms/ColorSelector';
 
-export default function RecurringClassModal() {
-  // --- LISÄTTY: session-tieto haetaan kontekstista ---
+export default function ScheduleTemplateModal() {
   const { state, dispatch } = useApp();
-  const { showRecurringClassModal, selectedRecurringClass, scheduleTemplates, courseModalInfo, session } = state;
+  const { showScheduleTemplateModal, selectedScheduleTemplate, session } = state;
 
-  const [activeTab, setActiveTab] = useState<'details' | 'files'>('details');
   const [formData, setFormData] = useState({
-    title: '',
+    name: '',
     description: '',
-    templateGroupName: '',
-    startDate: '',
-    endDate: ''
+    dayOfWeek: 0,
+    startTime: '08:00',
+    endTime: '09:00',
+    color: DEFAULT_COLOR,
   });
 
-  const [files, setFiles] = useState<FileAttachment[]>([]);
-
-  const templateGroups = React.useMemo(() => {
-    const groups: { [key: string]: typeof scheduleTemplates } = {};
-    scheduleTemplates.forEach(template => {
-      if (!groups[template.name]) {
-        groups[template.name] = [];
-      }
-      groups[template.name].push(template);
-    });
-    return groups;
-  }, [scheduleTemplates]);
-
-  const templateGroupNames = React.useMemo(() => {
-    return Object.keys(templateGroups);
-  }, [templateGroups]);
-
   useEffect(() => {
-    if (selectedRecurringClass) {
-      const template = scheduleTemplates.find(t => t.id === selectedRecurringClass.scheduleTemplateId);
+    if (selectedScheduleTemplate) {
       setFormData({
-        title: selectedRecurringClass.title,
-        description: selectedRecurringClass.description || '',
-        templateGroupName: template?.name || '',
-        startDate: selectedRecurringClass.startDate.toISOString().split('T')[0],
-        endDate: selectedRecurringClass.endDate.toISOString().split('T')[0]
+        name: selectedScheduleTemplate.name,
+        description: selectedScheduleTemplate.description || '',
+        dayOfWeek: selectedScheduleTemplate.dayOfWeek,
+        startTime: selectedScheduleTemplate.startTime,
+        endTime: selectedScheduleTemplate.endTime,
+        color: selectedScheduleTemplate.color,
       });
-      setFiles(selectedRecurringClass.files || []);
     } else {
-      const today = new Date();
-      const endOfYear = new Date(today.getFullYear(), 11, 31);
-      
+      // Nollaa oletusarvoihin uutta pohjaa varten
       setFormData({
-        title: '',
+        name: '',
         description: '',
-        templateGroupName: templateGroupNames[0] || '',
-        startDate: today.toISOString().split('T')[0],
-        endDate: endOfYear.toISOString().split('T')[0]
+        dayOfWeek: 0,
+        startTime: '08:00',
+        endTime: '09:00',
+        color: DEFAULT_COLOR,
       });
-      setFiles([]);
     }
-    setActiveTab('details');
-  }, [selectedRecurringClass, scheduleTemplates, templateGroupNames]);
+  }, [selectedScheduleTemplate, showScheduleTemplateModal]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // --- LISÄTTY: Varmistus, että käyttäjä on kirjautunut ---
-    if (!session?.user && !selectedRecurringClass) {
-        alert("Sinun täytyy olla kirjautunut luodaksesi oppitunteja.");
-        return;
+    if (!session?.user && !selectedScheduleTemplate) {
+      alert("Sinun täytyy olla kirjautunut luodaksesi tuntipohjan.");
+      return;
     }
 
-    const selectedTemplates = templateGroups[formData.templateGroupName];
-    if (!selectedTemplates || selectedTemplates.length === 0) return;
+    const templateData: ScheduleTemplate = {
+      id: selectedScheduleTemplate?.id || uuidv4(),
+      name: formData.name,
+      description: formData.description,
+      dayOfWeek: Number(formData.dayOfWeek),
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      color: formData.color,
+    };
 
-    selectedTemplates.forEach((template, index) => {
-      const classData: any = { // <-- MUUTETTU: any, jotta user_id voidaan lisätä
-        id: selectedRecurringClass?.id || uuidv4(),
-        title: formData.title,
-        description: formData.description,
-        scheduleTemplateId: template.id,
-        startDate: new Date(formData.startDate),
-        endDate: new Date(formData.endDate),
-        color: template.color,
-        groupName: formData.templateGroupName,
-        projectId: courseModalInfo?.id,
-        files: files
-      };
-      
-      // --- LISÄTTY: Käyttäjän ID:n lisääminen uuteen luontiin ---
-      if (!selectedRecurringClass) {
-          classData.user_id = session.user.id;
-      }
-
-      if (selectedRecurringClass && index === 0) {
-        dispatch({ type: 'UPDATE_RECURRING_CLASS', payload: classData });
-      } else if (!selectedRecurringClass) {
-        dispatch({ type: 'ADD_RECURRING_CLASS', payload: classData });
-      }
-    });
+    if (selectedScheduleTemplate) {
+      dispatch({ type: 'UPDATE_SCHEDULE_TEMPLATE', payload: templateData });
+    } else {
+      dispatch({ type: 'ADD_SCHEDULE_TEMPLATE', payload: templateData });
+    }
 
     dispatch({ type: 'CLOSE_MODALS' });
   };
 
-  const getTemplateGroupInfo = (groupName: string) => {
-    const templates = templateGroups[groupName];
-    if (!templates || templates.length === 0) return '';
-    
-    const weekDays = ['Maanantai', 'Tiistai', 'Keskiviikko', 'Torstai', 'Perjantai'];
-    const timeSlots = templates.map(template => 
-      `${weekDays[template.dayOfWeek]} ${template.startTime}-${template.endTime}`
-    );
-    
-    return timeSlots.join(', ');
-  };
+  if (!showScheduleTemplateModal) return null;
 
-  if (!showRecurringClassModal) return null;
+  const weekDays = ['Maanantai', 'Tiistai', 'Keskiviikko', 'Torstai', 'Perjantai'];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">
-            {selectedRecurringClass ? 'Muokkaa oppituntia' : 'Lisää oppitunti'}
+            {selectedScheduleTemplate ? 'Muokkaa tuntipohjaa' : 'Luo uusi tuntipohja'}
           </h2>
           <button
             onClick={() => dispatch({ type: 'CLOSE_MODALS' })}
@@ -136,140 +90,86 @@ export default function RecurringClassModal() {
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex border-b border-gray-200 flex-shrink-0">
-          <button
-            onClick={() => setActiveTab('details')}
-            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'details'
-                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+          <FormInput
+            id="template-name"
+            label="Tuntiryhmän nimi"
+            icon={<Type className="w-4 h-4 inline mr-2" />}
+            type="text"
+            required
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            placeholder="esim. Matematiikka 9A"
+          />
+          
+          <FormTextarea
+            id="template-description"
+            label="Kuvaus (valinnainen)"
+            icon={<FileText className="w-4 h-4 inline mr-2" />}
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            rows={2}
+            placeholder="Tarkempi kuvaus tai muistiinpano"
+          />
+
+          <FormSelect
+            id="template-day"
+            label="Viikonpäivä"
+            icon={<Clock className="w-4 h-4 inline mr-2" />}
+            required
+            value={formData.dayOfWeek}
+            onChange={(e) => setFormData({ ...formData, dayOfWeek: Number(e.target.value) })}
           >
-            <Type className="w-4 h-4 inline mr-2" />
-            Perustiedot
-          </button>
-          <button
-            onClick={() => setActiveTab('files')}
-            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'files'
-                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
-          >
-            <File className="w-4 h-4 inline mr-2" />
-            Tiedostot ({files.length})
-          </button>
-        </div>
+            {weekDays.map((day, index) => (
+              <option key={index} value={index}>
+                {day}
+              </option>
+            ))}
+          </FormSelect>
 
-        <div className="flex-1 overflow-y-auto">
-          {activeTab === 'details' ? (
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <FormInput
-                id="class-title"
-                label="Oppitunnin nimi"
-                icon={<Type className="w-4 h-4 inline mr-2" />}
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="esim. Matematiikka 9A - Algebra"
-              />
-
-              <FormTextarea
-                id="class-description"
-                label="Kuvaus"
-                icon={<FileText className="w-4 h-4 inline mr-2" />}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={2}
-                placeholder="Oppitunnin kuvaus"
-              />
-
-              <div>
-                <FormSelect
-                  id="class-template-group"
-                  label="Tuntiryhmä"
-                  icon={<Clock className="w-4 h-4 inline mr-2" />}
-                  required
-                  value={formData.templateGroupName}
-                  onChange={(e) => setFormData({ ...formData, templateGroupName: e.target.value })}
-                >
-                  <option value="">Valitse tuntiryhmä</option>
-                  {templateGroupNames.map(groupName => (
-                    <option key={groupName} value={groupName}>
-                      {groupName} ({templateGroups[groupName].length} aikaa)
-                    </option>
-                  ))}
-                </FormSelect>
-                {formData.templateGroupName && (
-                  <div className="mt-2 p-2 bg-blue-50 rounded text-sm text-blue-800">
-                    <strong>Ajankohdat:</strong> {getTemplateGroupInfo(formData.templateGroupName)}
-                  </div>
-                )}
-                {templateGroupNames.length === 0 && (
-                  <p className="text-sm text-red-600 mt-1">
-                    Luo ensin tuntiryhmä kiertotuntikaavio-näkymässä
-                  </p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormInput
-                  id="class-start-date"
-                  label="Alkupäivä"
-                  icon={<Calendar className="w-4 h-4 inline mr-2" />}
-                  type="date"
-                  required
-                  value={formData.startDate}
-                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                />
-                <FormInput
-                  id="class-end-date"
-                  label="Loppupäivä"
-                  type="date"
-                  required
-                  value={formData.endDate}
-                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                />
-              </div>
-
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  <strong>Huomio:</strong> Tämä luo toistuvat oppitunnit valitun ajanjakson aikana 
-                  kaikkiin valitun tuntiryhmän aikoihin.
-                  {formData.templateGroupName && templateGroups[formData.templateGroupName] && (
-                    <span className="block mt-1">
-                      Luodaan {templateGroups[formData.templateGroupName].length} oppituntia viikossa.
-                    </span>
-                  )}
-                </p>
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: 'CLOSE_MODALS' })}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  Peruuta
-                </button>
-                <button
-                  type="submit"
-                  disabled={templateGroupNames.length === 0}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {selectedRecurringClass ? 'Päivitä' : 'Luo oppitunnit'}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <AttachmentSection
-              files={files}
-              onFilesChange={setFiles}
-              fileInputId="file-upload-recurring"
+          <div className="grid grid-cols-2 gap-4">
+            <FormInput
+              id="template-start-time"
+              label="Alkuaika"
+              icon={<Clock className="w-4 h-4 inline mr-2" />}
+              type="time"
+              required
+              value={formData.startTime}
+              onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
             />
-          )}
-        </div>
+            <FormInput
+              id="template-end-time"
+              label="Loppuaika"
+              type="time"
+              required
+              value={formData.endTime}
+              onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+            />
+          </div>
+
+          <ColorSelector
+            label="Väri"
+            selectedColor={formData.color}
+            onChange={(color) => setFormData({ ...formData, color })}
+          />
+
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 mt-4">
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'CLOSE_MODALS' })}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Peruuta
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              {selectedScheduleTemplate ? 'Päivitä' : 'Luo'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
