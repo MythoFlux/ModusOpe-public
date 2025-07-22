@@ -10,11 +10,17 @@ import { supabase } from '../supabaseClient';
 export function projectReducerLogic(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'ADD_PROJECT': {
-      const newProjectData = action.payload;
+      // KORJAUS: Varmistetaan, että projektilla on aina ID.
+      // Jos action.payload ei sisällä ID:tä (kuten uutta kurssia luodessa),
+      // luodaan se tässä nanoid-kirjastolla.
+      const projectWithId = {
+        ...action.payload,
+        id: action.payload.id || nanoid(),
+      };
 
       const addProjectAsync = async () => {
         // VIIMEINEN KORJAUS: Poistetaan kaikki paikalliset kentät: templateGroupName, files, columns ja tasks.
-        const { templateGroupName, files, columns, tasks, ...dbData } = newProjectData;
+        const { templateGroupName, files, columns, tasks, ...dbData } = projectWithId;
 
         const { data, error } = await supabase
           .from('projects')
@@ -31,7 +37,7 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
 
       addProjectAsync();
 
-      const { project, newRecurringClasses } = createProjectWithTemplates(newProjectData, state.scheduleTemplates);
+      const { project, newRecurringClasses } = createProjectWithTemplates(projectWithId, state.scheduleTemplates);
       const newProjects = [...state.projects, project];
       const updatedRecurringClasses = [...state.recurringClasses, ...newRecurringClasses];
       let updatedEvents = [...state.events];
