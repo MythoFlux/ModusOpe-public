@@ -171,16 +171,6 @@ export default function EventModal() {
     }
   };
 
-  const getEventsInDateRange = () => {
-    if (!bulkEditOptions.startDate || !bulkEditOptions.endDate || !isRecurringEvent) return 0;
-    const startDate = new Date(bulkEditOptions.startDate);
-    const endDate = new Date(bulkEditOptions.endDate);
-    return similarEvents.filter(event => {
-      const eventDate = new Date(event.date);
-      return eventDate >= startDate && eventDate <= endDate;
-    }).length + 1;
-  };
-
   if (!showEventModal) return null;
 
   return (
@@ -282,11 +272,6 @@ export default function EventModal() {
                   </option>
                 ))}
               </FormSelect>
-              {isRecurringEvent && similarEvents.length > 0 && (
-                <div className="border-t border-gray-200 pt-4">
-                  {/* Bulk edit content would go here */}
-                </div>
-              )}
             </form>
           ) : (
             <AttachmentSection 
@@ -297,7 +282,31 @@ export default function EventModal() {
           )}
         </div>
         <div className="flex justify-between p-6 border-t border-gray-200 flex-shrink-0 bg-gray-50">
-           {/* Button content would go here */}
+            {selectedEvent && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                Poista
+              </button>
+            )}
+            <div className="flex space-x-3 ml-auto">
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'CLOSE_MODALS' })}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Peruuta
+              </button>
+              <button
+                type="submit"
+                form="event-details-form"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                {selectedEvent ? 'Päivitä' : 'Luo'}
+              </button>
+            </div>
         </div>
       </div>
     </div>
