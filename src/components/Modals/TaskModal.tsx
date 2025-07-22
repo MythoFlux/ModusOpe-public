@@ -263,6 +263,8 @@ export default function TaskModal() {
                 <div className="flex items-center space-x-2 mt-2">
                   <input
                     type="text"
+                    id="new-subtask-title"
+                    name="new-subtask-title"
                     value={newSubtaskTitle}
                     onChange={e => setNewSubtaskTitle(e.target.value)}
                     placeholder="Uusi alitehtävä"
