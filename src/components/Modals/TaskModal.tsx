@@ -1,7 +1,7 @@
 // src/components/Modals/TaskModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Type, FileText, Calendar, AlertCircle, Bookmark, Plus, Trash2, File } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid'; // <-- MUUTETTU: nanoid -> uuid
+import { v4 as uuidv4 } from 'uuid';
 import { useApp } from '../../contexts/AppContext';
 import { Task, Subtask, FileAttachment } from '../../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
@@ -12,7 +12,8 @@ import FormSelect from '../Forms/FormSelect';
 
 export default function TaskModal() {
   const { state, dispatch } = useApp();
-  const { showTaskModal, selectedTask, projects } = state;
+  // --- LISÄTTY: session-tieto haetaan kontekstista ---
+  const { showTaskModal, selectedTask, projects, session } = state;
 
   const [activeTab, setActiveTab] = useState<'details' | 'files'>('details');
   const [formData, setFormData] = useState({
@@ -64,7 +65,7 @@ export default function TaskModal() {
   const handleAddSubtask = () => {
     if (newSubtaskTitle.trim() === '') return;
     const newSubtask: Subtask = {
-      id: uuidv4(), // <-- KORJATTU
+      id: uuidv4(),
       title: newSubtaskTitle,
       completed: false,
     };
@@ -84,9 +85,15 @@ export default function TaskModal() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // --- LISÄTTY: Varmistus, että käyttäjä on kirjautunut ---
+    if (!session?.user && !(selectedTask && selectedTask.id)) {
+        alert("Sinun täytyy olla kirjautunut luodaksesi tehtävän.");
+        return;
+    }
 
-    const taskData: Task = {
-      id: selectedTask?.id || uuidv4(), // <-- KORJATTU
+    const taskData: any = {
+      id: selectedTask?.id || uuidv4(),
       title: formData.title,
       description: formData.description,
       completed: (selectedTask && selectedTask.id && selectedTask.completed) || false,
@@ -97,6 +104,11 @@ export default function TaskModal() {
       subtasks: formData.subtasks,
       files: files
     };
+    
+    // --- LISÄTTY: Käyttäjän ID:n lisääminen uuteen tehtävään ---
+    if (!(selectedTask && selectedTask.id)) {
+        taskData.user_id = session.user.id;
+    }
 
     if (selectedTask && selectedTask.id) {
       dispatch({ type: 'UPDATE_TASK', payload: { projectId: taskData.projectId || selectedTask.projectId, task: taskData } });
