@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, Type, FileText, File } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useApp } from '../../contexts/AppContext';
+import { useConfirmation } from '../../hooks/useConfirmation'; // <-- LISÄTTY
 import { Event, FileAttachment } from '../../types';
 import AttachmentSection from '../Shared/AttachmentSection';
 import { DEFAULT_COLOR } from '../../constants/colors';
@@ -14,6 +15,7 @@ import ColorSelector from '../Forms/ColorSelector';
 export default function EventModal() {
   const { state, dispatch } = useApp();
   const { showEventModal, selectedEvent, projects, events, session } = state;
+  const { getConfirmation } = useConfirmation(); // <-- LISÄTTY
 
   const [activeTab, setActiveTab] = useState<'details' | 'files'>('details');
   const [formData, setFormData] = useState({
@@ -152,22 +154,35 @@ export default function EventModal() {
     dispatch({ type: 'CLOSE_MODALS' });
   };
 
-  const handleDelete = () => {
+  // --- KOKO FUNKTIO MUOKATTU ASYNKRONISEKSI JA KÄYTTÄMÄÄN VAHVISTUSTA ---
+  const handleDelete = async () => {
     if (selectedEvent) {
-      dispatch({ type: 'DELETE_EVENT', payload: selectedEvent.id });
+      const isBulkDelete = bulkEditOptions.applyToAll && isRecurringEvent && similarEvents.length > 0;
+      const message = isBulkDelete
+        ? `Haluatko varmasti poistaa kaikki tämän sarjan tapahtumat valitulla aikavälillä? Toimintoa ei voi perua.`
+        : `Haluatko varmasti poistaa tapahtuman "${selectedEvent.title}"? Toimintoa ei voi perua.`;
+      
+      const confirmed = await getConfirmation({
+        title: 'Vahvista poisto',
+        message: message,
+      });
 
-      if (bulkEditOptions.applyToAll && isRecurringEvent && similarEvents.length > 0) {
-        const startDate = new Date(bulkEditOptions.startDate);
-        const endDate = new Date(bulkEditOptions.endDate);
+      if (confirmed) {
+        dispatch({ type: 'DELETE_EVENT', payload: selectedEvent.id });
 
-        similarEvents.forEach(event => {
-          const eventDate = new Date(event.date);
-          if (eventDate >= startDate && eventDate <= endDate) {
-            dispatch({ type: 'DELETE_EVENT', payload: event.id });
-          }
-        });
+        if (isBulkDelete) {
+          const startDate = new Date(bulkEditOptions.startDate);
+          const endDate = new Date(bulkEditOptions.endDate);
+
+          similarEvents.forEach(event => {
+            const eventDate = new Date(event.date);
+            if (eventDate >= startDate && eventDate <= endDate) {
+              dispatch({ type: 'DELETE_EVENT', payload: event.id });
+            }
+          });
+        }
+        dispatch({ type: 'CLOSE_MODALS' });
       }
-      dispatch({ type: 'CLOSE_MODALS' });
     }
   };
 
