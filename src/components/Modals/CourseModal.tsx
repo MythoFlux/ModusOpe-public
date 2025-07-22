@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, BookOpen, FileText, Calendar, Clock } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
+import { useConfirmation } from '../../hooks/useConfirmation'; // <-- LISÄTTY
 import { COLOR_OPTIONS, DEFAULT_COLOR } from '../../constants/colors';
 import FormInput from '../Forms/FormInput';
 import FormTextarea from '../Forms/FormTextarea';
@@ -11,6 +12,7 @@ import ColorSelector from '../Forms/ColorSelector';
 export default function CourseModal() {
   const { state, dispatch } = useApp();
   const { showCourseModal, courseModalInfo, projects, scheduleTemplates, session } = state;
+  const { getConfirmation } = useConfirmation(); // <-- LISÄTTY
 
   const selectedCourse = courseModalInfo?.id
     ? projects.find(p => p.id === courseModalInfo.id && p.type === 'course')
@@ -78,10 +80,17 @@ export default function CourseModal() {
     dispatch({ type: 'CLOSE_MODALS' });
   };
 
-  const handleDelete = () => {
+  // --- KOKO FUNKTIO MUOKATTU ASYNKRONISEKSI JA KÄYTTÄMÄÄN VAHVISTUSTA ---
+  const handleDelete = async () => {
     if (selectedCourse) {
-      dispatch({ type: 'DELETE_PROJECT', payload: selectedCourse.id });
-      dispatch({ type: 'CLOSE_MODALS' });
+      const confirmed = await getConfirmation({
+        title: 'Vahvista poisto',
+        message: `Haluatko varmasti poistaa kurssin "${selectedCourse.name}"? Tätä toimintoa ei voi perua.`
+      });
+      if (confirmed) {
+        dispatch({ type: 'DELETE_PROJECT', payload: selectedCourse.id });
+        dispatch({ type: 'CLOSE_MODALS' });
+      }
     }
   };
 
