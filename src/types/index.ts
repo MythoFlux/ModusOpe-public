@@ -1,3 +1,5 @@
+// src/types/index.ts
+
 export interface KanbanColumn {
   id: string;
   title: string;
@@ -32,7 +34,8 @@ export interface Project {
   name: string;
   description?: string;
   color: string;
-  type: 'none' | 'course' | 'administrative' | 'personal';
+  // --- TÄMÄ RIVI ON MUUTETTU ---
+  type: 'course' | 'administrative' | 'personal' | 'none';
   startDate: Date;
   endDate?: Date;
   tasks: Task[];
