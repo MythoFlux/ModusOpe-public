@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, Type, FileText, File } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useApp } from '../../contexts/AppContext';
-import { useConfirmation } from '../../hooks/useConfirmation'; // <-- LISÄTTY
+import { useConfirmation } from '../../hooks/useConfirmation';
 import { Event, FileAttachment } from '../../types';
 import AttachmentSection from '../Shared/AttachmentSection';
 import { DEFAULT_COLOR } from '../../constants/colors';
@@ -15,7 +15,7 @@ import ColorSelector from '../Forms/ColorSelector';
 export default function EventModal() {
   const { state, dispatch } = useApp();
   const { showEventModal, selectedEvent, projects, events, session } = state;
-  const { getConfirmation } = useConfirmation(); // <-- LISÄTTY
+  const { getConfirmation } = useConfirmation();
 
   const [activeTab, setActiveTab] = useState<'details' | 'files'>('details');
   const [formData, setFormData] = useState({
@@ -154,12 +154,22 @@ export default function EventModal() {
     dispatch({ type: 'CLOSE_MODALS' });
   };
 
-  // --- KOKO FUNKTIO MUOKATTU ASYNKRONISEKSI JA KÄYTTÄMÄÄN VAHVISTUSTA ---
   const handleDelete = async () => {
     if (selectedEvent) {
       const isBulkDelete = bulkEditOptions.applyToAll && isRecurringEvent && similarEvents.length > 0;
+      
+      let eventsToDeleteCount = 1;
+      if (isBulkDelete) {
+          const startDate = new Date(bulkEditOptions.startDate);
+          const endDate = new Date(bulkEditOptions.endDate);
+          eventsToDeleteCount += similarEvents.filter(event => {
+              const eventDate = new Date(event.date);
+              return eventDate >= startDate && eventDate <= endDate;
+          }).length;
+      }
+
       const message = isBulkDelete
-        ? `Haluatko varmasti poistaa kaikki tämän sarjan tapahtumat valitulla aikavälillä? Toimintoa ei voi perua.`
+        ? `Haluatko varmasti poistaa ${eventsToDeleteCount} tapahtumaa tästä sarjasta? Toimintoa ei voi perua.`
         : `Haluatko varmasti poistaa tapahtuman "${selectedEvent.title}"? Toimintoa ei voi perua.`;
       
       const confirmed = await getConfirmation({
@@ -287,6 +297,30 @@ export default function EventModal() {
                   </option>
                 ))}
               </FormSelect>
+
+              {/* --- LISÄTTY SARJAN MUOKKAUSOSIO --- */}
+              {isRecurringEvent && similarEvents.length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg space-y-3">
+                  <h4 className="font-semibold text-yellow-800">Sarjan muokkaus</h4>
+                  <div className="flex items-start">
+                    <input
+                      type="checkbox"
+                      id="applyToAll"
+                      className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      checked={bulkEditOptions.applyToAll}
+                      onChange={(e) => setBulkEditOptions({ ...bulkEditOptions, applyToAll: e.target.checked })}
+                    />
+                    <div className="ml-3 text-sm">
+                      <label htmlFor="applyToAll" className="font-medium text-gray-900">
+                        Sovella muutokset koko sarjaan
+                      </label>
+                      <p className="text-gray-600">
+                        Muutokset (myös poisto) koskevat kaikkia tämän sarjan tapahtumia aikavälillä {new Date(bulkEditOptions.startDate).toLocaleDateString('fi-FI')} - {new Date(bulkEditOptions.endDate).toLocaleDateString('fi-FI')}.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </form>
           ) : (
             <AttachmentSection 
