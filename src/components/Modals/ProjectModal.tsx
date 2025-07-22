@@ -308,6 +308,8 @@ export default function ProjectModal() {
                               <form onSubmit={handleAddTask} className="bg-gray-50 p-4 rounded-lg mb-4 space-y-3">
                                    <input
                         type="text"
+                        id="new-project-task-title"
+                        name="new-project-task-title"
                         required
                         value={newTask.title}
                         onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
@@ -315,6 +317,8 @@ export default function ProjectModal() {
                         placeholder="Tehtävän otsikko"
                       />
                       <textarea
+                        id="new-project-task-description"
+                        name="new-project-task-description"
                         value={newTask.description}
                         onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -323,6 +327,8 @@ export default function ProjectModal() {
                       />
                       <div className="grid grid-cols-2 gap-3">
                         <select
+                          id="new-project-task-priority"
+                          name="new-project-task-priority"
                           value={newTask.priority}
                           onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as Task['priority'] })}
                           className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -333,6 +339,8 @@ export default function ProjectModal() {
                         </select>
                         <input
                           type="date"
+                          id="new-project-task-dueDate"
+                          name="new-project-task-dueDate"
                           value={newTask.dueDate}
                           onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
                           className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -341,14 +349,14 @@ export default function ProjectModal() {
                       <div className="flex space-x-2">
                         <button
                           type="submit"
-                          className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
+                          className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
                         >
                           Lisää tehtävä
                         </button>
                         <button
                           type="button"
                           onClick={() => setShowAddTask(false)}
-                          className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded text-sm transition-colors"
+                          className="px-3 py-1 text-sm rounded hover:bg-gray-200"
                         >
                           Peruuta
                         </button>
