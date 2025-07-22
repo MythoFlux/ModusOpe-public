@@ -34,14 +34,15 @@ export interface Project {
   name: string;
   description?: string;
   color: string;
-  // --- TÄMÄ RIVI ON MUUTETTU ---
   type: 'course' | 'administrative' | 'personal' | 'none';
-  startDate: Date;
-  endDate?: Date;
+  // --- NÄMÄ RIVIT ON MUUTETTU ---
+  start_date: Date;
+  end_date?: Date;
+  parent_course_id?: string;
+  // ------------------------------
   tasks: Task[];
   columns: KanbanColumn[];
   files?: FileAttachment[];
-  parentCourseId?: string;
 }
 
 export interface Subtask {
