@@ -1,129 +1,83 @@
-import React, { useState } from 'react';
-import { AppProvider, useApp } from './contexts/AppContext';
-import Sidebar from './components/Layout/Sidebar';
-import Dashboard from './components/Dashboard/Dashboard';
-import Calendar from './components/Calendar/Calendar';
-import ProjectList from './components/Projects/ProjectList';
-import CourseList from './components/Courses/CourseList';
-import TaskList from './components/Tasks/TaskList';
-import EventModal from './components/Modals/EventModal';
-import ProjectModal from './components/Modals/ProjectModal';
-import CourseModal from './components/Modals/CourseModal';
-import ScheduleTemplateModal from './components/Modals/ScheduleTemplateModal';
-import RecurringClassModal from './components/Modals/RecurringClassModal';
-import TaskModal from './components/Modals/TaskModal';
-import KanbanView from './components/Kanban/KanbanView';
-import ConfirmationModal from './components/Modals/ConfirmationModal';
-import Auth from './components/Auth';
-import { Menu, Plus, Calendar as CalendarIcon, BookOpen, ClipboardCheck, CheckSquare } from 'lucide-react';
+import React from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useApp } from '../../contexts/AppContext';
+import { addMonths, getMonthName, getYear } from '../../utils/dateUtils';
+import { CalendarView } from '../../types';
 
-function AppContent() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+export default function CalendarHeader() {
   const { state, dispatch } = useApp();
-  const { isMobileMenuOpen, session } = state;
+  const { selectedDate, currentView } = state;
 
-  const [isFabMenuOpen, setFabMenuOpen] = useState(false);
-
-  if (!session) {
-    return <Auth />;
-  }
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard': return <Dashboard />;
-      case 'calendar': return <Calendar />;
-      case 'courses': return <CourseList />;
-      case 'projects': return <ProjectList />;
-      case 'tasks': return <TaskList />;
-      case 'kanban': return <KanbanView />;
-      default: return <Dashboard />;
-    }
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    const newDate = addMonths(selectedDate, direction === 'next' ? 1 : -1);
+    dispatch({ type: 'SET_SELECTED_DATE', payload: newDate });
   };
 
-  const fabActions = [
-    { label: 'Tapahtuma', icon: CalendarIcon, action: () => dispatch({ type: 'TOGGLE_EVENT_MODAL' }) },
-    { label: 'Oppitunti', icon: BookOpen, action: () => dispatch({ type: 'TOGGLE_COURSE_MODAL' }) },
-    { label: 'Projekti', icon: ClipboardCheck, action: () => dispatch({ type: 'TOGGLE_PROJECT_MODAL' }) },
-    { label: 'Tehtävä', icon: CheckSquare, action: () => dispatch({ type: 'TOGGLE_TASK_MODAL' }) },
-  ];
+  const setView = (view: CalendarView) => {
+    dispatch({ type: 'SET_VIEW', payload: view });
+  };
+
+  const goToToday = () => {
+    dispatch({ type: 'SET_SELECTED_DATE', payload: new Date() });
+  };
+
+  const showNavigation = currentView !== 'schedule' && currentView !== 'day';
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <header className="md:hidden p-4 bg-white shadow-md flex items-center">
-          <button onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MENU' })}>
-            <Menu className="w-6 h-6" />
-          </button>
-          <h1 className="text-lg font-bold ml-4">ModusOpe</h1>
-        </header>
-
-        {/* --- TÄMÄ RIVI ON MUUTETTU --- */}
-        <main className="flex-1 overflow-y-auto">
-          {renderContent()}
-        </main>
-      </div>
-
-      {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
-          onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MENU' })}
-        />
-      )}
-
-      {isFabMenuOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-20 z-30 md:hidden"
-          onClick={() => setFabMenuOpen(false)}
-        />
-      )}
-
-      <div className="md:hidden fixed bottom-6 right-6 z-40">
-        {isFabMenuOpen && (
-          <div className="flex flex-col items-end space-y-3 mb-3">
-            {fabActions.map(item => (
-              <div key={item.label} className="flex items-center">
-                <span className="bg-white text-sm text-gray-800 rounded-md px-3 py-1 mr-3 shadow-sm">{item.label}</span>
-                <button
-                  onClick={() => {
-                    item.action();
-                    setFabMenuOpen(false);
-                  }}
-                  className="w-12 h-12 flex items-center justify-center bg-white rounded-full shadow-lg text-blue-600"
-                >
-                  <item.icon className="w-6 h-6" />
-                </button>
-              </div>
-            ))}
-          </div>
+    <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <div className="flex items-center space-x-4">
+        {showNavigation && (
+          <>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => navigateMonth('prev')}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <h2 className="text-2xl font-semibold text-gray-800 min-w-[200px] text-center">
+                {getMonthName(selectedDate)} {getYear(selectedDate)}
+              </h2>
+              <button
+                onClick={() => navigateMonth('next')}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+            <button
+              onClick={goToToday}
+              className="px-4 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+            >
+              Tänään
+            </button>
+          </>
         )}
-
-        <button
-          onClick={() => setFabMenuOpen(!isFabMenuOpen)}
-          className="w-16 h-16 flex items-center justify-center rounded-full text-white shadow-xl transition-transform duration-200"
-          style={{ backgroundImage: 'linear-gradient(to bottom, #6b7280, #1f2937)' }}
-        >
-          <Plus className={`w-8 h-8 transition-transform duration-300 ${isFabMenuOpen ? 'rotate-45' : ''}`} />
-        </button>
+        {currentView === 'schedule' && (
+          <h2 className="text-2xl font-semibold text-gray-800">
+            Kiertotuntikaavio
+          </h2>
+        )}
       </div>
 
-      <EventModal />
-      <ProjectModal />
-      <CourseModal />
-      <ScheduleTemplateModal />
-      <RecurringClassModal />
-      <TaskModal />
-      <ConfirmationModal />
+      <div className="flex bg-gray-100 rounded-lg p-1">
+        {(['month', 'week', 'day', 'schedule'] as CalendarView[]).map((view) => (
+          <button
+            key={view}
+            onClick={() => setView(view)}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              currentView === view
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            {view === 'month' && 'Kuukausi'}
+            {view === 'week' && 'Viikko'}
+            {view === 'day' && 'Päivä'}
+            {view === 'schedule' && 'Kiertotuntikaavio'}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
-
-function App() {
-  return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
-  );
-}
-
-export default App;
