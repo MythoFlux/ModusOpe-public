@@ -149,15 +149,17 @@ export default function DayView() {
                     minHeight: '40px'
                   }}
                 >
-                  <div className="font-medium text-gray-900">
-                    {event.title}
+                  <div className="flex items-baseline justify-between h-full">
+                    <span className="font-medium text-gray-900 truncate pr-2">
+                      {event.title}
+                    </span>
+                    {event.startTime && (
+                      <span className="text-sm text-gray-600 flex-shrink-0 whitespace-nowrap">
+                        {formatTimeString(event.startTime)}
+                        {event.endTime && ` - ${formatTimeString(event.endTime)}`}
+                      </span>
+                    )}
                   </div>
-                  {event.startTime && (
-                    <div className="text-sm text-gray-600 mt-1 whitespace-nowrap overflow-hidden text-ellipsis">
-                      {formatTimeString(event.startTime)}
-                      {event.endTime && ` - ${formatTimeString(event.endTime)}`}
-                    </div>
-                  )}
                 </div>
               );
             })}
