@@ -15,7 +15,7 @@ export default function WeekView() {
 
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 7 * 48;
+      scrollContainerRef.current.scrollTop = 8 * 48;
     }
   }, [state.selectedDate, state.currentView, showWeekend]);
 
@@ -103,7 +103,7 @@ export default function WeekView() {
             <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: gridColumns }}>
               <div className="py-4 px-2 text-center"></div>
               {displayDates.map((date, index) => (
-                <div key={`header-${index}`} className="py-4 px-2 text-center border-l border-gray-200">
+                <div key={`header-${index}`} className="py-2 px-2 text-center border-l border-gray-200">
                   <div className="text-sm font-medium text-gray-600">{displayDays[index]}</div>
                   <div className={`text-lg font-semibold mt-1 ${isToday(date) ? 'bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mx-auto' : 'text-gray-900'}`}>{date.getDate()}.</div>
                 </div>
