@@ -15,7 +15,10 @@ export default function MonthView() {
   const eventsByDay = useMemo(() => {
     const map = new Map<string, Event[]>();
     daysInMonth.forEach(day => {
-      const dayEvents = events.filter(event => isSameDay(new Date(event.date), day));
+      // --- TÄMÄ RIVI ON MUUTETTU ---
+      // Suodatetaan pois oppitunnit ('class') kuukausinäkymästä
+      const dayEvents = events.filter(event => isSameDay(new Date(event.date), day) && event.type !== 'class');
+      
       // Järjestetään tapahtumat ajan mukaan, koko päivän tapahtumat ensin
       dayEvents.sort((a, b) => {
         if (!a.startTime) return -1;
