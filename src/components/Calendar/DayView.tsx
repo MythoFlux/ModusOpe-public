@@ -1,6 +1,7 @@
+// src/components/Calendar/DayView.tsx
 import React, { useRef, useLayoutEffect, useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import { formatDate, isSameDay, addDays } from '../../utils/dateUtils';
+import { formatDate, isSameDay, addDays, formatTimeString } from '../../utils/dateUtils'; 
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { Event } from '../../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
@@ -29,11 +30,11 @@ export default function DayView() {
     dispatch({ type: 'SET_SELECTED_DATE', payload: adjustedDate });
   };
 
-  const dayEvents = useMemo(() => 
+  const dayEvents = useMemo(() =>
     events.filter(event => isSameDay(new Date(event.date), selectedDate)),
     [events, selectedDate]
   );
-  
+
   const allDayEvents = useMemo(() => dayEvents.filter(e => !e.startTime), [dayEvents]);
   const timedEvents = useMemo(() => dayEvents.filter(e => !!e.startTime), [dayEvents]);
 
@@ -153,8 +154,8 @@ export default function DayView() {
                   </div>
                   {event.startTime && (
                     <div className="text-sm text-gray-600 mt-1">
-                      {event.startTime}
-                      {event.endTime && ` - ${event.endTime}`}
+                      {formatTimeString(event.startTime)}
+                      {event.endTime && ` - ${formatTimeString(event.endTime)}`}
                     </div>
                   )}
                   {event.description && (
