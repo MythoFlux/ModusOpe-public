@@ -47,77 +47,73 @@ export default function MonthView() {
   const weekDays = ['Ma', 'Ti', 'Ke', 'To', 'Pe', 'La', 'Su'];
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-full flex flex-col">
-      {/* Weekday Header */}
-      <div className="grid grid-cols-7 border-b border-gray-200 flex-shrink-0">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div className="grid grid-cols-7 border-b border-gray-200">
         {weekDays.map((day) => (
-          <div key={day} className="py-2 text-center text-sm font-medium text-gray-600">
+          <div key={day} className="p-4 text-center text-sm font-medium text-gray-600">
             {day}
           </div>
         ))}
       </div>
 
-      {/* Scrollable container for days */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="grid grid-cols-7">
-          {daysInMonth.map((date, index) => {
-            const dayEvents = eventsByDay.get(date.toISOString().split('T')[0]) || [];
-            const isCurrentMonth = date.getMonth() === currentMonth;
-            const isSelected = isSameDay(date, selectedDate);
-            const isTodayDate = isToday(date);
+      <div className="grid grid-cols-7">
+        {daysInMonth.map((date, index) => {
+          const dayEvents = eventsByDay.get(date.toISOString().split('T')[0]) || [];
+          const isCurrentMonth = date.getMonth() === currentMonth;
+          const isSelected = isSameDay(date, selectedDate);
+          const isTodayDate = isToday(date);
 
-            return (
-              <div
-                key={index}
-                onClick={() => handleDateClick(date)}
-                className={`min-h-[120px] p-2 border-r border-b border-gray-100 cursor-pointer transition-colors hover:bg-gray-50 flex flex-col ${
-                  !isCurrentMonth ? 'bg-gray-50 text-gray-400' : ''
-                } ${isSelected ? 'bg-blue-50' : ''}`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span
-                    className={`text-sm font-medium ${
-                      isTodayDate
-                        ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center'
-                        : isCurrentMonth
-                        ? 'text-gray-900'
-                        : 'text-gray-400'
-                    }`}
-                  >
-                    {date.getDate()}
-                  </span>
-                </div>
-
-                <div className="space-y-0.5 flex-1 min-h-0 overflow-hidden">
-                  {dayEvents.slice(0, 2).map((event) => (
-                    <div
-                      key={event.id}
-                      onClick={(e) => handleEventClick(event, e)}
-                      className="text-xs px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity"
-                      style={{ backgroundColor: event.color + '20', color: event.color }}
-                    >
-                      {event.startTime && (
-                        <span className="font-medium">{formatTimeString(event.startTime)} </span>
-                      )}
-                      {event.title}
-                    </div>
-                  ))}
-                  {dayEvents.length > 2 && (
-                    <div 
-                      onClick={(e) => {
-                          e.stopPropagation();
-                          handleDateClick(date);
-                      }}
-                      className="text-xs text-blue-600 font-semibold cursor-pointer hover:underline pt-0.5"
-                    >
-                      + {dayEvents.length - 2} lisää
-                    </div>
-                  )}
-                </div>
+          return (
+            <div
+              key={index}
+              onClick={() => handleDateClick(date)}
+              className={`min-h-[120px] p-2 border-r border-b border-gray-100 cursor-pointer transition-colors hover:bg-gray-50 flex flex-col ${
+                !isCurrentMonth ? 'bg-gray-50 text-gray-400' : ''
+              } ${isSelected ? 'bg-blue-50' : ''}`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span
+                  className={`text-sm font-medium ${
+                    isTodayDate
+                      ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center'
+                      : isCurrentMonth
+                      ? 'text-gray-900'
+                      : 'text-gray-400'
+                  }`}
+                >
+                  {date.getDate()}
+                </span>
               </div>
-            );
-          })}
-        </div>
+
+              <div className="space-y-0.5 flex-1 min-h-0 overflow-hidden">
+                {dayEvents.slice(0, 2).map((event) => (
+                  <div
+                    key={event.id}
+                    onClick={(e) => handleEventClick(event, e)}
+                    className="text-xs px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{ backgroundColor: event.color + '20', color: event.color }}
+                  >
+                    {event.startTime && (
+                      <span className="font-medium">{formatTimeString(event.startTime)} </span>
+                    )}
+                    {event.title}
+                  </div>
+                ))}
+                {dayEvents.length > 2 && (
+                  <div 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleDateClick(date);
+                    }}
+                    className="text-xs text-blue-600 font-semibold cursor-pointer hover:underline pt-0.5"
+                  >
+                    + {dayEvents.length - 2} lisää
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
