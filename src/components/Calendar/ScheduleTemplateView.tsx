@@ -1,13 +1,14 @@
+// src/components/Calendar/ScheduleTemplateView.tsx
 import React from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { Plus, Trash2 } from 'lucide-react';
 import { ScheduleTemplate } from '../../types';
+import { formatTimeString } from '../../utils/dateUtils';
 
 export default function ScheduleTemplateView() {
   const { state, dispatch } = useApp();
   const { scheduleTemplates } = state;
 
-  // MUUTOS: Viikonpäivien nimet on lyhennetty
   const weekDays = ['Ma', 'Ti', 'Ke', 'To', 'Pe'];
   const timeSlots = Array.from({ length: 12 }, (_, i) => {
     const hour = (i + 6).toString().padStart(2, '0');
@@ -32,10 +33,9 @@ export default function ScheduleTemplateView() {
     const [startHour, startMinute] = template.startTime.split(':').map(Number);
     const [endHour, endMinute] = template.endTime.split(':').map(Number);
     
-    // Kellonaika alkaa klo 6:00, joten vähennetään se laskuista
     const startPosition = ((startHour - 6) * 60) + startMinute;
     const duration = ((endHour - startHour) * 60) + (endMinute - startMinute);
-    const hourRowHeight = 48; // 48px per tunti
+    const hourRowHeight = 48;
     
     return {
       top: (startPosition / 60) * hourRowHeight,
@@ -45,7 +45,6 @@ export default function ScheduleTemplateView() {
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-full">
-      {/* Header */}
       <div className="p-6 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Kiertotuntikaavio</h3>
@@ -62,22 +61,17 @@ export default function ScheduleTemplateView() {
         </button>
       </div>
 
-      {/* Main Schedule Area */}
       <div className="flex-1 overflow-auto">
         <div className="relative">
-          {/* Grid Container for Header and Content */}
           <div className="grid" style={{ gridTemplateColumns: '60px repeat(5, 1fr)' }}>
-            {/* Top-left empty cell */}
             <div className="sticky top-0 z-20 bg-white border-b border-gray-200"></div>
 
-            {/* Weekday Headers */}
             {weekDays.map((day) => (
               <div key={day} className="sticky top-0 z-20 bg-white p-4 text-center font-medium text-gray-900 border-b border-l border-gray-200">
                 {day}
               </div>
             ))}
             
-            {/* Time Labels Column */}
             <div className="col-start-1 row-start-2">
               {timeSlots.map((time) => (
                 <div key={time} className="h-12 pr-2 text-right text-xs text-gray-500 border-t border-gray-100 flex items-start pt-1">
@@ -86,17 +80,13 @@ export default function ScheduleTemplateView() {
               ))}
             </div>
 
-            {/* Grid Content Area (for lines and events) */}
             <div className="col-start-2 col-span-5 row-start-2 grid grid-cols-5">
-              {/* Map through days to create columns */}
               {weekDays.map((_, dayIndex) => (
                 <div key={dayIndex} className="relative border-l border-gray-200">
-                  {/* Background time slots for this column */}
                   {timeSlots.map((time) => (
                     <div key={time} className="h-12 border-b border-gray-100" />
                   ))}
                   
-                  {/* Templates for this day, positioned absolutely within this column */}
                   {scheduleTemplates
                     .filter(t => t.dayOfWeek === dayIndex)
                     .map((template) => {
@@ -119,8 +109,9 @@ export default function ScheduleTemplateView() {
                               <div className="font-medium text-gray-900 text-sm truncate">
                                 {template.name}
                               </div>
+                              {/* --- MUUTOS TÄSSÄ --- */}
                               <div className="text-xs text-gray-600">
-                                {template.startTime} - {template.endTime}
+                                {formatTimeString(template.startTime)} - {formatTimeString(template.endTime)}
                               </div>
                               {template.description && (
                                 <div className="text-xs text-gray-500 mt-1 truncate">
@@ -131,7 +122,7 @@ export default function ScheduleTemplateView() {
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
                                 onClick={(e) => {
-                                  e.stopPropagation(); // Estää muokkausikkunan avautumisen
+                                  e.stopPropagation();
                                   handleDeleteTemplate(template.id);
                                 }}
                                 className="p-1 text-gray-500 hover:text-red-600 transition-colors"
@@ -149,7 +140,6 @@ export default function ScheduleTemplateView() {
           </div>
         </div>
 
-        {/* Empty state (if no templates exist) */}
         {scheduleTemplates.length === 0 && (
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
@@ -159,7 +149,7 @@ export default function ScheduleTemplateView() {
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">Ei tuntiryhmäksi määriteltyjä tunteja</h3>
             <p className="text-gray-600 mb-4">Luo ensimmäinen tuntiryhmä aloittaaksesi</p>
-                  </div>
+          </div>
          )}
       </div>
     </div>
