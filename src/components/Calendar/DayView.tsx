@@ -153,14 +153,9 @@ export default function DayView() {
                     {event.title}
                   </div>
                   {event.startTime && (
-                    <div className="text-sm text-gray-600 mt-1">
+                    <div className="text-sm text-gray-600 mt-1 whitespace-nowrap overflow-hidden text-ellipsis">
                       {formatTimeString(event.startTime)}
                       {event.endTime && ` - ${formatTimeString(event.endTime)}`}
-                    </div>
-                  )}
-                  {event.description && (
-                    <div className="text-sm text-gray-600 mt-1">
-                      {event.description}
                     </div>
                   )}
                 </div>
