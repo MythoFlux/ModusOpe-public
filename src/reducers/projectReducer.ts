@@ -4,6 +4,7 @@ import { AppAction, AppState } from '../contexts/AppContext';
 import { KanbanColumn, Project, Subtask, Task } from '../types';
 import { supabase } from '../supabaseClient';
 import { createProjectWithTemplates } from '../utils/projectUtils';
+import { generateRecurringEvents } from '../utils/eventUtils'; // <-- LISÄTTY IMPORTTI
 
 // Apufunktio projektin löytämiseksi tilasta
 const findProject = (state: AppState, projectId: string): Project | undefined => {
@@ -33,17 +34,39 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
       };
       addProjectAsync();
 
-      const { project } = createProjectWithTemplates(projectWithId, state.scheduleTemplates);
-      
+      // --- MUUTOS ALKAA ---
+      // Keskistetään projektin, toistuvien tuntien ja tapahtumien luonti tänne.
+      const { project, newRecurringClasses } = createProjectWithTemplates(projectWithId, state.scheduleTemplates);
+
+      const newEvents = newRecurringClasses.flatMap(rc => {
+        const template = state.scheduleTemplates.find(t => t.id === rc.scheduleTemplateId);
+        return template ? generateRecurringEvents(rc, template) : [];
+      });
+
+      // Lisätään uudet toistuvat tunnit tietokantaan
+      const addRecurringClassesAsync = async () => {
+        const classesWithUserId = newRecurringClasses.map(rc => ({
+          ...rc,
+          user_id: state.session?.user.id
+        }));
+        const { error } = await supabase.from('recurring_classes').insert(classesWithUserId);
+        if (error) console.error("Error adding recurring classes:", error);
+      };
+      if (newRecurringClasses.length > 0) {
+        addRecurringClassesAsync();
+      }
+
       return {
         ...state,
         projects: [...state.projects, project],
+        recurringClasses: [...state.recurringClasses, ...newRecurringClasses],
+        events: [...state.events, ...newEvents],
       };
+      // --- MUUTOS PÄÄTTYY ---
     }
 
     case 'UPDATE_PROJECT': {
         const updateProjectAsync = async () => {
-            // Poistetaan paikalliset kentät ennen tietokantapäivitystä
             const { files, columns, tasks, ...dbData } = action.payload;
             const { error } = await supabase
                 .from('projects')
@@ -234,7 +257,6 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
                     ? {
                         ...p,
                         columns: p.columns.filter(c => c.id !== columnId),
-                        // Siirretään poistetun sarakkeen tehtävät "todo"-sarakkeeseen
                         tasks: p.tasks.map(t =>
                             t.columnId === columnId ? { ...t, columnId: 'todo' } : t
                         ),
