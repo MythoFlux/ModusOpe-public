@@ -16,6 +16,12 @@ export default function MonthView() {
     const map = new Map<string, Event[]>();
     daysInMonth.forEach(day => {
       const dayEvents = events.filter(event => isSameDay(new Date(event.date), day));
+      // Järjestetään tapahtumat ajan mukaan, koko päivän tapahtumat ensin
+      dayEvents.sort((a, b) => {
+        if (!a.startTime) return -1;
+        if (!b.startTime) return 1;
+        return a.startTime.localeCompare(b.startTime);
+      });
       map.set(day.toISOString().split('T')[0], dayEvents);
     });
     return map;
@@ -61,7 +67,7 @@ export default function MonthView() {
             <div
               key={index}
               onClick={() => handleDateClick(date)}
-              className={`min-h-[120px] p-2 border-r border-b border-gray-100 cursor-pointer transition-colors hover:bg-gray-50 ${
+              className={`min-h-[120px] p-2 border-r border-b border-gray-100 cursor-pointer transition-colors hover:bg-gray-50 flex flex-col ${
                 !isCurrentMonth ? 'bg-gray-50 text-gray-400' : ''
               } ${isSelected ? 'bg-blue-50' : ''}`}
             >
@@ -79,12 +85,12 @@ export default function MonthView() {
                 </span>
               </div>
 
-              <div className="space-y-1">
-                {dayEvents.slice(0, 3).map((event) => (
+              <div className="space-y-0.5 flex-1 min-h-0 overflow-hidden">
+                {dayEvents.slice(0, 2).map((event) => (
                   <div
                     key={event.id}
                     onClick={(e) => handleEventClick(event, e)}
-                    className="text-xs p-1 rounded truncate cursor-pointer hover:opacity-80 transition-opacity"
+                    className="text-xs px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity"
                     style={{ backgroundColor: event.color + '20', color: event.color }}
                   >
                     {event.startTime && (
@@ -93,9 +99,15 @@ export default function MonthView() {
                     {event.title}
                   </div>
                 ))}
-                {dayEvents.length > 3 && (
-                  <div className="text-xs text-gray-500 font-medium">
-                    +{dayEvents.length - 3} more
+                {dayEvents.length > 2 && (
+                  <div 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleDateClick(date);
+                    }}
+                    className="text-xs text-blue-600 font-semibold cursor-pointer hover:underline pt-0.5"
+                  >
+                    + {dayEvents.length - 2} lisää
                   </div>
                 )}
               </div>
