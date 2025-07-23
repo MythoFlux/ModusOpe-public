@@ -14,17 +14,16 @@ import RecurringClassModal from './components/Modals/RecurringClassModal';
 import TaskModal from './components/Modals/TaskModal';
 import KanbanView from './components/Kanban/KanbanView';
 import ConfirmationModal from './components/Modals/ConfirmationModal';
-import Auth from './components/Auth'; // <-- UUSI IMPORTTI
+import Auth from './components/Auth';
 import { Menu, Plus, Calendar as CalendarIcon, BookOpen, ClipboardCheck, CheckSquare } from 'lucide-react';
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const { state, dispatch } = useApp();
-  const { isMobileMenuOpen, session } = state; // <-- Lisätään sessio
+  const { isMobileMenuOpen, session } = state;
 
   const [isFabMenuOpen, setFabMenuOpen] = useState(false);
 
-  // NÄYTETÄÄN AUTH-KOMPONENTTI, JOS SESSIOTA EI OLE
   if (!session) {
     return <Auth />;
   }
@@ -59,7 +58,8 @@ function AppContent() {
           <h1 className="text-lg font-bold ml-4">ModusOpe</h1>
         </header>
 
-        <main className="flex-1 flex flex-col min-h-0">
+        {/* --- TÄMÄ RIVI ON MUUTETTU --- */}
+        <main className="flex-1 overflow-y-auto">
           {renderContent()}
         </main>
       </div>
