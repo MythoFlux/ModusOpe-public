@@ -109,7 +109,7 @@ export default function ScheduleTemplateView() {
                               <div className="font-medium text-gray-900 text-sm truncate">
                                 {template.name}
                               </div>
-                              <div className="text-xs text-gray-600">
+                              <div className="text-xs text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis">
                                 {formatTimeString(template.startTime)} - {formatTimeString(template.endTime)}
                               </div>
                               {template.description && (
