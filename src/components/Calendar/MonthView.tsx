@@ -1,6 +1,7 @@
+// src/components/Calendar/MonthView.tsx
 import React, { useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import { getDaysInMonth, isSameDay, isToday } from '../../utils/dateUtils';
+import { getDaysInMonth, isSameDay, isToday, formatTimeString } from '../../utils/dateUtils';
 import { Event } from '../../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 
@@ -29,7 +30,7 @@ export default function MonthView() {
     e.stopPropagation();
     if (event.type === 'deadline' && event.projectId) {
         if (event.projectId === GENERAL_TASKS_PROJECT_ID) {
-            return; 
+            return;
         }
       dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.projectId });
     } else {
@@ -87,7 +88,7 @@ export default function MonthView() {
                     style={{ backgroundColor: event.color + '20', color: event.color }}
                   >
                     {event.startTime && (
-                      <span className="font-medium">{event.startTime} </span>
+                      <span className="font-medium">{formatTimeString(event.startTime)} </span>
                     )}
                     {event.title}
                   </div>
