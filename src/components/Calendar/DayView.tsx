@@ -12,7 +12,7 @@ export default function DayView() {
 
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 7 * 48;
+      scrollContainerRef.current.scrollTop = 8 * 48;
     }
   }, [state.selectedDate, state.currentView]);
 
