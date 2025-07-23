@@ -6,52 +6,13 @@ import { createProjectWithTemplates } from '../utils/projectUtils';
 
 export function eventReducerLogic(state: AppState, action: AppAction): AppState {
   switch (action.type) {
-    case 'ADD_PROJECT': {
-      const projectPayload = action.payload;
-
-      if (projectPayload.type !== 'course' || !projectPayload.templateGroupName) {
-        return state;
-      }
-
-      const newProject = state.projects[state.projects.length - 1];
-      if (!newProject) return state;
-
-      const { newRecurringClasses } = createProjectWithTemplates(
-        { ...projectPayload, id: newProject.id },
-        state.scheduleTemplates
-      );
-
-      const newEvents = newRecurringClasses.flatMap(rc => {
-        const template = state.scheduleTemplates.find(t => t.id === rc.scheduleTemplateId);
-        return template ? generateRecurringEvents(rc, template) : [];
-      });
-
-      // Lisätään uudet toistuvat tunnit tietokantaan
-      const addRecurringClassesAsync = async () => {
-        const classesWithUserId = newRecurringClasses.map(rc => ({
-          ...rc,
-          user_id: state.session?.user.id
-        }));
-        const { error } = await supabase.from('recurring_classes').insert(classesWithUserId);
-        if (error) console.error("Error adding recurring classes:", error);
-      };
-      if (newRecurringClasses.length > 0) {
-        addRecurringClassesAsync();
-      }
-
-      return {
-        ...state,
-        recurringClasses: [...state.recurringClasses, ...newRecurringClasses],
-        events: [...state.events, ...newEvents]
-      };
-    }
+    // --- MUUTOS: KOKO 'ADD_PROJECT' CASE ON POISTETTU TÄÄLTÄ ---
 
     case 'DELETE_PROJECT': {
       const projectId = action.payload;
       const projectToDelete = state.projects.find(p => p.id === projectId);
 
       if (projectToDelete && projectToDelete.type === 'course') {
-        // Poistetaan kurssiin liittyvät toistuvat tunnit myös tietokannasta
         const deleteRecurringClassesAsync = async () => {
             const { error } = await supabase
                 .from('recurring_classes')
