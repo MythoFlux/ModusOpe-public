@@ -1,5 +1,5 @@
+// src/utils/dateUtils.ts
 export function formatDate(date: Date): string {
-  // MUUTOS: vaihdettu 'en-US' -> 'fi-FI'
   return date.toLocaleDateString('fi-FI', {
     year: 'numeric',
     month: 'long',
@@ -8,11 +8,26 @@ export function formatDate(date: Date): string {
 }
 
 export function formatTime(date: Date): string {
-  return date.toLocaleTimeString('en-US', {
+  return date.toLocaleTimeString('fi-FI', { // MUUTOS: vaihdettu 'en-US' -> 'fi-FI'
     hour: '2-digit',
     minute: '2-digit'
   });
 }
+
+// --- LISÄTTY UUSI FUNKTIO ALKAA ---
+/**
+ * Muotoilee ainoastaan kellonajan merkkijonosta (esim. "08:00:00") muotoon "08:00".
+ * @param timeString Kellonaika merkkijonona.
+ * @returns Kellonaika muodossa HH:mm.
+ */
+export function formatTimeString(timeString?: string): string {
+  if (!timeString || !timeString.includes(':')) {
+    return '';
+  }
+  const parts = timeString.split(':');
+  return `${parts[0]}:${parts[1]}`;
+}
+// --- LISÄTTY UUSI FUNKTIO PÄÄTTYY ---
 
 export function isSameDay(date1: Date, date2: Date): boolean {
   return (
@@ -33,24 +48,18 @@ export function getDaysInMonth(date: Date): Date[] {
   const lastDay = new Date(year, month + 1, 0);
   const days: Date[] = [];
 
-  // Muutettu: Suomalainen viikkojärjestys (Ma = 0, Ti = 1, ..., Su = 6)
-  // JavaScript: Su = 0, Ma = 1, ..., Sa = 6
-  // Muunnos: (jsDay + 6) % 7 antaa suomalaisen järjestyksen
-  const firstDayOfWeek = (firstDay.getDay() + 6) % 7; // Ma = 0, Ti = 1, ..., Su = 6
+  const firstDayOfWeek = (firstDay.getDay() + 6) % 7;
 
-  // Add previous month's days to fill the first week
   for (let i = firstDayOfWeek - 1; i >= 0; i--) {
     const prevDate = new Date(year, month, -i);
     days.push(prevDate);
   }
 
-  // Add current month's days
   for (let day = 1; day <= lastDay.getDate(); day++) {
     days.push(new Date(year, month, day));
   }
 
-  // Add next month's days to fill the last week
-  const remainingDays = 42 - days.length; // 6 weeks * 7 days
+  const remainingDays = 42 - days.length;
   for (let day = 1; day <= remainingDays; day++) {
     days.push(new Date(year, month + 1, day));
   }
@@ -87,7 +96,6 @@ export function addMonths(date: Date, months: number): Date {
 }
 
 export function getMonthName(date: Date): string {
-  // MUUTOS: vaihdettu 'en-US' -> 'fi-FI'
   return date.toLocaleDateString('fi-FI', { month: 'long' });
 }
 
