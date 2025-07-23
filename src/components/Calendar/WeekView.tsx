@@ -1,6 +1,7 @@
+// src/components/Calendar/WeekView.tsx
 import React, { useState, useRef, useLayoutEffect, useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import { formatDate, isToday, isSameDay, addDays } from '../../utils/dateUtils';
+import { formatDate, isToday, isSameDay, addDays, formatTimeString } from '../../utils/dateUtils'; // <-- LISÄTTY formatTimeString
 import { Event } from '../../types';
 import { Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
@@ -182,7 +183,7 @@ export default function WeekView() {
                                         }}
                                     >
                                         <div className="font-medium text-gray-900 truncate">{event.title}</div>
-                                        {event.startTime && (<div className="text-gray-600 text-xs">{event.startTime}{event.endTime && ` - ${event.endTime}`}</div>)}
+                                        {event.startTime && (<div className="text-gray-600 text-xs">{formatTimeString(event.startTime)}{event.endTime && ` - ${formatTimeString(event.endTime)}`}</div>)}
                                     </div>
                                 );
                             })}
