@@ -36,14 +36,58 @@ export function eventReducerLogic(state: AppState, action: AppAction): AppState 
       };
     }
 
-    case 'ADD_EVENT':
+    case 'ADD_EVENT': {
+      // --- LISÄTTY OSUUS ALKAA ---
+      const addEventAsync = async () => {
+        // Poistetaan 'id', jotta Supabase voi luoda sen automaattisesti
+        const { id, ...dbData } = action.payload;
+        const { error } = await supabase.from('events').insert([dbData]);
+        if (error) {
+          console.error("Error adding event:", error);
+        }
+      };
+      addEventAsync();
+      // --- LISÄTTY OSUUS PÄÄTTYY ---
       return { ...state, events: [...state.events, action.payload] };
+    }
     
-    case 'UPDATE_EVENT':
-      return { ...state, events: state.events.map(event => event.id === action.payload.id ? action.payload : event) };
+    case 'UPDATE_EVENT': {
+      // --- LISÄTTY OSUUS ALKAA ---
+      const updateEventAsync = async () => {
+        const { error } = await supabase
+          .from('events')
+          .update(action.payload)
+          .match({ id: action.payload.id });
+        if (error) {
+          console.error("Error updating event:", error);
+        }
+      };
+      updateEventAsync();
+      // --- LISÄTTY OSUUS PÄÄTTYY ---
+      return { 
+        ...state, 
+        events: state.events.map(event => event.id === action.payload.id ? action.payload : event) 
+      };
+    }
     
-    case 'DELETE_EVENT':
-      return { ...state, events: state.events.filter(event => event.id !== action.payload) };
+    case 'DELETE_EVENT': {
+      // --- LISÄTTY OSUUS ALKAA ---
+      const deleteEventAsync = async () => {
+        const { error } = await supabase
+          .from('events')
+          .delete()
+          .match({ id: action.payload });
+        if (error) {
+          console.error("Error deleting event:", error);
+        }
+      };
+      deleteEventAsync();
+      // --- LISÄTTY OSUUS PÄÄTTYY ---
+      return { 
+        ...state, 
+        events: state.events.filter(event => event.id !== action.payload) 
+      };
+    }
 
     case 'ADD_SCHEDULE_TEMPLATE': {
       const newTemplate = { ...action.payload, user_id: state.session?.user.id };
