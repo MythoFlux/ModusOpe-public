@@ -18,10 +18,11 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
     case 'ADD_PROJECT': {
       const projectDataFromForm = action.payload;
 
-      // KORJAUS: Muutetaan logiikkaa niin, että tietokantakutsut tehdään oikeassa järjestyksessä.
       const addProjectAndClassesAsync = async () => {
         // 1. Erotetaan projektin data tietokantaa varten.
-        const { templateGroupName, files, columns, tasks, ...dbData } = projectDataFromForm;
+        // KORJAUS: Poistetaan 'id' (joka on 'undefined' uutta projektia luodessa) `dbData`-objektista,
+        // jotta Supabase voi generoida sen automaattisesti tietokannassa.
+        const { id, templateGroupName, files, columns, tasks, ...dbData } = projectDataFromForm;
         
         // 2. Luodaan projekti ja odotetaan, että se on valmis. Pyydetään paluuarvona luotu projekti.
         const { data: newProjectData, error: projectError } = await supabase
