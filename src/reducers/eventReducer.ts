@@ -17,7 +17,8 @@ export function eventReducerLogic(state: AppState, action: AppAction): AppState 
             const { error } = await supabase
                 .from('recurring_classes')
                 .delete()
-                .match({ project_id: projectId });
+                // KORJAUS: Muutettu `project_id` -> `projectId` vastaamaan tietokannan sarakkeen nimeä.
+                .match({ projectId: projectId });
             if (error) console.error("Error deleting recurring classes:", error);
         };
         deleteRecurringClassesAsync();
