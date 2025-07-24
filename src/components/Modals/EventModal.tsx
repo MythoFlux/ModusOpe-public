@@ -37,6 +37,8 @@ export default function EventModal() {
     endDate: ''
   });
 
+  // HUOM: Koodi luottaa edelleen camelCase-tyyppeihin sovelluksen sisällä,
+  // joten käytetään niitä `selectedEvent`-oliota käsitellessä.
   const isRecurringEvent = selectedEvent?.scheduleTemplateId && selectedEvent.id.startsWith('recurring-');
   
   const similarEvents = React.useMemo(() => {
@@ -105,20 +107,25 @@ export default function EventModal() {
       eventDate.setHours(parseInt(hours), parseInt(minutes));
     }
 
+    // --- MUUTETTU KOHTA ALKAA ---
+    // Muutetaan avaimet vastaamaan tietokannan snake_case-sarakkeita
     const eventData: any = {
       id: selectedEvent?.id || uuidv4(),
       title: formData.title,
       description: formData.description,
       date: eventDate,
-      startTime: formData.start_time,
-      endTime: formData.end_time,
+      start_time: formData.start_time || null, // Käytä null tyhjän sijaan
+      end_time: formData.end_time || null,     // Käytä null tyhjän sijaan
       type: formData.type,
       color: formData.color,
-      projectId: formData.project_id || undefined,
+      project_id: formData.project_id || null, // Käytä null tyhjän sijaan
+      // Nämä ovat sovelluksen sisäisiä, joten ne voivat säilyä camelCase-muodossa
+      // kunnes ne tallennetaan omiin tauluihinsa. Events-tauluun ne eivät kuulu.
       scheduleTemplateId: selectedEvent?.scheduleTemplateId,
       groupName: selectedEvent?.groupName,
       files: files
     };
+    // --- MUUTETTU KOHTA PÄÄTTYY ---
     
     if (!selectedEvent) {
         eventData.user_id = session.user.id;
@@ -298,7 +305,6 @@ export default function EventModal() {
                 ))}
               </FormSelect>
 
-              {/* --- LISÄTTY SARJAN MUOKKAUSOSIO --- */}
               {isRecurringEvent && similarEvents.length > 0 && (
                 <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg space-y-3">
                   <h4 className="font-semibold text-yellow-800">Sarjan muokkaus</h4>
