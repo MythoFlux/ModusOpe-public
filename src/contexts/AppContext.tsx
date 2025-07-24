@@ -7,10 +7,16 @@ import { supabase } from '../supabaseClient';
 import { projectReducerLogic } from '../reducers/projectReducer';
 import { eventReducerLogic } from '../reducers/eventReducer';
 import { uiReducerLogic } from '../reducers/uiReducer';
-import { updateDeadlineEvents, generateRecurringEvents } from '../utils/eventUtils'; // Lisätty generateRecurringEvents
+import { updateDeadlineEvents, generateRecurringEvents } from '../utils/eventUtils';
 
-// Funktio pysyy samana...
-function getInitialEvents(projects: Project[], recurringClasses: RecurringClass[], templates: ScheduleTemplate[]): Event[] {
+// --- MUUTETTU FUNKTIO ALKAA ---
+// Lisätty manualEvents-parametri, joka sisältää tietokannasta haetut tapahtumat
+function getInitialEvents(
+  projects: Project[], 
+  recurringClasses: RecurringClass[], 
+  templates: ScheduleTemplate[],
+  manualEvents: Event[] // <-- LISÄTTY
+): Event[] {
   const projectDeadlines = projects
     .filter(project => project.end_date && project.type !== 'course')
     .map(project => ({
@@ -33,14 +39,15 @@ function getInitialEvents(projects: Project[], recurringClasses: RecurringClass[
         projectId: task.projectId,
     }));
     
-  // Generoidaan tapahtumat toistuvista tunneista
   const recurringEvents = recurringClasses.flatMap(rc => {
       const template = templates.find(t => t.id === rc.scheduleTemplateId);
       return template ? generateRecurringEvents(rc, template) : [];
   });
 
-  return [...projectDeadlines, ...taskDeadlines, ...recurringEvents];
+  // Yhdistetään dynaamisesti luodut tapahtumat ja tietokannasta haetut manuaaliset tapahtumat
+  return [...projectDeadlines, ...taskDeadlines, ...recurringEvents, ...manualEvents];
 }
+// --- MUUTETTU FUNKTIO PÄÄTTYY ---
 
 
 export const GENERAL_TASKS_PROJECT_ID = 'general_tasks_project';
@@ -69,7 +76,6 @@ export interface ConfirmationModalState {
   onCancel: () => void;
 }
 
-// Muokataan AppStatea sisältämään sessio
 export interface AppState {
   session: Session | null;
   loading: boolean;
@@ -99,7 +105,8 @@ export interface AppState {
 
 export type AppAction =
   | { type: 'SET_SESSION'; payload: Session | null }
-  | { type: 'INITIALIZE_DATA'; payload: { projects: Project[]; scheduleTemplates: ScheduleTemplate[]; recurringClasses: RecurringClass[] } }
+  // --- MUUTETTU RIVI ---
+  | { type: 'INITIALIZE_DATA'; payload: { projects: Project[]; scheduleTemplates: ScheduleTemplate[]; recurringClasses: RecurringClass[]; manualEvents: Event[] } }
   | { type: 'ADD_EVENT'; payload: Event }
   | { type: 'UPDATE_EVENT'; payload: Event }
   | { type: 'DELETE_EVENT'; payload: string }
@@ -174,16 +181,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
       if (state.session === action.payload) return state;
       return { ...state, session: action.payload };
     case 'INITIALIZE_DATA':
-      const { projects, scheduleTemplates, recurringClasses } = action.payload;
+      // --- MUUTETTU KOHTA ALKAA ---
+      const { projects, scheduleTemplates, recurringClasses, manualEvents } = action.payload;
       const initialProjectsWithGeneral = [generalTasksProject, ...projects];
       return {
         ...state,
         projects: initialProjectsWithGeneral,
         scheduleTemplates,
         recurringClasses,
-        events: getInitialEvents(initialProjectsWithGeneral, recurringClasses, scheduleTemplates),
+        events: getInitialEvents(initialProjectsWithGeneral, recurringClasses, scheduleTemplates, manualEvents),
         loading: false,
       };
+      // --- MUUTETTU KOHTA PÄÄTTYY ---
     default:
       const stateAfterUi = uiReducerLogic(state, action);
       const stateAfterEvent = eventReducerLogic(stateAfterUi, action);
@@ -221,17 +230,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const fetchInitialData = async () => {
       if (!state.session) return;
       
-      const [projectsRes, templatesRes, recurringRes] = await Promise.all([
+      // --- MUUTETTU KOHTA ALKAA ---
+      const [projectsRes, templatesRes, recurringRes, eventsRes] = await Promise.all([
           supabase.from('projects').select('*'),
           supabase.from('schedule_templates').select('*'),
-          supabase.from('recurring_classes').select('*')
+          supabase.from('recurring_classes').select('*'),
+          supabase.from('events').select('*') // <-- LISÄTTY events-taulun haku
       ]);
 
-      if (projectsRes.error || templatesRes.error || recurringRes.error) {
-        console.error('Error fetching data:', projectsRes.error || templatesRes.error || recurringRes.error);
-        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [] } });
+      if (projectsRes.error || templatesRes.error || recurringRes.error || eventsRes.error) {
+        console.error('Error fetching data:', projectsRes.error || templatesRes.error || recurringRes.error || eventsRes.error);
+        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [] } });
         return;
       }
+      // --- MUUTETTU KOHTA PÄÄTTYY ---
       
       const formattedProjects = (projectsRes.data || []).map((p: any) => ({
         ...p,
@@ -250,13 +262,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
         startDate: new Date(rc.startDate),
         endDate: new Date(rc.endDate),
       }));
+      
+      // --- LISÄTTY KOHTA ALKAA ---
+      // Muotoillaan tietokannasta haetut tapahtumat oikeaan muotoon
+      const formattedEvents = (eventsRes.data || []).map((e: any) => ({
+        ...e,
+        // Varmistetaan, että päivämäärä on Date-olio
+        date: new Date(e.date),
+        // Muunnetaan snake_case avaimet camelCase-avaimiksi sovelluksen sisäistä käyttöä varten
+        startTime: e.start_time,
+        endTime: e.end_time,
+        projectId: e.project_id,
+        scheduleTemplateId: e.schedule_template_id,
+        groupName: e.group_name
+      }));
+      // --- LISÄTTY KOHTA PÄÄTTYY ---
 
+      // --- MUUTETTU KOHTA ---
       dispatch({ 
         type: 'INITIALIZE_DATA', 
         payload: { 
           projects: formattedProjects, 
           scheduleTemplates: templatesRes.data || [], 
-          recurringClasses: formattedRecurring
+          recurringClasses: formattedRecurring,
+          manualEvents: formattedEvents // <-- Lisätään haetut tapahtumat mukaan
         } 
       });
     };
@@ -264,7 +293,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (state.session) {
       fetchInitialData();
     } else {
-      dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [] }});
+      dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [] }});
     }
   }, [state.session]);
 
