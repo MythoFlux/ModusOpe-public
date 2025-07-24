@@ -4,7 +4,7 @@ import { AppAction, AppState } from '../contexts/AppContext';
 import { KanbanColumn, Project, Subtask, Task } from '../types';
 import { supabase } from '../supabaseClient';
 import { createProjectWithTemplates } from '../utils/projectUtils';
-import { generateRecurringEvents } from '../utils/eventUtils'; // <-- LISÄTTY IMPORTTI
+import { generateRecurringEvents } from '../utils/eventUtils';
 
 // Apufunktio projektin löytämiseksi tilasta
 const findProject = (state: AppState, projectId: string): Project | undefined => {
@@ -16,53 +16,67 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
   switch (action.type) {
     // === PROJEKTIT ===
     case 'ADD_PROJECT': {
-      const projectWithId = {
-        ...action.payload,
-        id: action.payload.id || uuidv4(),
-      };
+      const projectDataFromForm = action.payload;
 
-      const addProjectAsync = async () => {
-        const { templateGroupName, files, columns, tasks, ...dbData } = projectWithId;
-        const { data, error } = await supabase
+      // KORJAUS: Muutetaan logiikkaa niin, että tietokantakutsut tehdään oikeassa järjestyksessä.
+      const addProjectAndClassesAsync = async () => {
+        // 1. Erotetaan projektin data tietokantaa varten.
+        const { templateGroupName, files, columns, tasks, ...dbData } = projectDataFromForm;
+        
+        // 2. Luodaan projekti ja odotetaan, että se on valmis. Pyydetään paluuarvona luotu projekti.
+        const { data: newProjectData, error: projectError } = await supabase
           .from('projects')
           .insert([dbData])
           .select()
           .single();
 
-        if (error) console.error("Error adding project:", error);
-        else if (data) console.log("Project added successfully:", data);
-      };
-      addProjectAsync();
+        if (projectError) {
+          console.error("Error adding project:", projectError);
+          return; // Lopetetaan suoritus, jos projektin luonti epäonnistui.
+        }
+        
+        console.log("Project added successfully:", newProjectData);
 
-      // --- MUUTOS ALKAA ---
-      // Keskistetään projektin, toistuvien tuntien ja tapahtumien luonti tänne.
-      const { project, newRecurringClasses } = createProjectWithTemplates(projectWithId, state.scheduleTemplates);
+        // 3. Jos tuntiryhmä oli valittu, luodaan toistuvat tunnit käyttäen juuri luodun projektin ID:tä.
+        if (templateGroupName && newProjectData) {
+          const projectWithId = { ...projectDataFromForm, id: newProjectData.id };
+          const { newRecurringClasses } = createProjectWithTemplates(projectWithId, state.scheduleTemplates);
+          
+          if (newRecurringClasses.length > 0) {
+            const classesWithUserId = newRecurringClasses.map(rc => ({
+              ...rc,
+              projectId: newProjectData.id, // Varmistetaan, että käytössä on oikea ID
+              user_id: state.session?.user.id
+            }));
+            
+            // 4. Lisätään toistuvat tunnit tietokantaan ja odotetaan, että se on valmis.
+            const { error: recurringError } = await supabase.from('recurring_classes').insert(classesWithUserId);
+            if (recurringError) {
+              console.error("Error adding recurring classes:", recurringError);
+            }
+          }
+        }
+      };
+      
+      addProjectAndClassesAsync();
+
+      // Päivitetään paikallinen tila optimistisesti heti.
+      const { project, newRecurringClasses } = createProjectWithTemplates(
+        { ...projectDataFromForm, id: uuidv4() }, // Käytetään väliaikaista ID:tä paikallisesti
+        state.scheduleTemplates
+      );
 
       const newEvents = newRecurringClasses.flatMap(rc => {
         const template = state.scheduleTemplates.find(t => t.id === rc.scheduleTemplateId);
         return template ? generateRecurringEvents(rc, template) : [];
       });
-
-      // Lisätään uudet toistuvat tunnit tietokantaan
-      const addRecurringClassesAsync = async () => {
-        const classesWithUserId = newRecurringClasses.map(rc => ({
-          ...rc,
-          user_id: state.session?.user.id
-        }));
-        const { error } = await supabase.from('recurring_classes').insert(classesWithUserId);
-        if (error) console.error("Error adding recurring classes:", error);
-      };
-      if (newRecurringClasses.length > 0) {
-        addRecurringClassesAsync();
-      }
-
+      
       return {
         ...state,
         projects: [...state.projects, project],
         recurringClasses: [...state.recurringClasses, ...newRecurringClasses],
         events: [...state.events, ...newEvents],
       };
-      // --- MUUTOS PÄÄTTYY ---
     }
 
     case 'UPDATE_PROJECT': {
