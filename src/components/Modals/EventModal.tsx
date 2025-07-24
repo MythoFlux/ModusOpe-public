@@ -37,8 +37,6 @@ export default function EventModal() {
     endDate: ''
   });
 
-  // HUOM: Koodi luottaa edelleen camelCase-tyyppeihin sovelluksen sisällä,
-  // joten käytetään niitä `selectedEvent`-oliota käsitellessä.
   const isRecurringEvent = selectedEvent?.scheduleTemplateId && selectedEvent.id.startsWith('recurring-');
   
   const similarEvents = React.useMemo(() => {
@@ -107,25 +105,22 @@ export default function EventModal() {
       eventDate.setHours(parseInt(hours), parseInt(minutes));
     }
 
-    // --- MUUTETTU KOHTA ALKAA ---
-    // Muutetaan avaimet vastaamaan tietokannan snake_case-sarakkeita
+    // --- KORJATTU KOHTA ALKAA ---
     const eventData: any = {
       id: selectedEvent?.id || uuidv4(),
       title: formData.title,
       description: formData.description,
       date: eventDate,
-      start_time: formData.start_time || null, // Käytä null tyhjän sijaan
-      end_time: formData.end_time || null,     // Käytä null tyhjän sijaan
+      start_time: formData.start_time || null,
+      end_time: formData.end_time || null,
       type: formData.type,
       color: formData.color,
-      project_id: formData.project_id || null, // Käytä null tyhjän sijaan
-      // Nämä ovat sovelluksen sisäisiä, joten ne voivat säilyä camelCase-muodossa
-      // kunnes ne tallennetaan omiin tauluihinsa. Events-tauluun ne eivät kuulu.
-      scheduleTemplateId: selectedEvent?.scheduleTemplateId,
-      groupName: selectedEvent?.groupName,
+      project_id: formData.project_id || null,
+      schedule_template_id: selectedEvent?.scheduleTemplateId || null,
+      group_name: selectedEvent?.groupName || null,
       files: files
     };
-    // --- MUUTETTU KOHTA PÄÄTTYY ---
+    // --- KORJATTU KOHTA PÄÄTTYY ---
     
     if (!selectedEvent) {
         eventData.user_id = session.user.id;
