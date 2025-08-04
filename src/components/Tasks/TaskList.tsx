@@ -12,8 +12,8 @@ export default function TaskList() {
   const allTasks = useMemo(() => projects.flatMap(project => 
     project.tasks.map(task => ({
       ...task,
-      projectName: project.name,
-      projectColor: project.color
+      project_name: project.name,
+      project_color: project.color
     }))
   ), [projects]);
 
@@ -149,9 +149,9 @@ export default function TaskList() {
                         <div className="flex items-center space-x-1">
                           <div
                             className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: task.projectColor }}
+                            style={{ backgroundColor: task.project_color }}
                           />
-                          <span>{task.projectName}</span>
+                          <span>{task.project_name}</span>
                         </div>
                         
                         {task.due_date && ( // KORJATTU
@@ -209,9 +209,9 @@ export default function TaskList() {
                         <div className="flex items-center space-x-1">
                           <div
                             className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: task.projectColor }}
+                            style={{ backgroundColor: task.project_color }}
                           />
-                          <span>{task.projectName}</span>
+                          <span>{task.project_name}</span>
                         </div>
                       </div>
                     </div>
