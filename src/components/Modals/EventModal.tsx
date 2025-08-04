@@ -108,8 +108,8 @@ export default function EventModal() {
     }
 
     const eventData: Event = {
-      id: selectedEvent?.id || '', // ID will be set by Supabase
-      user_id: session!.user.id,
+      id: selectedEvent?.id || '', // ID will be set by Supabase for new events
+      // POISTETTU: user_id poistettu, tietokanta hoitaa tämän
       title: formData.title,
       description: formData.description,
       date: eventDate,
@@ -117,7 +117,7 @@ export default function EventModal() {
       end_time: formData.end_time || undefined,
       type: formData.type,
       color: formData.color,
-      project_id: formData.project_id || undefined,
+      project_id: formData.project_id || null, // MUUTETTU: Käytetään null tyhjän merkkijonon sijaan
       schedule_template_id: selectedEvent?.schedule_template_id || undefined,
       group_name: selectedEvent?.group_name || undefined,
       files: files
@@ -140,7 +140,8 @@ export default function EventModal() {
                 }
             }
         } else {
-            await services.addEvent(eventData);
+            const { id, ...newEventData } = eventData; // Poistetaan tyhjä id ennen lähetystä
+            await services.addEvent(newEventData);
         }
         dispatch({ type: 'CLOSE_MODALS' });
     } catch (error: any) {
