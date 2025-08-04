@@ -42,7 +42,7 @@ function AppContent() {
 
   const fabActions = [
     { label: 'Tapahtuma', icon: CalendarIcon, action: () => dispatch({ type: 'TOGGLE_EVENT_MODAL' }) },
-    { label: 'Oppitunti', icon: BookOpen, action: () => dispatch({ type: 'TOGGLE_COURSE_MODAL' }) },
+    { label: 'Kurssi', icon: BookOpen, action: () => dispatch({ type: 'TOGGLE_COURSE_MODAL' }) },
     { label: 'Projekti', icon: ClipboardCheck, action: () => dispatch({ type: 'TOGGLE_PROJECT_MODAL' }) },
     { label: 'Tehtävä', icon: CheckSquare, action: () => dispatch({ type: 'TOGGLE_TASK_MODAL' }) },
   ];
