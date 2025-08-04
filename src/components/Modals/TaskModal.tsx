@@ -81,11 +81,11 @@ export default function TaskModal() {
     }
     setIsLoading(true);
     
-    const targetProjectId = formData.project_id || GENERAL_TASKS_PROJECT_ID;
+    // --- KORJATTU KOHTA ---
+    // Jos projektia ei ole valittu (formData.project_id on tyhjä), asetetaan arvoksi null.
+    // Tämä on oikea tapa kertoa tietokannalle, että viiteavainta ei ole.
+    const targetProjectId = formData.project_id || null;
 
-    // --- KORJATTU KOHTA ALKAA ---
-    
-    // Luodaan ensin perusdata, joka on yhteinen sekä uusille että päivitettäville tehtäville.
     const commonTaskData = {
       title: formData.title,
       description: formData.description,
@@ -99,7 +99,6 @@ export default function TaskModal() {
 
     try {
         if (selectedTask && selectedTask.id) {
-            // Päivityksen yhteydessä lähetetään myös ID ja completed-tila
             const taskToUpdate: Task = {
                 ...commonTaskData,
                 id: selectedTask.id,
@@ -107,8 +106,6 @@ export default function TaskModal() {
             };
             await services.updateTask(taskToUpdate);
         } else {
-            // Uutta tehtävää luodessa lähetetään vain Omit<Task, 'id'> -tyypin mukaiset tiedot.
-            // ID:tä tai user_id:tä ei lähetetä.
             const taskToAdd: Omit<Task, 'id'> = {
                 ...commonTaskData,
                 completed: false,
@@ -121,7 +118,6 @@ export default function TaskModal() {
     } finally {
         setIsLoading(false);
     }
-    // --- KORJATTU KOHTA PÄÄTTYY ---
   };
   
   const handleDelete = async () => {
