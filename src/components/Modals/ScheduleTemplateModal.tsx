@@ -17,9 +17,9 @@ export default function ScheduleTemplateModal() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    dayOfWeek: 0,
-    startTime: '08:00',
-    endTime: '09:00',
+    day_of_week: 0,
+    start_time: '08:00',
+    end_time: '09:00',
     color: DEFAULT_COLOR,
   });
 
@@ -28,19 +28,18 @@ export default function ScheduleTemplateModal() {
       setFormData({
         name: selectedScheduleTemplate.name,
         description: selectedScheduleTemplate.description || '',
-        dayOfWeek: selectedScheduleTemplate.dayOfWeek,
-        startTime: selectedScheduleTemplate.startTime,
-        endTime: selectedScheduleTemplate.endTime,
+        day_of_week: selectedScheduleTemplate.day_of_week,
+        start_time: selectedScheduleTemplate.start_time,
+        end_time: selectedScheduleTemplate.end_time,
         color: selectedScheduleTemplate.color,
       });
     } else {
-      // Nollaa oletusarvoihin uutta pohjaa varten
       setFormData({
         name: '',
         description: '',
-        dayOfWeek: 0,
-        startTime: '08:00',
-        endTime: '09:00',
+        day_of_week: 0,
+        start_time: '08:00',
+        end_time: '09:00',
         color: DEFAULT_COLOR,
       });
     }
@@ -57,9 +56,9 @@ export default function ScheduleTemplateModal() {
       id: selectedScheduleTemplate?.id || uuidv4(),
       name: formData.name,
       description: formData.description,
-      dayOfWeek: Number(formData.dayOfWeek),
-      startTime: formData.startTime,
-      endTime: formData.endTime,
+      day_of_week: Number(formData.day_of_week),
+      start_time: formData.start_time,
+      end_time: formData.end_time,
       color: formData.color,
     };
 
@@ -118,8 +117,8 @@ export default function ScheduleTemplateModal() {
             label="Viikonpäivä"
             icon={<Clock className="w-4 h-4 inline mr-2" />}
             required
-            value={formData.dayOfWeek}
-            onChange={(e) => setFormData({ ...formData, dayOfWeek: Number(e.target.value) })}
+            value={formData.day_of_week}
+            onChange={(e) => setFormData({ ...formData, day_of_week: Number(e.target.value) })}
           >
             {weekDays.map((day, index) => (
               <option key={index} value={index}>
@@ -135,16 +134,16 @@ export default function ScheduleTemplateModal() {
               icon={<Clock className="w-4 h-4 inline mr-2" />}
               type="time"
               required
-              value={formData.startTime}
-              onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+              value={formData.start_time}
+              onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
             />
             <FormInput
               id="template-end-time"
               label="Loppuaika"
               type="time"
               required
-              value={formData.endTime}
-              onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+              value={formData.end_time}
+              onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
             />
           </div>
 
