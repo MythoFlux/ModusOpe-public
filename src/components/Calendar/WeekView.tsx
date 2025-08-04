@@ -1,7 +1,7 @@
 // src/components/Calendar/WeekView.tsx
 import React, { useState, useRef, useLayoutEffect, useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import { formatDate, isToday, isSameDay, addDays, formatTimeString } from '../../utils/dateUtils'; // <-- LISÄTTY formatTimeString
+import { formatDate, isToday, isSameDay, addDays, formatTimeString } from '../../utils/dateUtils';
 import { Event } from '../../types';
 import { Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
@@ -51,11 +51,11 @@ export default function WeekView() {
   }, [displayDates, events]);
 
   const handleEventClick = (event: Event) => {
-    if (event.type === 'deadline' && event.projectId) {
-      if (event.projectId === GENERAL_TASKS_PROJECT_ID) {
+    if (event.type === 'deadline' && event.project_id) { // KORJATTU
+      if (event.project_id === GENERAL_TASKS_PROJECT_ID) { // KORJATTU
         return; 
       }
-      dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.projectId });
+      dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id }); // KORJATTU
     } else {
       dispatch({ type: 'TOGGLE_EVENT_MODAL', payload: event });
     }
