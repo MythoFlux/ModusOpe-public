@@ -1,7 +1,7 @@
 // src/components/Modals/RecurringClassModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Type, FileText, Clock, File } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid'; // <-- MUUTETTU: nanoid -> uuid
+import { v4 as uuidv4 } from 'uuid';
 import { useApp } from '../../contexts/AppContext';
 import { RecurringClass, FileAttachment } from '../../types';
 import AttachmentSection from '../Shared/AttachmentSection';
@@ -18,8 +18,8 @@ export default function RecurringClassModal() {
     title: '',
     description: '',
     templateGroupName: '',
-    startDate: '',
-    endDate: ''
+    start_date: '',
+    end_date: ''
   });
 
   const [files, setFiles] = useState<FileAttachment[]>([]);
@@ -41,13 +41,13 @@ export default function RecurringClassModal() {
 
   useEffect(() => {
     if (selectedRecurringClass) {
-      const template = scheduleTemplates.find(t => t.id === selectedRecurringClass.scheduleTemplateId);
+      const template = scheduleTemplates.find(t => t.id === selectedRecurringClass.schedule_template_id);
       setFormData({
         title: selectedRecurringClass.title,
         description: selectedRecurringClass.description || '',
         templateGroupName: template?.name || '',
-        startDate: selectedRecurringClass.startDate.toISOString().split('T')[0],
-        endDate: selectedRecurringClass.endDate.toISOString().split('T')[0]
+        start_date: selectedRecurringClass.start_date.toISOString().split('T')[0],
+        end_date: selectedRecurringClass.end_date.toISOString().split('T')[0]
       });
       setFiles(selectedRecurringClass.files || []);
     } else {
@@ -58,8 +58,8 @@ export default function RecurringClassModal() {
         title: '',
         description: '',
         templateGroupName: templateGroupNames[0] || '',
-        startDate: today.toISOString().split('T')[0],
-        endDate: endOfYear.toISOString().split('T')[0]
+        start_date: today.toISOString().split('T')[0],
+        end_date: endOfYear.toISOString().split('T')[0]
       });
       setFiles([]);
     }
@@ -74,15 +74,15 @@ export default function RecurringClassModal() {
 
     selectedTemplates.forEach((template, index) => {
       const classData: RecurringClass = {
-        id: selectedRecurringClass?.id || uuidv4(), // <-- KORJATTU
+        id: selectedRecurringClass?.id || uuidv4(),
         title: formData.title,
         description: formData.description,
-        scheduleTemplateId: template.id,
-        startDate: new Date(formData.startDate),
-        endDate: new Date(formData.endDate),
+        schedule_template_id: template.id,
+        start_date: new Date(formData.start_date),
+        end_date: new Date(formData.end_date),
         color: template.color,
-        groupName: formData.templateGroupName,
-        projectId: courseModalInfo?.id,
+        group_name: formData.templateGroupName,
+        project_id: courseModalInfo?.id,
         files: files
       };
 
@@ -102,7 +102,7 @@ export default function RecurringClassModal() {
     
     const weekDays = ['Maanantai', 'Tiistai', 'Keskiviikko', 'Torstai', 'Perjantai'];
     const timeSlots = templates.map(template => 
-      `${weekDays[template.dayOfWeek]} ${template.startTime}-${template.endTime}`
+      `${weekDays[template.day_of_week]} ${template.start_time}-${template.end_time}`
     );
     
     return timeSlots.join(', ');
@@ -208,16 +208,16 @@ export default function RecurringClassModal() {
                   icon={<Calendar className="w-4 h-4 inline mr-2" />}
                   type="date"
                   required
-                  value={formData.startDate}
-                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                 />
                 <FormInput
                   id="class-end-date"
                   label="Loppupäivä"
                   type="date"
                   required
-                  value={formData.endDate}
-                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                  value={formData.end_date}
+                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                 />
               </div>
 
