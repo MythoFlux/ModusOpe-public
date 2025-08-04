@@ -35,8 +35,8 @@ export default function DayView() {
     [events, selectedDate]
   );
 
-  const allDayEvents = useMemo(() => dayEvents.filter(e => !e.startTime), [dayEvents]);
-  const timedEvents = useMemo(() => dayEvents.filter(e => !!e.startTime), [dayEvents]);
+  const allDayEvents = useMemo(() => dayEvents.filter(e => !e.start_time), [dayEvents]);
+  const timedEvents = useMemo(() => dayEvents.filter(e => !!e.start_time), [dayEvents]);
 
   const handleEventClick = (event: Event) => {
     if (event.type === 'deadline' && event.project_id) { // KORJATTU
@@ -129,9 +129,9 @@ export default function DayView() {
               const top = (startHour * 48) + (startMinute * 48 / 60);
               
               let height = 48;
-              if (event.endTime && event.startTime) {
-                const [endHour, endMinute] = event.endTime.split(':').map(Number);
-                const [startHourTime, startMinuteTime] = event.startTime.split(':').map(Number) || [startHour, startMinute];
+              if (event.end_time && event.start_time) {
+                const [endHour, endMinute] = event.end_time.split(':').map(Number);
+                const [startHourTime, startMinuteTime] = event.start_time.split(':').map(Number) || [startHour, startMinute];
                 const duration = (endHour - startHourTime) + ((endMinute - startMinuteTime) / 60);
                 height = duration * 48;
               }
@@ -153,10 +153,10 @@ export default function DayView() {
                     <span className="font-medium text-gray-900 truncate pr-2">
                       {event.title}
                     </span>
-                    {event.startTime && (
+                    {event.start_time && (
                       <span className="text-sm text-gray-600 flex-shrink-0 whitespace-nowrap">
-                        {formatTimeString(event.startTime)}
-                        {event.endTime && ` - ${formatTimeString(event.endTime)}`}
+                        {formatTimeString(event.start_time)}
+                        {event.end_time && ` - ${formatTimeString(event.end_time)}`}
                       </span>
                     )}
                   </div>
