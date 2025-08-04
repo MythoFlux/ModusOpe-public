@@ -219,29 +219,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addProject: useCallback(async (projectPayload: AddProjectPayload) => {
         const { template_group_name, ...projectDataFromForm } = projectPayload;
         const { id, files, columns, tasks, ...dbData } = projectDataFromForm;
+
+        // 1. Insert the project and get the new row with the real ID
         const { data: newProjectData, error } = await supabase.from('projects').insert([dbData]).select().single();
         if (error || !newProjectData) throw new Error(error.message);
 
-        // --- TÄMÄ ON KORJATTU KOHTA ---
-        // Muunnetaan Supabaselta tulleet päivämäärä-stringit takaisin Date-olioiksi
+        // 2. Format the project data correctly (dates to Date objects)
         const finalProject: Project = {
-          ...(projectDataFromForm as Project), // Käytetään alkuperäistä payloadia pohjana
-          ...newProjectData, // Ylikirjoitetaan id, created_at jne. Supabasen palauttamilla arvoilla
+          ...(projectDataFromForm as Project),
+          ...newProjectData,
           start_date: new Date(newProjectData.start_date),
           end_date: newProjectData.end_date ? new Date(newProjectData.end_date) : undefined,
+          tasks: [],
+          columns: projectDataFromForm.columns || [
+            { id: 'todo', title: 'Suunnitteilla' },
+            { id: 'inProgress', title: 'Työn alla' },
+            { id: 'done', title: 'Valmis' },
+          ],
         };
-        // --- KORJAUKSEN LOPPU ---
 
-        if (template_group_name) {
-            const { newRecurringClasses } = createProjectWithTemplates(finalProject, state.scheduleTemplates);
-            if (newRecurringClasses.length > 0) {
-                // Käytetään `any` tyyppiä väliaikaisesti, koska `user_id` ei ole RecurringClass-tyypissä
-                const classesToInsert: any[] = newRecurringClasses.map(rc => ({ ...rc, project_id: newProjectData.id, user_id: state.session?.user.id }));
-                const { data: newClassesData, error: recurringError } = await supabase.from('recurring_classes').insert(classesToInsert).select();
+        // 3. If a template group was selected, generate and insert recurring classes
+        if (template_group_name && finalProject.type === 'course') {
+            const templatesInGroup = state.scheduleTemplates.filter(t => t.name === template_group_name);
+            const recurringEndDate = finalProject.end_date
+                ? finalProject.end_date
+                : new Date(finalProject.start_date.getFullYear(), 11, 31);
+
+            if (templatesInGroup.length > 0) {
+                const newRecurringClasses: any[] = templatesInGroup.map(template => ({
+                    title: finalProject.name,
+                    description: `Oppitunti kurssille ${finalProject.name}`,
+                    schedule_template_id: template.id,
+                    start_date: finalProject.start_date,
+                    end_date: recurringEndDate,
+                    color: finalProject.color,
+                    group_name: template.name,
+                    project_id: finalProject.id,
+                    files: finalProject.files || [],
+                    user_id: state.session!.user.id
+                }));
+
+                const { data: newClassesData, error: recurringError } = await supabase.from('recurring_classes').insert(newRecurringClasses).select();
                 
                 if (recurringError) throw new Error(recurringError.message);
 
-                // Muunnetaan palautetut päivämäärät Date-olioiksi ennen dispatchia
                 const formattedNewClasses = (newClassesData || []).map((rc: any) => ({
                     ...rc,
                     start_date: new Date(rc.start_date),
@@ -251,7 +272,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 dispatch({ type: 'ADD_RECURRING_CLASS_SUCCESS', payload: formattedNewClasses as RecurringClass[] });
             }
         }
-        dispatch({ type: 'ADD_PROJECT_SUCCESS', payload: finalProject as Project });
+
+        // 4. Finally, dispatch the action to add the new project to the state
+        dispatch({ type: 'ADD_PROJECT_SUCCESS', payload: finalProject });
     }, [state.scheduleTemplates, state.session]),
 
     updateProject: useCallback(async (project: Project) => {
