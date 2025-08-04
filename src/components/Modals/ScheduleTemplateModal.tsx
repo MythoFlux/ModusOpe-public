@@ -54,8 +54,8 @@ export default function ScheduleTemplateModal() {
     }
     setIsLoading(true);
 
-    const templateData: ScheduleTemplate = {
-      id: selectedScheduleTemplate?.id || '', // ID will be handled by service
+    const templateData: any = { // Käytetään 'any' väliaikaisesti id:n poistoa varten
+      id: selectedScheduleTemplate?.id || '',
       name: formData.name,
       description: formData.description,
       day_of_week: Number(formData.day_of_week),
@@ -66,9 +66,11 @@ export default function ScheduleTemplateModal() {
 
     try {
         if (selectedScheduleTemplate) {
-            await services.updateScheduleTemplate(templateData);
+            await services.updateScheduleTemplate(templateData as ScheduleTemplate);
         } else {
-            await services.addScheduleTemplate(templateData);
+            // MUUTETTU: Poistetaan 'id'-kenttä ennen uuden pohjan lisäämistä
+            const { id, ...newTemplateData } = templateData;
+            await services.addScheduleTemplate(newTemplateData);
         }
         dispatch({ type: 'CLOSE_MODALS' });
     } catch (error: any) {
