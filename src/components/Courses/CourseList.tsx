@@ -1,3 +1,4 @@
+// src/components/Courses/CourseList.tsx
 import React, { useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { BookOpen, Calendar, CheckSquare, Plus } from 'lucide-react';
@@ -42,7 +43,7 @@ export default function CourseList() {
       </div>
 
       {/* Course Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
         {courses.map((course) => {
           const taskStats = getTaskStats(course.id);
           const completionRate = taskStats.total > 0 ? (taskStats.completed / taskStats.total) * 100 : 0;
@@ -99,10 +100,10 @@ export default function CourseList() {
                     <CheckSquare className="w-4 h-4" />
                     <span>{taskStats.completed}/{taskStats.total} tehtävää</span>
                   </div>
-                  {course.endDate && (
+                  {course.end_date && ( // KORJATTU
                     <div className="flex items-center space-x-1">
                       <Calendar className="w-4 h-4" />
-                      <span>Päättyy {formatDate(course.endDate)}</span>
+                      <span>Päättyy {formatDate(course.end_date)}</span>
                     </div>
                   )}
                 </div>
