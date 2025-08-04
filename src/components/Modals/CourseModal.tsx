@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, BookOpen, FileText, Calendar, Clock } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
-import { useConfirmation } from '../../hooks/useConfirmation'; // <-- LISÄTTY
-import { COLOR_OPTIONS, DEFAULT_COLOR } from '../../constants/colors';
+import { useConfirmation } from '../../hooks/useConfirmation';
+import { DEFAULT_COLOR } from '../../constants/colors';
 import FormInput from '../Forms/FormInput';
 import FormTextarea from '../Forms/FormTextarea';
 import FormSelect from '../Forms/FormSelect';
@@ -12,7 +12,7 @@ import ColorSelector from '../Forms/ColorSelector';
 export default function CourseModal() {
   const { state, dispatch } = useApp();
   const { showCourseModal, courseModalInfo, projects, scheduleTemplates, session } = state;
-  const { getConfirmation } = useConfirmation(); // <-- LISÄTTY
+  const { getConfirmation } = useConfirmation();
 
   const selectedCourse = courseModalInfo?.id
     ? projects.find(p => p.id === courseModalInfo.id && p.type === 'course')
@@ -80,7 +80,6 @@ export default function CourseModal() {
     dispatch({ type: 'CLOSE_MODALS' });
   };
 
-  // --- KOKO FUNKTIO MUOKATTU ASYNKRONISEKSI JA KÄYTTÄMÄÄN VAHVISTUSTA ---
   const handleDelete = async () => {
     if (selectedCourse) {
       const confirmed = await getConfirmation({
@@ -169,7 +168,7 @@ export default function CourseModal() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormInput
-                    id="start-date"
+                    id="start_date"
                     label="Alkamispäivä"
                     icon={<Calendar className="w-4 h-4 inline mr-2" />}
                     type="date"
@@ -178,7 +177,7 @@ export default function CourseModal() {
                     onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                   />
                   <FormInput
-                    id="end-date"
+                    id="end_date"
                     label="Päättymispäivä"
                     type="date"
                     value={formData.end_date}
