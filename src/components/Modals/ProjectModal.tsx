@@ -41,7 +41,7 @@ export default function ProjectModal() {
     title: '',
     description: '',
     priority: 'medium' as Task['priority'],
-    dueDate: ''
+    due_date: ''
   });
 
   const [showAddTask, setShowAddTask] = useState(false);
@@ -88,6 +88,7 @@ export default function ProjectModal() {
     
     const projectData: any = {
       id: projectId,
+      user_id: session!.user.id,
       name: formData.name,
       description: formData.description,
       type: formData.type,
@@ -95,14 +96,10 @@ export default function ProjectModal() {
       start_date: new Date(formData.start_date),
       end_date: formData.end_date ? new Date(formData.end_date) : undefined,
       parent_course_id: formData.parent_course_id || undefined,
-      tasks: tasks.map(t => ({...t, projectId })),
+      tasks: tasks.map(t => ({...t, project_id: projectId })),
       files: files,
       columns: selectedProject?.columns || []
     };
-
-    if (!selectedProject) {
-        projectData.user_id = session.user.id;
-    }
 
     if (selectedProject) {
       dispatch({ type: 'UPDATE_PROJECT', payload: projectData });
@@ -119,13 +116,13 @@ export default function ProjectModal() {
       title: newTask.title,
       description: newTask.description,
       completed: false,
-      columnId: 'todo',
+      column_id: 'todo',
       priority: newTask.priority,
-      dueDate: newTask.dueDate ? new Date(newTask.dueDate) : undefined,
-      projectId: selectedProject?.id || 'temp-id'
+      due_date: newTask.due_date ? new Date(newTask.due_date) : undefined,
+      project_id: selectedProject?.id || 'temp-id'
     };
     setTasks([...tasks, taskData]);
-    setNewTask({ title: '', description: '', priority: 'medium', dueDate: '' });
+    setNewTask({ title: '', description: '', priority: 'medium', due_date: '' });
     setShowAddTask(false);
   };
 
@@ -250,7 +247,7 @@ export default function ProjectModal() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <FormInput
-                    id="start-date"
+                    id="start_date"
                     label="Alkupäivä"
                     icon={<Calendar className="w-4 h-4 inline mr-2" />}
                     type="date"
@@ -259,7 +256,7 @@ export default function ProjectModal() {
                     onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                   />
                   <FormInput
-                    id="end-date"
+                    id="end_date"
                     label="Loppupäivä (valinnainen)"
                     type="date"
                     value={formData.end_date}
@@ -339,10 +336,10 @@ export default function ProjectModal() {
                         </select>
                         <input
                           type="date"
-                          id="new-project-task-dueDate"
-                          name="new-project-task-dueDate"
-                          value={newTask.dueDate}
-                          onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                          id="new-project-task-due_date"
+                          name="new-project-task-due_date"
+                          value={newTask.due_date}
+                          onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
                           className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
@@ -389,8 +386,8 @@ export default function ProjectModal() {
                                 {task.priority === 'high' ? 'Korkea' : 
                                  task.priority === 'medium' ? 'Keskitaso' : 'Matala'}
                               </span>
-                              {task.dueDate && (
-                                <span>Määräaika: {new Date(task.dueDate).toLocaleDateString('fi-FI')}</span>
+                              {task.due_date && (
+                                <span>Määräaika: {new Date(task.due_date).toLocaleDateString('fi-FI')}</span>
                               )}
                             </div>
                                           </div>
