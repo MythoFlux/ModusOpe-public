@@ -1,8 +1,7 @@
 // src/components/Modals/TaskModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Type, FileText, Calendar, AlertCircle, Bookmark, Plus, Trash2, File } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
-import { useApp } from '../../contexts/AppContext';
+import { X, Type, FileText, Calendar, AlertCircle, Bookmark, Plus, Trash2, File, Loader2 } from 'lucide-react';
+import { useApp, useAppServices } from '../../contexts/AppContext';
 import { useConfirmation } from '../../hooks/useConfirmation';
 import { Task, Subtask, FileAttachment } from '../../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
@@ -13,8 +12,10 @@ import FormSelect from '../Forms/FormSelect';
 
 export default function TaskModal() {
   const { state, dispatch } = useApp();
+  const services = useAppServices();
   const { showTaskModal, selectedTask, projects, session } = state;
   const { getConfirmation } = useConfirmation();
+  const [isLoading, setIsLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'details' | 'files'>('details');
   const [formData, setFormData] = useState({
@@ -24,7 +25,7 @@ export default function TaskModal() {
     due_date: '',
     project_id: '',
     subtasks: [] as Subtask[],
-    column_id: 'todo', // LISÄTTY
+    column_id: 'todo',
   });
   
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -39,7 +40,7 @@ export default function TaskModal() {
         due_date: selectedTask.due_date ? new Date(selectedTask.due_date).toISOString().split('T')[0] : '',
         project_id: selectedTask.project_id,
         subtasks: selectedTask.subtasks || [],
-        column_id: selectedTask.column_id || 'todo', // LISÄTTY
+        column_id: selectedTask.column_id || 'todo',
       });
       setFiles(selectedTask.files || []);
     } else {
@@ -50,7 +51,7 @@ export default function TaskModal() {
         due_date: '',
         project_id: selectedTask?.project_id || '',
         subtasks: [],
-        column_id: selectedTask?.column_id || 'todo', // KORJATTU
+        column_id: selectedTask?.column_id || 'todo',
       });
       setFiles([]);
     }
@@ -58,52 +59,37 @@ export default function TaskModal() {
   }, [selectedTask, showTaskModal]);
 
   const handleSubtaskChange = (subtaskId: string, completed: boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      subtasks: prev.subtasks.map(st =>
-        st.id === subtaskId ? { ...st, completed } : st
-      ),
-    }));
+    setFormData(prev => ({ ...prev, subtasks: prev.subtasks.map(st => st.id === subtaskId ? { ...st, completed } : st) }));
   };
 
   const handleAddSubtask = () => {
     if (newSubtaskTitle.trim() === '') return;
-    const newSubtask: Subtask = {
-      id: uuidv4(),
-      title: newSubtaskTitle,
-      completed: false,
-    };
-    setFormData(prev => ({
-      ...prev,
-      subtasks: [...prev.subtasks, newSubtask],
-    }));
+    const newSubtask: Subtask = { id: `temp-${Date.now()}`, title: newSubtaskTitle, completed: false };
+    setFormData(prev => ({ ...prev, subtasks: [...prev.subtasks, newSubtask] }));
     setNewSubtaskTitle('');
   };
   
   const handleDeleteSubtask = (subtaskId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      subtasks: prev.subtasks.filter(st => st.id !== subtaskId),
-    }));
+    setFormData(prev => ({ ...prev, subtasks: prev.subtasks.filter(st => st.id !== subtaskId) }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!session?.user && !(selectedTask && selectedTask.id)) {
         alert("Sinun täytyy olla kirjautunut luodaksesi tehtävän.");
         return;
     }
+    setIsLoading(true);
     
     const targetProjectId = formData.project_id || GENERAL_TASKS_PROJECT_ID;
 
     const taskData: Task = {
-      id: selectedTask?.id || uuidv4(),
+      id: selectedTask?.id || '', // ID will be handled by service
       user_id: session!.user.id,
       title: formData.title,
       description: formData.description,
       completed: (selectedTask && selectedTask.id && selectedTask.completed) || false,
-      column_id: formData.column_id, // KORJATTU
+      column_id: formData.column_id,
       priority: formData.priority,
       due_date: formData.due_date ? new Date(formData.due_date) : undefined,
       project_id: targetProjectId,
@@ -111,13 +97,18 @@ export default function TaskModal() {
       files: files
     };
 
-    if (selectedTask && selectedTask.id) {
-      dispatch({ type: 'UPDATE_TASK', payload: { projectId: targetProjectId, task: taskData } });
-    } else {
-      dispatch({ type: 'ADD_TASK', payload: { projectId: targetProjectId, task: taskData } });
+    try {
+        if (selectedTask && selectedTask.id) {
+            await services.updateTask(taskData);
+        } else {
+            await services.addTask(taskData);
+        }
+        dispatch({ type: 'CLOSE_MODALS' });
+    } catch (error: any) {
+        alert(`Tallennus epäonnistui: ${error.message}`);
+    } finally {
+        setIsLoading(false);
     }
-
-    dispatch({ type: 'CLOSE_MODALS' });
   };
   
   const handleDelete = async () => {
@@ -127,8 +118,15 @@ export default function TaskModal() {
         message: `Haluatko varmasti poistaa tehtävän "${selectedTask.title}"? Toimintoa ei voi perua.`
       });
       if (confirmed) {
-        dispatch({ type: 'DELETE_TASK', payload: { projectId: selectedTask.project_id, taskId: selectedTask.id } });
-        dispatch({ type: 'CLOSE_MODALS' });
+        setIsLoading(true);
+        try {
+            await services.deleteTask(selectedTask.project_id, selectedTask.id);
+            dispatch({ type: 'CLOSE_MODALS' });
+        } catch (error: any) {
+            alert(`Poisto epäonnistui: ${error.message}`);
+        } finally {
+            setIsLoading(false);
+        }
       }
     }
   };
@@ -294,7 +292,8 @@ export default function TaskModal() {
                 <button
                     type="button"
                     onClick={handleDelete}
-                    className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    disabled={isLoading}
+                    className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                 >
                     Poista tehtävä
                 </button>
@@ -310,8 +309,10 @@ export default function TaskModal() {
                 <button
                     type="submit"
                     form="task-form-details"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    disabled={isLoading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
                 >
+                    {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     {isEditing ? 'Päivitä tehtävä' : 'Luo tehtävä'}
                 </button>
             </div>
