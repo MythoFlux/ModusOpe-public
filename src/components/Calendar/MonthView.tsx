@@ -15,11 +15,8 @@ export default function MonthView() {
   const eventsByDay = useMemo(() => {
     const map = new Map<string, Event[]>();
     daysInMonth.forEach(day => {
-      // --- TÄMÄ RIVI ON MUUTETTU ---
-      // Suodatetaan pois oppitunnit ('class') kuukausinäkymästä
       const dayEvents = events.filter(event => isSameDay(new Date(event.date), day) && event.type !== 'class');
       
-      // Järjestetään tapahtumat ajan mukaan, koko päivän tapahtumat ensin
       dayEvents.sort((a, b) => {
         if (!a.startTime) return -1;
         if (!b.startTime) return 1;
@@ -37,11 +34,11 @@ export default function MonthView() {
 
   const handleEventClick = (event: Event, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (event.type === 'deadline' && event.projectId) {
-        if (event.projectId === GENERAL_TASKS_PROJECT_ID) {
+    if (event.type === 'deadline' && event.project_id) { // KORJATTU
+        if (event.project_id === GENERAL_TASKS_PROJECT_ID) { // KORJATTU
             return;
         }
-      dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.projectId });
+      dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id }); // KORJATTU
     } else {
       dispatch({ type: 'TOGGLE_EVENT_MODAL', payload: event });
     }
