@@ -1,3 +1,4 @@
+// src/components/Kanban/KanbanView.tsx
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { Project, Task, KanbanColumn } from '../../types';
@@ -27,7 +28,7 @@ const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
       onDragStart={(e) => {
         e.dataTransfer.setData('type', DND_TYPES.TASK);
         e.dataTransfer.setData('taskId', task.id);
-        e.dataTransfer.setData('projectId', task.projectId);
+        e.dataTransfer.setData('projectId', task.project_id); // KORJATTU
         e.currentTarget.classList.add('opacity-50');
       }}
       onDragEnd={(e) => e.currentTarget.classList.remove('opacity-50')}
@@ -38,10 +39,10 @@ const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
         {getPriorityIcon(task.priority)}
       </div>
       {task.description && <p className="text-xs text-gray-600 mb-3 line-clamp-2">{task.description}</p>}
-      {task.dueDate && (
+      {task.due_date && (
         <div className="flex items-center text-xs text-gray-500">
           <Calendar className="w-3 h-3 mr-1.5" />
-          <span>{formatDate(new Date(task.dueDate))}</span>
+          <span>{formatDate(new Date(task.due_date))}</span>
         </div>
       )}
     </div>
@@ -71,8 +72,8 @@ const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, on
   
   const handleAddTask = () => {
     const newTaskTemplate: Partial<Task> = {
-      projectId: projectId,
-      columnId: column.id,
+      project_id: projectId, // KORJATTU
+      column_id: column.id, // KORJATTU
     };
     dispatch({ type: 'TOGGLE_TASK_MODAL', payload: newTaskTemplate as Task });
   };
@@ -256,9 +257,9 @@ export default function KanbanView() {
   const getTasksForColumn = (columnId: string) => {
     if (!selectedProject) return [];
     if (columnId === 'todo') {
-      return selectedProject.tasks.filter(t => t.columnId === 'todo' || !t.columnId);
+      return selectedProject.tasks.filter(t => t.column_id === 'todo' || !t.column_id);
     }
-    return selectedProject.tasks.filter(t => t.columnId === columnId);
+    return selectedProject.tasks.filter(t => t.column_id === columnId);
   };
   
   const handleDragStart = (e: React.DragEvent, type: string, id: string, index?: number) => {
