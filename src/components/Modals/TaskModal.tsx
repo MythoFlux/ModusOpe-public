@@ -21,8 +21,8 @@ export default function TaskModal() {
     title: '',
     description: '',
     priority: 'medium' as Task['priority'],
-    due_date: '',
-    project_id: '',
+    dueDate: '',
+    projectId: '',
     subtasks: [] as Subtask[],
   });
   
@@ -35,8 +35,8 @@ export default function TaskModal() {
         title: selectedTask.title,
         description: selectedTask.description || '',
         priority: selectedTask.priority,
-        due_date: selectedTask.dueDate ? new Date(selectedTask.dueDate).toISOString().split('T')[0] : '',
-        project_id: selectedTask.projectId,
+        dueDate: selectedTask.dueDate ? new Date(selectedTask.dueDate).toISOString().split('T')[0] : '',
+        projectId: selectedTask.projectId,
         subtasks: selectedTask.subtasks || [],
       });
       setFiles(selectedTask.files || []);
@@ -45,8 +45,8 @@ export default function TaskModal() {
         title: '',
         description: '',
         priority: 'medium',
-        due_date: '',
-        project_id: selectedTask?.projectId || '',
+        dueDate: '',
+        projectId: selectedTask?.projectId || '',
         subtasks: [],
       });
       setFiles([]);
@@ -92,6 +92,8 @@ export default function TaskModal() {
         return;
     }
 
+    const targetProjectId = formData.projectId || GENERAL_TASKS_PROJECT_ID;
+
     const taskData: any = {
       id: selectedTask?.id || uuidv4(),
       title: formData.title,
@@ -99,21 +101,17 @@ export default function TaskModal() {
       completed: (selectedTask && selectedTask.id && selectedTask.completed) || false,
       columnId: selectedTask?.columnId || 'todo',
       priority: formData.priority,
-      dueDate: formData.due_date ? new Date(formData.due_date) : undefined,
-      projectId: formData.project_id,
+      dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
+      projectId: targetProjectId,
       subtasks: formData.subtasks,
-      files: files
+      files: files,
+      user_id: session?.user.id,
     };
 
-    if (!(selectedTask && selectedTask.id)) {
-        taskData.user_id = session.user.id;
-    }
-
     if (selectedTask && selectedTask.id) {
-      dispatch({ type: 'UPDATE_TASK', payload: { projectId: taskData.projectId || selectedTask.projectId, task: taskData } });
+      dispatch({ type: 'UPDATE_TASK', payload: { projectId: targetProjectId, task: taskData } });
     } else {
-      const targetProjectId = taskData.projectId || GENERAL_TASKS_PROJECT_ID;
-      dispatch({ type: 'ADD_TASK', payload: { projectId: targetProjectId, task: { ...taskData, projectId: targetProjectId } } });
+      dispatch({ type: 'ADD_TASK', payload: { projectId: targetProjectId, task: taskData } });
     }
 
     dispatch({ type: 'CLOSE_MODALS' });
@@ -124,7 +122,7 @@ export default function TaskModal() {
     if (selectedTask) {
       const confirmed = await getConfirmation({
         title: 'Vahvista poisto',
-        message: `Haluatko varmasti poistaa tehtävän "${selectedTask.title}"? Toimintoa ei voi perua.`
+        message: `Haluatko varmasti poistaa tehtävän "${selectedTask.title}"? Tätä toimintoa ei voi perua.`
       });
       if (confirmed) {
         dispatch({ type: 'DELETE_TASK', payload: { projectId: selectedTask.projectId, taskId: selectedTask.id } });
@@ -184,8 +182,8 @@ export default function TaskModal() {
                 id="task-project"
                 label="Projekti (valinnainen)"
                 icon={<Bookmark className="w-4 h-4 inline mr-2" />}
-                value={formData.project_id}
-                onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                value={formData.projectId}
+                onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
               >
                 <option value="">Ei projektia (Yleiset tehtävät)</option>
                 {projects
@@ -235,8 +233,8 @@ export default function TaskModal() {
                   label="Määräpäivä"
                   icon={<Calendar className="w-4 h-4 inline mr-2" />}
                   type="date"
-                  value={formData.due_date}
-                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                  value={formData.dueDate}
+                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
                 />
               </div>
               
