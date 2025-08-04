@@ -19,13 +19,13 @@ export interface Event {
   title: string;
   description?: string;
   date: Date;
-  startTime?: string;
-  endTime?: string;
+  start_time?: string;
+  end_time?: string;
   type: 'class' | 'meeting' | 'deadline' | 'personal' | 'assignment';
   color: string;
-  projectId?: string;
-  scheduleTemplateId?: string; 
-  groupName?: string;
+  project_id?: string;
+  schedule_template_id?: string;
+  group_name?: string;
   files?: FileAttachment[];
 }
 
@@ -35,11 +35,9 @@ export interface Project {
   description?: string;
   color: string;
   type: 'course' | 'administrative' | 'personal' | 'none';
-  // --- NÄMÄ RIVIT ON MUUTETTU ---
   start_date: Date;
   end_date?: Date;
   parent_course_id?: string;
-  // ------------------------------
   tasks: Task[];
   columns: KanbanColumn[];
   files?: FileAttachment[];
@@ -56,10 +54,10 @@ export interface Task {
   title: string;
   description?: string;
   completed: boolean;
-  columnId: string;
+  column_id: string;
   priority: 'low' | 'medium' | 'high';
-  dueDate?: Date;
-  projectId: string;
+  due_date?: Date;
+  project_id: string;
   subtasks?: Subtask[];
   files?: FileAttachment[];
 }
@@ -68,9 +66,9 @@ export interface ScheduleTemplate {
   id: string;
   name: string;
   color: string;
-  dayOfWeek: number; // 0 = Monday, 1 = Tuesday, etc.
-  startTime: string;
-  endTime: string;
+  day_of_week: number; // 0 = Monday, 1 = Tuesday, etc.
+  start_time: string;
+  end_time: string;
   description?: string;
 }
 
@@ -78,12 +76,12 @@ export interface RecurringClass {
   id: string;
   title: string;
   description?: string;
-  scheduleTemplateId: string;
-  startDate: Date;
-  endDate: Date;
+  schedule_template_id: string;
+  start_date: Date;
+  end_date: Date;
   color: string;
-  groupName?: string; 
-  projectId?: string;
+  group_name?: string;
+  project_id?: string;
   files?: FileAttachment[];
 }
 
