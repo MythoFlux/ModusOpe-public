@@ -83,12 +83,12 @@ export default function TaskModal() {
     
     const targetProjectId = formData.project_id || GENERAL_TASKS_PROJECT_ID;
 
-    const taskData: Task = {
-      id: selectedTask?.id || '', // ID will be handled by service
-      user_id: session!.user.id,
+    // --- KORJATTU KOHTA ALKAA ---
+    
+    // Luodaan ensin perusdata, joka on yhteinen sekä uusille että päivitettäville tehtäville.
+    const commonTaskData = {
       title: formData.title,
       description: formData.description,
-      completed: (selectedTask && selectedTask.id && selectedTask.completed) || false,
       column_id: formData.column_id,
       priority: formData.priority,
       due_date: formData.due_date ? new Date(formData.due_date) : undefined,
@@ -99,9 +99,21 @@ export default function TaskModal() {
 
     try {
         if (selectedTask && selectedTask.id) {
-            await services.updateTask(taskData);
+            // Päivityksen yhteydessä lähetetään myös ID ja completed-tila
+            const taskToUpdate: Task = {
+                ...commonTaskData,
+                id: selectedTask.id,
+                completed: selectedTask.completed,
+            };
+            await services.updateTask(taskToUpdate);
         } else {
-            await services.addTask(taskData);
+            // Uutta tehtävää luodessa lähetetään vain Omit<Task, 'id'> -tyypin mukaiset tiedot.
+            // ID:tä tai user_id:tä ei lähetetä.
+            const taskToAdd: Omit<Task, 'id'> = {
+                ...commonTaskData,
+                completed: false,
+            };
+            await services.addTask(taskToAdd);
         }
         dispatch({ type: 'CLOSE_MODALS' });
     } catch (error: any) {
@@ -109,6 +121,7 @@ export default function TaskModal() {
     } finally {
         setIsLoading(false);
     }
+    // --- KORJATTU KOHTA PÄÄTTYY ---
   };
   
   const handleDelete = async () => {
