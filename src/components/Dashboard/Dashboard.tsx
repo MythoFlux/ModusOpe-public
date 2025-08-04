@@ -105,12 +105,12 @@ export default function Dashboard() {
                   >
                     <div
                       className="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0"
-                      style={{ backgroundColor: task.projectColor }}
+                      style={{ backgroundColor: task.project_color }}
                     />
                     <div className="flex-1">
                       <h3 className="font-medium text-gray-800">{task.title}</h3>
                       <p className="text-sm text-gray-500">
-                        {task.projectName} • {formatDate(new Date(task.dueDate!))}
+                        {task.project_name} • {formatDate(new Date(task.due_date!))}
                       </p>
                     </div>
                   </div>
@@ -144,12 +144,12 @@ export default function Dashboard() {
                   >
                     <div
                       className="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0"
-                      style={{ backgroundColor: task.projectColor }}
+                      style={{ backgroundColor: task.project_color }}
                     />
                     <div className="flex-1">
                       <h3 className="font-medium text-gray-800">{task.title}</h3>
                       <p className="text-sm text-gray-500">
-                        {task.projectName} • {formatDate(new Date(task.dueDate!))}
+                        {task.project_name} • {formatDate(new Date(task.due_date!))}
                       </p>
                     </div>
                   </div>
@@ -183,12 +183,12 @@ export default function Dashboard() {
                   >
                     <div
                       className="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0"
-                      style={{ backgroundColor: task.projectColor }}
+                      style={{ backgroundColor: task.project_color }}
                     />
                     <div className="flex-1">
                       <h3 className="font-medium text-gray-800">{task.title}</h3>
                       <p className="text-sm text-red-500">
-                        Myöhässä: {formatDate(new Date(task.dueDate!))}
+                        Myöhässä: {formatDate(new Date(task.due_date!))}
                       </p>
                     </div>
                   </div>
