@@ -24,7 +24,7 @@ export default function CourseModal() {
     color: DEFAULT_COLOR,
     start_date: '',
     end_date: '',
-    templateGroupName: ''
+    template_group_name: ''
   });
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export default function CourseModal() {
         color: selectedCourse.color,
         start_date: new Date(selectedCourse.start_date).toISOString().split('T')[0],
         end_date: selectedCourse.end_date ? new Date(selectedCourse.end_date).toISOString().split('T')[0] : '',
-        templateGroupName: ''
+        template_group_name: ''
       });
     } else {
       setFormData({
@@ -44,7 +44,7 @@ export default function CourseModal() {
         color: DEFAULT_COLOR,
         start_date: new Date().toISOString().split('T')[0],
         end_date: '',
-        templateGroupName: ''
+        template_group_name: ''
       });
     }
   }, [selectedCourse, showCourseModal]);
@@ -67,7 +67,7 @@ export default function CourseModal() {
       end_date: formData.end_date ? new Date(formData.end_date + 'T00:00:00') : undefined,
       tasks: selectedCourse?.tasks || [],
       files: selectedCourse?.files || [],
-      templateGroupName: formData.templateGroupName,
+      template_group_name: formData.template_group_name,
       user_id: session.user.id
     };
 
@@ -129,12 +129,12 @@ export default function CourseModal() {
                           id="template-group"
                           label="Valitse tuntiryhmä (luo oppitunnit automaattisesti)"
                           icon={<Clock className="w-4 h-4 inline mr-2" />}
-                          value={formData.templateGroupName}
+                          value={formData.template_group_name}
                           onChange={(e) => {
                               const groupName = e.target.value;
                               setFormData({
                                   ...formData,
-                                  templateGroupName: groupName,
+                                  template_group_name: groupName,
                                   name: formData.name || groupName
                               });
                           }}
