@@ -39,11 +39,11 @@ export default function DayView() {
   const timedEvents = useMemo(() => dayEvents.filter(e => !!e.startTime), [dayEvents]);
 
   const handleEventClick = (event: Event) => {
-    if (event.type === 'deadline' && event.projectId) {
-      if (event.projectId === GENERAL_TASKS_PROJECT_ID) {
+    if (event.type === 'deadline' && event.project_id) { // KORJATTU
+      if (event.project_id === GENERAL_TASKS_PROJECT_ID) { // KORJATTU
           return;
       }
-      dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.projectId });
+      dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id }); // KORJATTU
     } else {
       dispatch({ type: 'TOGGLE_EVENT_MODAL', payload: event });
     }
