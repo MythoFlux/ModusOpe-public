@@ -1,8 +1,9 @@
+// src/components/Tasks/TaskList.tsx
 import React, { useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { CheckSquare, Circle, Calendar, AlertCircle, Plus } from 'lucide-react';
 import { formatDate } from '../../utils/dateUtils';
-import { Task } from '../../types'; // Varmistetaan, että Task-tyyppi on tuotu
+import { Task } from '../../types';
 
 export default function TaskList() {
   const { state, dispatch } = useApp();
@@ -20,8 +21,7 @@ export default function TaskList() {
   const pendingTasks = useMemo(() => allTasks.filter(task => !task.completed), [allTasks]);
 
   const handleTaskClick = (task: Task) => {
-    // Etsitään alkuperäinen task-olio projekteista, jotta saadaan kaikki data mukaan
-    const originalProject = projects.find(p => p.id === task.projectId);
+    const originalProject = projects.find(p => p.id === task.project_id); // KORJATTU
     const originalTask = originalProject?.tasks.find(t => t.id === task.id);
     if (originalTask) {
       dispatch({ type: 'TOGGLE_TASK_MODAL', payload: originalTask });
@@ -29,7 +29,7 @@ export default function TaskList() {
   };
 
   const toggleTask = (e: React.MouseEvent, projectId: string, taskId: string, completed: boolean) => {
-    e.stopPropagation(); // Estää modaalin avaamisen, kun tehtävä merkitään valmiiksi
+    e.stopPropagation();
     const project = projects.find(p => p.id === projectId);
     const task = project?.tasks.find(t => t.id === taskId);
     
@@ -45,7 +45,7 @@ export default function TaskList() {
   };
   
   const toggleSubtask = (e: React.MouseEvent, projectId: string, taskId: string, subtaskId: string, completed: boolean) => {
-    e.stopPropagation(); // Estää modaalin avaamisen
+    e.stopPropagation();
     const project = projects.find(p => p.id === projectId);
     const task = project?.tasks.find(t => t.id === taskId);
 
@@ -111,7 +111,7 @@ export default function TaskList() {
                 >
                   <div className="flex items-start space-x-4">
                     <button
-                      onClick={(e) => toggleTask(e, task.projectId, task.id, true)}
+                      onClick={(e) => toggleTask(e, task.project_id, task.id, true)} // KORJATTU
                       className="mt-1 text-gray-400 hover:text-blue-600 transition-colors z-10 relative"
                     >
                       <Circle className="w-5 h-5" />
@@ -134,7 +134,7 @@ export default function TaskList() {
                               <input
                                 type="checkbox"
                                 checked={subtask.completed}
-                                onClick={(e) => toggleSubtask(e, task.projectId, task.id, subtask.id, !subtask.completed)}
+                                onClick={(e) => toggleSubtask(e, task.project_id, task.id, subtask.id, !subtask.completed)} // KORJATTU
                                 className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 z-10 relative"
                               />
                               <span className={`text-sm ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
@@ -154,10 +154,10 @@ export default function TaskList() {
                           <span>{task.projectName}</span>
                         </div>
                         
-                        {task.dueDate && (
+                        {task.due_date && ( // KORJATTU
                           <div className="flex items-center space-x-1">
                             <Calendar className="w-4 h-4" />
-                            <span>Määräaika {formatDate(new Date(task.dueDate))}</span>
+                            <span>Määräaika {formatDate(new Date(task.due_date))}</span>
                           </div>
                         )}
                         
@@ -194,7 +194,7 @@ export default function TaskList() {
                 >
                   <div className="flex items-start space-x-4">
                     <button
-                      onClick={(e) => toggleTask(e, task.projectId, task.id, false)}
+                      onClick={(e) => toggleTask(e, task.project_id, task.id, false)} // KORJATTU
                       className="mt-1 text-green-600 hover:text-gray-400 transition-colors z-10 relative"
                     >
                       <CheckSquare className="w-5 h-5" />
