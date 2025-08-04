@@ -30,8 +30,8 @@ export default function ScheduleTemplateView() {
   };
 
   const getTemplatePosition = (template: ScheduleTemplate) => {
-    const [startHour, startMinute] = template.startTime.split(':').map(Number);
-    const [endHour, endMinute] = template.endTime.split(':').map(Number);
+    const [startHour, startMinute] = template.start_time.split(':').map(Number);
+    const [endHour, endMinute] = template.end_time.split(':').map(Number);
     
     const startPosition = ((startHour - 6) * 60) + startMinute;
     const duration = ((endHour - startHour) * 60) + (endMinute - startMinute);
@@ -88,7 +88,7 @@ export default function ScheduleTemplateView() {
                   ))}
                   
                   {scheduleTemplates
-                    .filter(t => t.dayOfWeek === dayIndex)
+                    .filter(t => t.day_of_week === dayIndex)
                     .map((template) => {
                       const position = getTemplatePosition(template);
                       return (
@@ -110,7 +110,7 @@ export default function ScheduleTemplateView() {
                                 {template.name}
                               </div>
                               <div className="text-xs text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis">
-                                {formatTimeString(template.startTime)} - {formatTimeString(template.endTime)}
+                                {formatTimeString(template.start_time)} - {formatTimeString(template.end_time)}
                               </div>
                               {template.description && (
                                 <div className="text-xs text-gray-500 mt-1 truncate">
