@@ -24,6 +24,7 @@ export default function TaskModal() {
     due_date: '',
     project_id: '',
     subtasks: [] as Subtask[],
+    column_id: 'todo', // LISÄTTY
   });
   
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -38,6 +39,7 @@ export default function TaskModal() {
         due_date: selectedTask.due_date ? new Date(selectedTask.due_date).toISOString().split('T')[0] : '',
         project_id: selectedTask.project_id,
         subtasks: selectedTask.subtasks || [],
+        column_id: selectedTask.column_id || 'todo', // LISÄTTY
       });
       setFiles(selectedTask.files || []);
     } else {
@@ -48,6 +50,7 @@ export default function TaskModal() {
         due_date: '',
         project_id: selectedTask?.project_id || '',
         subtasks: [],
+        column_id: selectedTask?.column_id || 'todo', // KORJATTU
       });
       setFiles([]);
     }
@@ -100,7 +103,7 @@ export default function TaskModal() {
       title: formData.title,
       description: formData.description,
       completed: (selectedTask && selectedTask.id && selectedTask.completed) || false,
-      column_id: selectedTask?.column_id || 'todo',
+      column_id: formData.column_id, // KORJATTU
       priority: formData.priority,
       due_date: formData.due_date ? new Date(formData.due_date) : undefined,
       project_id: targetProjectId,
