@@ -12,8 +12,8 @@ import { updateDeadlineEvents, generateRecurringEvents } from '../utils/eventUti
 // --- MUUTETTU FUNKTIO ALKAA ---
 // Lisätty manualEvents-parametri, joka sisältää tietokannasta haetut tapahtumat
 function getInitialEvents(
-  projects: Project[], 
-  recurringClasses: RecurringClass[], 
+  projects: Project[],
+  recurringClasses: RecurringClass[],
   templates: ScheduleTemplate[],
   manualEvents: Event[] // <-- LISÄTTY
 ): Event[] {
@@ -38,7 +38,7 @@ function getInitialEvents(
         color: '#F59E0B',
         projectId: task.projectId,
     }));
-    
+
   const recurringEvents = recurringClasses.flatMap(rc => {
       const template = templates.find(t => t.id === rc.scheduleTemplateId);
       return template ? generateRecurringEvents(rc, template) : [];
@@ -106,7 +106,7 @@ export interface AppState {
 export type AppAction =
   | { type: 'SET_SESSION'; payload: Session | null }
   // --- MUUTETTU RIVI ---
-  | { type: 'INITIALIZE_DATA'; payload: { projects: Project[]; scheduleTemplates: ScheduleTemplate[]; recurringClasses: RecurringClass[]; manualEvents: Event[] } }
+  | { type: 'INITIALIZE_DATA'; payload: { projects: Project[]; scheduleTemplates: ScheduleTemplate[]; recurringClasses: RecurringClass[]; manualEvents: Event[]; tasks: Task[] } }
   | { type: 'ADD_EVENT'; payload: Event }
   | { type: 'UPDATE_EVENT'; payload: Event }
   | { type: 'DELETE_EVENT'; payload: string }
@@ -182,8 +182,26 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, session: action.payload };
     case 'INITIALIZE_DATA':
       // --- MUUTETTU KOHTA ALKAA ---
-      const { projects, scheduleTemplates, recurringClasses, manualEvents } = action.payload;
-      const initialProjectsWithGeneral = [generalTasksProject, ...projects];
+      const { projects, scheduleTemplates, recurringClasses, manualEvents, tasks } = action.payload;
+
+      // Jaotellaan tehtävät: ne, jotka kuuluvat projekteihin ja ne, jotka ovat yleisiä
+      const projectTasks = tasks.filter(t => t.projectId && t.projectId !== GENERAL_TASKS_PROJECT_ID);
+      const generalTasks = tasks.filter(t => !t.projectId || t.projectId === GENERAL_TASKS_PROJECT_ID);
+
+      // Lisätään tehtävät niitä vastaaviin projekteihin
+      const projectsWithTasks = projects.map(p => ({
+        ...p,
+        tasks: projectTasks.filter(t => t.projectId === p.id)
+      }));
+
+      // Päivitetään yleisten tehtävien projekti
+      const updatedGeneralTasksProject = {
+        ...generalTasksProject,
+        tasks: generalTasks,
+      };
+
+      const initialProjectsWithGeneral = [updatedGeneralTasksProject, ...projectsWithTasks];
+
       return {
         ...state,
         projects: initialProjectsWithGeneral,
@@ -231,16 +249,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!state.session) return;
       
       // --- MUUTETTU KOHTA ALKAA ---
-      const [projectsRes, templatesRes, recurringRes, eventsRes] = await Promise.all([
+      const [projectsRes, templatesRes, recurringRes, eventsRes, tasksRes] = await Promise.all([
           supabase.from('projects').select('*'),
           supabase.from('schedule_templates').select('*'),
           supabase.from('recurring_classes').select('*'),
-          supabase.from('events').select('*') // <-- LISÄTTY events-taulun haku
+          supabase.from('events').select('*'), // <-- LISÄTTY events-taulun haku
+          supabase.from('tasks').select('*') // <-- LISÄTTY tasks-taulun haku
       ]);
 
-      if (projectsRes.error || templatesRes.error || recurringRes.error || eventsRes.error) {
-        console.error('Error fetching data:', projectsRes.error || templatesRes.error || recurringRes.error || eventsRes.error);
-        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [] } });
+      if (projectsRes.error || templatesRes.error || recurringRes.error || eventsRes.error || tasksRes.error) {
+        console.error('Error fetching data:', projectsRes.error || templatesRes.error || recurringRes.error || eventsRes.error || tasksRes.error);
+        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [], tasks: [] } });
         return;
       }
       // --- MUUTETTU KOHTA PÄÄTTYY ---
@@ -250,7 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         start_date: new Date(p.start_date),
         end_date: p.end_date ? new Date(p.end_date) : undefined,
         tasks: [],
-        columns: [
+        columns: p.columns && p.columns.length > 0 ? p.columns : [
           { id: 'todo', title: 'Suunnitteilla' },
           { id: 'inProgress', title: 'Työn alla' },
           { id: 'done', title: 'Valmis' },
@@ -276,6 +295,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         scheduleTemplateId: e.schedule_template_id,
         groupName: e.group_name
       }));
+      
+      const formattedTasks = (tasksRes.data || []).map((t: any) => ({
+        ...t,
+        dueDate: t.dueDate ? new Date(t.dueDate) : undefined,
+      }));
       // --- LISÄTTY KOHTA PÄÄTTYY ---
 
       // --- MUUTETTU KOHTA ---
@@ -285,7 +309,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           projects: formattedProjects, 
           scheduleTemplates: templatesRes.data || [], 
           recurringClasses: formattedRecurring,
-          manualEvents: formattedEvents // <-- Lisätään haetut tapahtumat mukaan
+          manualEvents: formattedEvents, // <-- Lisätään haetut tapahtumat mukaan
+          tasks: formattedTasks // <-- Lisätään haetut tehtävät mukaan
         } 
       });
     };
@@ -293,7 +318,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (state.session) {
       fetchInitialData();
     } else {
-      dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [] }});
+      dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [], tasks: [] }});
     }
   }, [state.session]);
 
