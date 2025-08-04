@@ -1,3 +1,4 @@
+// src/components/Projects/ProjectList.tsx
 import React, { useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { BookOpen, Calendar, CheckSquare, ClipboardCheck, Plus } from 'lucide-react';
@@ -100,10 +101,10 @@ export default function ProjectList() {
                     <CheckSquare className="w-4 h-4" />
                     <span>{taskStats.completed}/{taskStats.total} tasks</span>
                   </div>
-                  {project.endDate && (
+                  {project.end_date && ( // KORJATTU
                     <div className="flex items-center space-x-1">
                       <Calendar className="w-4 h-4" />
-                      <span>Due {formatDate(project.endDate)}</span>
+                      <span>Due {formatDate(project.end_date)}</span>
                     </div>
                   )}
                 </div>
