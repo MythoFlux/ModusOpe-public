@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Type, FileText, Calendar, AlertCircle, Bookmark, Plus, Trash2, File } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useApp } from '../../contexts/AppContext';
-import { useConfirmation } from '../../hooks/useConfirmation'; // <-- LISÄTTY
+import { useConfirmation } from '../../hooks/useConfirmation';
 import { Task, Subtask, FileAttachment } from '../../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import AttachmentSection from '../Shared/AttachmentSection';
@@ -14,15 +14,15 @@ import FormSelect from '../Forms/FormSelect';
 export default function TaskModal() {
   const { state, dispatch } = useApp();
   const { showTaskModal, selectedTask, projects, session } = state;
-  const { getConfirmation } = useConfirmation(); // <-- LISÄTTY
+  const { getConfirmation } = useConfirmation();
 
   const [activeTab, setActiveTab] = useState<'details' | 'files'>('details');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     priority: 'medium' as Task['priority'],
-    dueDate: '',
-    projectId: '',
+    due_date: '',
+    project_id: '',
     subtasks: [] as Subtask[],
   });
   
@@ -35,8 +35,8 @@ export default function TaskModal() {
         title: selectedTask.title,
         description: selectedTask.description || '',
         priority: selectedTask.priority,
-        dueDate: selectedTask.dueDate ? new Date(selectedTask.dueDate).toISOString().split('T')[0] : '',
-        projectId: selectedTask.projectId,
+        due_date: selectedTask.due_date ? new Date(selectedTask.due_date).toISOString().split('T')[0] : '',
+        project_id: selectedTask.project_id,
         subtasks: selectedTask.subtasks || [],
       });
       setFiles(selectedTask.files || []);
@@ -45,8 +45,8 @@ export default function TaskModal() {
         title: '',
         description: '',
         priority: 'medium',
-        dueDate: '',
-        projectId: selectedTask?.projectId || '',
+        due_date: '',
+        project_id: selectedTask?.project_id || '',
         subtasks: [],
       });
       setFiles([]);
@@ -91,21 +91,21 @@ export default function TaskModal() {
         alert("Sinun täytyy olla kirjautunut luodaksesi tehtävän.");
         return;
     }
+    
+    const targetProjectId = formData.project_id || GENERAL_TASKS_PROJECT_ID;
 
-    const targetProjectId = formData.projectId || GENERAL_TASKS_PROJECT_ID;
-
-    const taskData: any = {
+    const taskData: Task = {
       id: selectedTask?.id || uuidv4(),
+      user_id: session!.user.id,
       title: formData.title,
       description: formData.description,
       completed: (selectedTask && selectedTask.id && selectedTask.completed) || false,
-      columnId: selectedTask?.columnId || 'todo',
+      column_id: selectedTask?.column_id || 'todo',
       priority: formData.priority,
-      dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
-      projectId: targetProjectId,
+      due_date: formData.due_date ? new Date(formData.due_date) : undefined,
+      project_id: targetProjectId,
       subtasks: formData.subtasks,
-      files: files,
-      user_id: session?.user.id,
+      files: files
     };
 
     if (selectedTask && selectedTask.id) {
@@ -117,15 +117,14 @@ export default function TaskModal() {
     dispatch({ type: 'CLOSE_MODALS' });
   };
   
-  // --- KOKO FUNKTIO MUOKATTU ASYNKRONISEKSI JA KÄYTTÄMÄÄN VAHVISTUSTA ---
   const handleDelete = async () => {
     if (selectedTask) {
       const confirmed = await getConfirmation({
         title: 'Vahvista poisto',
-        message: `Haluatko varmasti poistaa tehtävän "${selectedTask.title}"? Tätä toimintoa ei voi perua.`
+        message: `Haluatko varmasti poistaa tehtävän "${selectedTask.title}"? Toimintoa ei voi perua.`
       });
       if (confirmed) {
-        dispatch({ type: 'DELETE_TASK', payload: { projectId: selectedTask.projectId, taskId: selectedTask.id } });
+        dispatch({ type: 'DELETE_TASK', payload: { projectId: selectedTask.project_id, taskId: selectedTask.id } });
         dispatch({ type: 'CLOSE_MODALS' });
       }
     }
@@ -182,8 +181,8 @@ export default function TaskModal() {
                 id="task-project"
                 label="Projekti (valinnainen)"
                 icon={<Bookmark className="w-4 h-4 inline mr-2" />}
-                value={formData.projectId}
-                onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                value={formData.project_id}
+                onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
               >
                 <option value="">Ei projektia (Yleiset tehtävät)</option>
                 {projects
@@ -233,8 +232,8 @@ export default function TaskModal() {
                   label="Määräpäivä"
                   icon={<Calendar className="w-4 h-4 inline mr-2" />}
                   type="date"
-                  value={formData.dueDate}
-                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  value={formData.due_date}
+                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
                 />
               </div>
               
