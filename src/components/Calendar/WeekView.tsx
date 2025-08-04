@@ -113,7 +113,7 @@ export default function WeekView() {
             <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: gridColumns }}>
                 <div className="py-1 px-2 text-xs text-gray-500 text-right flex items-center justify-end">koko pv</div>
                 {displayDates.map((date, index) => {
-                    const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.startTime);
+                    const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
                     return (
                         <div key={`allday-${index}`} className="p-1 border-l border-gray-200 min-h-[30px] space-y-1">
                             {allDayEvents.map(event => (
@@ -152,7 +152,7 @@ export default function WeekView() {
             <div className="absolute top-0 left-0 w-full h-full grid" style={{ gridTemplateColumns: gridColumns }}>
                 <div className="col-start-1"></div>
                  {displayDates.map((date, dateIndex) => {
-                    const timedEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !!e.startTime);
+                    const timedEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !!e.start_time);
                     return (
                         <div key={dateIndex} className="relative">
                              {timedEvents.map((event) => {
@@ -162,9 +162,9 @@ export default function WeekView() {
                                 const top = (startHour * 48) + (startMinute * 48 / 60);
 
                                 let height = 48;
-                                if (event.endTime && event.startTime) {
-                                    const [endHour, endMinute] = event.endTime.split(':').map(Number);
-                                    const [startHourTime, startMinuteTime] = event.startTime.split(':').map(Number);
+                                if (event.end_time && event.start_time) {
+                                    const [endHour, endMinute] = event.end_time.split(':').map(Number);
+                                    const [startHourTime, startMinuteTime] = event.start_time.split(':').map(Number);
                                     const duration = (endHour - startHourTime) + ((endMinute - startMinuteTime) / 60);
                                     height = duration * 48;
                                 }
@@ -183,7 +183,7 @@ export default function WeekView() {
                                         }}
                                     >
                                         <div className="font-medium text-gray-900 truncate">{event.title}</div>
-                                        {event.startTime && (<div className="text-gray-600 text-xs">{formatTimeString(event.startTime)}{event.endTime && ` - ${formatTimeString(event.endTime)}`}</div>)}
+                                        {event.start_time && (<div className="text-gray-600 text-xs">{formatTimeString(event.start_time)}{event.end_time && ` - ${formatTimeString(event.end_time)}`}</div>)}
                                     </div>
                                 );
                             })}
