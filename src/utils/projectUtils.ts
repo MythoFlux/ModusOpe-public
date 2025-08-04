@@ -7,7 +7,7 @@ export function createProjectWithTemplates(
   payload: AddProjectPayload,
   allTemplates: ScheduleTemplate[]
 ): { project: Project; newRecurringClasses: RecurringClass[] } {
-  const { templateGroupName, ...projectData } = payload;
+  const { template_group_name, ...projectData } = payload;
 
   const defaultColumns: KanbanColumn[] = [
     { id: 'todo', title: 'Suunnitteilla' },
@@ -24,8 +24,8 @@ export function createProjectWithTemplates(
 
   let newRecurringClasses: RecurringClass[] = [];
 
-  if (templateGroupName && newProject.type === 'course' && newProject.start_date) {
-    const templatesInGroup = allTemplates.filter(t => t.name === templateGroupName);
+  if (template_group_name && newProject.type === 'course' && newProject.start_date) {
+    const templatesInGroup = allTemplates.filter(t => t.name === template_group_name);
 
     const recurringEndDate = newProject.end_date
         ? newProject.end_date
