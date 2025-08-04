@@ -5,8 +5,8 @@ import { isToday, addDays } from '../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../contexts/AppContext';
 
 export interface DashboardTask extends Task {
-  projectName: string;
-  projectColor: string;
+  project_name: string;
+  project_color: string;
 }
 
 interface DashboardStats {
@@ -36,8 +36,8 @@ export function useDashboardStats({ events, projects }: UseDashboardStatsProps):
   const allTasks = useMemo(() => projects.flatMap(project => 
     project.tasks.map(task => ({
       ...task,
-      projectName: project.name,
-      projectColor: project.color
+      project_name: project.name,
+      project_color: project.color
     }))
   ), [projects]);
   
