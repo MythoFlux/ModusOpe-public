@@ -1,8 +1,7 @@
 // src/components/Modals/EventModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, Type, FileText, File } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
-import { useApp } from '../../contexts/AppContext';
+import { X, Calendar, Clock, Type, FileText, File, Loader2 } from 'lucide-react';
+import { useApp, useAppServices } from '../../contexts/AppContext';
 import { useConfirmation } from '../../hooks/useConfirmation';
 import { Event, FileAttachment } from '../../types';
 import AttachmentSection from '../Shared/AttachmentSection';
@@ -14,8 +13,10 @@ import ColorSelector from '../Forms/ColorSelector';
 
 export default function EventModal() {
   const { state, dispatch } = useApp();
+  const services = useAppServices();
   const { showEventModal, selectedEvent, projects, events, session } = state;
   const { getConfirmation } = useConfirmation();
+  const [isLoading, setIsLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'details' | 'files'>('details');
   const [formData, setFormData] = useState({
@@ -91,13 +92,14 @@ export default function EventModal() {
     setActiveTab('details');
   }, [selectedEvent, state.selectedDate, isRecurringEvent, similarEvents]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!session?.user && !selectedEvent) {
         alert("Sinun täytyy olla kirjautunut luodaksesi tapahtuman.");
         return;
     }
+    setIsLoading(true);
 
     const eventDate = new Date(formData.date);
     if (formData.start_time) {
@@ -106,7 +108,7 @@ export default function EventModal() {
     }
 
     const eventData: Event = {
-      id: selectedEvent?.id || uuidv4(),
+      id: selectedEvent?.id || '', // ID will be set by Supabase
       user_id: session!.user.id,
       title: formData.title,
       description: formData.description,
@@ -121,40 +123,36 @@ export default function EventModal() {
       files: files
     };
     
-    if (selectedEvent) {
-      dispatch({ type: 'UPDATE_EVENT', payload: eventData });
-
-      if (bulkEditOptions.applyToAll && isRecurringEvent && similarEvents.length > 0) {
-        const startDate = new Date(bulkEditOptions.start_date);
-        const endDate = new Date(bulkEditOptions.end_date);
-
-        similarEvents.forEach(event => {
-          const eventDate = new Date(event.date);
-          if (eventDate >= startDate && eventDate <= endDate) {
-            const updatedEvent: Event = {
-              ...event,
-              title: formData.title,
-              description: formData.description,
-              type: formData.type,
-              color: formData.color,
-              project_id: formData.project_id || undefined,
-              files: files
-            };
-            dispatch({ type: 'UPDATE_EVENT', payload: updatedEvent });
-          }
-        });
-      }
-    } else {
-      dispatch({ type: 'ADD_EVENT', payload: eventData });
+    try {
+        if (selectedEvent) {
+            await services.updateEvent(eventData);
+    
+            if (bulkEditOptions.applyToAll && isRecurringEvent && similarEvents.length > 0) {
+                const startDate = new Date(bulkEditOptions.start_date);
+                const endDate = new Date(bulkEditOptions.end_date);
+        
+                for (const event of similarEvents) {
+                    const eventDate = new Date(event.date);
+                    if (eventDate >= startDate && eventDate <= endDate) {
+                        const updatedEvent: Event = { ...event, title: formData.title, description: formData.description, type: formData.type, color: formData.color, project_id: formData.project_id || undefined, files: files };
+                        await services.updateEvent(updatedEvent);
+                    }
+                }
+            }
+        } else {
+            await services.addEvent(eventData);
+        }
+        dispatch({ type: 'CLOSE_MODALS' });
+    } catch (error: any) {
+        alert(`Tallennus epäonnistui: ${error.message}`);
+    } finally {
+        setIsLoading(false);
     }
-
-    dispatch({ type: 'CLOSE_MODALS' });
   };
 
   const handleDelete = async () => {
     if (selectedEvent) {
       const isBulkDelete = bulkEditOptions.applyToAll && isRecurringEvent && similarEvents.length > 0;
-      
       let eventsToDeleteCount = 1;
       if (isBulkDelete) {
           const startDate = new Date(bulkEditOptions.start_date);
@@ -169,26 +167,28 @@ export default function EventModal() {
         ? `Haluatko varmasti poistaa ${eventsToDeleteCount} tapahtumaa tästä sarjasta? Toimintoa ei voi perua.`
         : `Haluatko varmasti poistaa tapahtuman "${selectedEvent.title}"? Toimintoa ei voi perua.`;
       
-      const confirmed = await getConfirmation({
-        title: 'Vahvista poisto',
-        message: message,
-      });
+      const confirmed = await getConfirmation({ title: 'Vahvista poisto', message });
 
       if (confirmed) {
-        dispatch({ type: 'DELETE_EVENT', payload: selectedEvent.id });
-
-        if (isBulkDelete) {
-          const startDate = new Date(bulkEditOptions.start_date);
-          const endDate = new Date(bulkEditOptions.end_date);
-
-          similarEvents.forEach(event => {
-            const eventDate = new Date(event.date);
-            if (eventDate >= startDate && eventDate <= endDate) {
-              dispatch({ type: 'DELETE_EVENT', payload: event.id });
+        setIsLoading(true);
+        try {
+            if (isBulkDelete) {
+                const startDate = new Date(bulkEditOptions.start_date);
+                const endDate = new Date(bulkEditOptions.end_date);
+                for (const event of similarEvents) {
+                    const eventDate = new Date(event.date);
+                    if (eventDate >= startDate && eventDate <= endDate) {
+                        await services.deleteEvent(event.id);
+                    }
+                }
             }
-          });
+            await services.deleteEvent(selectedEvent.id);
+            dispatch({ type: 'CLOSE_MODALS' });
+        } catch (error: any) {
+            alert(`Poisto epäonnistui: ${error.message}`);
+        } finally {
+            setIsLoading(false);
         }
-        dispatch({ type: 'CLOSE_MODALS' });
       }
     }
   };
@@ -331,7 +331,8 @@ export default function EventModal() {
               <button
                 type="button"
                 onClick={handleDelete}
-                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                disabled={isLoading}
+                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
               >
                 Poista
               </button>
@@ -347,8 +348,10 @@ export default function EventModal() {
               <button
                 type="submit"
                 form="event-details-form"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={isLoading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
               >
+                {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 {selectedEvent ? 'Päivitä' : 'Luo'}
               </button>
             </div>
