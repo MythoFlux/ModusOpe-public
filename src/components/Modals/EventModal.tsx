@@ -33,19 +33,19 @@ export default function EventModal() {
   
   const [bulkEditOptions, setBulkEditOptions] = useState({
     applyToAll: false,
-    startDate: '',
-    endDate: ''
+    start_date: '',
+    end_date: ''
   });
 
-  const isRecurringEvent = selectedEvent?.scheduleTemplateId && selectedEvent.id.startsWith('recurring-');
+  const isRecurringEvent = selectedEvent?.schedule_template_id && selectedEvent.id.startsWith('recurring-');
   
   const similarEvents = React.useMemo(() => {
-    if (!selectedEvent || !isRecurringEvent || !selectedEvent.groupName) return [];
+    if (!selectedEvent || !isRecurringEvent || !selectedEvent.group_name) return [];
     
     return events.filter(event => 
       event.id !== selectedEvent.id &&
       event.title === selectedEvent.title &&
-      event.groupName === selectedEvent.groupName &&
+      event.group_name === selectedEvent.group_name &&
       event.id.startsWith('recurring-')
     );
   }, [selectedEvent, events, isRecurringEvent]);
@@ -57,10 +57,10 @@ export default function EventModal() {
         title: selectedEvent.title,
         description: selectedEvent.description || '',
         date: eventDate.toISOString().split('T')[0],
-        start_time: selectedEvent.startTime || '',
-        end_time: selectedEvent.endTime || '',
+        start_time: selectedEvent.start_time || '',
+        end_time: selectedEvent.end_time || '',
         type: selectedEvent.type,
-        project_id: selectedEvent.projectId || '',
+        project_id: selectedEvent.project_id || '',
         color: selectedEvent.color
       });
       setFiles(selectedEvent.files || []);
@@ -70,8 +70,8 @@ export default function EventModal() {
         const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
         setBulkEditOptions({
           applyToAll: false,
-          startDate: minDate.toISOString().split('T')[0],
-          endDate: maxDate.toISOString().split('T')[0]
+          start_date: minDate.toISOString().split('T')[0],
+          end_date: maxDate.toISOString().split('T')[0]
         });
       }
     } else {
@@ -86,7 +86,7 @@ export default function EventModal() {
         color: DEFAULT_COLOR
       });
       setFiles([]);
-      setBulkEditOptions({ applyToAll: false, startDate: '', endDate: '' });
+      setBulkEditOptions({ applyToAll: false, start_date: '', end_date: '' });
     }
     setActiveTab('details');
   }, [selectedEvent, state.selectedDate, isRecurringEvent, similarEvents]);
@@ -105,33 +105,28 @@ export default function EventModal() {
       eventDate.setHours(parseInt(hours), parseInt(minutes));
     }
 
-    // --- KORJATTU KOHTA ALKAA ---
-    const eventData: any = {
+    const eventData: Event = {
       id: selectedEvent?.id || uuidv4(),
+      user_id: session!.user.id,
       title: formData.title,
       description: formData.description,
       date: eventDate,
-      start_time: formData.start_time || null,
-      end_time: formData.end_time || null,
+      start_time: formData.start_time || undefined,
+      end_time: formData.end_time || undefined,
       type: formData.type,
       color: formData.color,
-      project_id: formData.project_id || null,
-      schedule_template_id: selectedEvent?.scheduleTemplateId || null,
-      group_name: selectedEvent?.groupName || null,
+      project_id: formData.project_id || undefined,
+      schedule_template_id: selectedEvent?.schedule_template_id || undefined,
+      group_name: selectedEvent?.group_name || undefined,
       files: files
     };
-    // --- KORJATTU KOHTA PÄÄTTYY ---
     
-    if (!selectedEvent) {
-        eventData.user_id = session.user.id;
-    }
-
     if (selectedEvent) {
       dispatch({ type: 'UPDATE_EVENT', payload: eventData });
 
       if (bulkEditOptions.applyToAll && isRecurringEvent && similarEvents.length > 0) {
-        const startDate = new Date(bulkEditOptions.startDate);
-        const endDate = new Date(bulkEditOptions.endDate);
+        const startDate = new Date(bulkEditOptions.start_date);
+        const endDate = new Date(bulkEditOptions.end_date);
 
         similarEvents.forEach(event => {
           const eventDate = new Date(event.date);
@@ -142,7 +137,7 @@ export default function EventModal() {
               description: formData.description,
               type: formData.type,
               color: formData.color,
-              projectId: formData.project_id || undefined,
+              project_id: formData.project_id || undefined,
               files: files
             };
             dispatch({ type: 'UPDATE_EVENT', payload: updatedEvent });
@@ -162,8 +157,8 @@ export default function EventModal() {
       
       let eventsToDeleteCount = 1;
       if (isBulkDelete) {
-          const startDate = new Date(bulkEditOptions.startDate);
-          const endDate = new Date(bulkEditOptions.endDate);
+          const startDate = new Date(bulkEditOptions.start_date);
+          const endDate = new Date(bulkEditOptions.end_date);
           eventsToDeleteCount += similarEvents.filter(event => {
               const eventDate = new Date(event.date);
               return eventDate >= startDate && eventDate <= endDate;
@@ -183,8 +178,8 @@ export default function EventModal() {
         dispatch({ type: 'DELETE_EVENT', payload: selectedEvent.id });
 
         if (isBulkDelete) {
-          const startDate = new Date(bulkEditOptions.startDate);
-          const endDate = new Date(bulkEditOptions.endDate);
+          const startDate = new Date(bulkEditOptions.start_date);
+          const endDate = new Date(bulkEditOptions.end_date);
 
           similarEvents.forEach(event => {
             const eventDate = new Date(event.date);
@@ -254,7 +249,7 @@ export default function EventModal() {
               />
               <div className="grid grid-cols-2 gap-4">
                 <FormInput
-                  id="start-time"
+                  id="start_time"
                   label="Alkuaika"
                   icon={<Clock className="w-4 h-4 inline mr-2" />}
                   type="time"
@@ -262,7 +257,7 @@ export default function EventModal() {
                   onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
                 />
                 <FormInput
-                  id="end-time"
+                  id="end_time"
                   label="Loppuaika"
                   type="time"
                   value={formData.end_time}
@@ -316,7 +311,7 @@ export default function EventModal() {
                         Sovella muutokset koko sarjaan
                       </label>
                       <p className="text-gray-600">
-                        Muutokset (myös poisto) koskevat kaikkia tämän sarjan tapahtumia aikavälillä {new Date(bulkEditOptions.startDate).toLocaleDateString('fi-FI')} - {new Date(bulkEditOptions.endDate).toLocaleDateString('fi-FI')}.
+                        Muutokset (myös poisto) koskevat kaikkia tämän sarjan tapahtumia aikavälillä {new Date(bulkEditOptions.start_date).toLocaleDateString('fi-FI')} - {new Date(bulkEditOptions.end_date).toLocaleDateString('fi-FI')}.
                       </p>
                     </div>
                   </div>
