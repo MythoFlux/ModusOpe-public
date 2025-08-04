@@ -101,7 +101,6 @@ export interface AppState {
   confirmationModal: ConfirmationModalState;
 }
 
-// UUDET ACTION-TYYPIT ONNISTUNEILLE TALLENNUKSILLE
 export type AppAction =
   | { type: 'SET_SESSION'; payload: Session | null }
   | { type: 'INITIALIZE_DATA'; payload: { projects: Project[]; scheduleTemplates: ScheduleTemplate[]; recurringClasses: RecurringClass[]; manualEvents: Event[]; tasks: Task[] } }
@@ -121,8 +120,8 @@ export type AppAction =
   | { type: 'UPDATE_SCHEDULE_TEMPLATE_SUCCESS'; payload: ScheduleTemplate }
   | { type: 'DELETE_SCHEDULE_TEMPLATE_SUCCESS'; payload: string }
   | { type: 'ADD_RECURRING_CLASS_SUCCESS'; payload: RecurringClass[] }
-  | { type: 'UPDATE_RECURRING_CLASS'; payload: RecurringClass }
-  | { type: 'DELETE_RECURRING_CLASS'; payload: string }
+  | { type: 'UPDATE_RECURRING_CLASS_SUCCESS'; payload: RecurringClass } // Added for completeness
+  | { type: 'DELETE_RECURRING_CLASS_SUCCESS'; payload: string } // Added for completeness
   | { type: 'SET_VIEW'; payload: CalendarView }
   | { type: 'SET_SELECTED_DATE'; payload: Date }
   | { type: 'TOGGLE_EVENT_MODAL'; payload?: Event }
@@ -172,7 +171,6 @@ const initialState: AppState = {
   confirmationModal: initialConfirmationState,
 };
 
-// PÄÄREDUCER (NYT PUHDAS JA SYNkroninen)
 function appReducer(state: AppState, action: AppAction): AppState {
   let newState: AppState;
 
@@ -185,10 +183,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const { projects, scheduleTemplates, recurringClasses, manualEvents, tasks } = action.payload;
       const projectTasks = tasks.filter(t => t.project_id && t.project_id !== GENERAL_TASKS_PROJECT_ID);
       const generalTasks = tasks.filter(t => !t.project_id || t.project_id === GENERAL_TASKS_PROJECT_ID);
-      const projectsWithTasks = projects.map(p => ({
-        ...p,
-        tasks: projectTasks.filter(t => t.project_id === p.id)
-      }));
+      const projectsWithTasks = projects.map(p => ({ ...p, tasks: projectTasks.filter(t => t.project_id === p.id) }));
       const updatedGeneralTasksProject = { ...generalTasksProject, tasks: generalTasks };
       const initialProjectsWithGeneral = [updatedGeneralTasksProject, ...projectsWithTasks];
       newState = {
@@ -206,26 +201,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
       newState = projectReducerLogic(stateAfterEvent, action);
   }
 
-  // Aja deadline-päivitys aina kun projektit tai tapahtumat muuttuvat
   if (newState.projects !== state.projects || newState.events !== state.events) {
-      return {
-          ...newState,
-          events: updateDeadlineEvents(newState.projects, newState.events)
-      };
+      return { ...newState, events: updateDeadlineEvents(newState.projects, newState.events) };
   }
 
   return newState;
 }
 
 const AppContext = createContext<{ state: AppState; dispatch: React.Dispatch<AppAction>; } | null>(null);
-
-// UUSI SERIVCE CONTEXT, JOKA SISÄLTÄÄ SUPABASE-KUTSUT
 const AppServiceContext = createContext<any>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // --- Kaikki Supabase-logiikka on nyt täällä ---
   const services = {
     // PROJECTS
     addProject: useCallback(async (projectPayload: AddProjectPayload) => {
@@ -233,9 +221,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { id, files, columns, tasks, ...dbData } = projectDataFromForm;
         const { data: newProjectData, error } = await supabase.from('projects').insert([dbData]).select().single();
         if (error || !newProjectData) throw new Error(error.message);
-
         const finalProject = { ...projectDataFromForm, ...newProjectData };
-
         if (templateGroupName) {
             const { newRecurringClasses } = createProjectWithTemplates(finalProject, state.scheduleTemplates);
             if (newRecurringClasses.length > 0) {
@@ -262,11 +248,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, []),
 
     // TASKS
-    addTask: useCallback(async (task: Task) => {
-      const { id, ...dbData } = task;
-      const { data, error } = await supabase.from('tasks').insert([dbData]).select().single();
+    addTask: useCallback(async (task: Omit<Task, 'id'>) => {
+      const { data, error } = await supabase.from('tasks').insert([task]).select().single();
       if (error || !data) throw new Error(error.message);
-      dispatch({ type: 'ADD_TASK_SUCCESS', payload: { projectId: data.project_id, task: data } });
+      dispatch({ type: 'ADD_TASK_SUCCESS', payload: { projectId: data.project_id, task: data as Task } });
     }, []),
 
     updateTask: useCallback(async (task: Task) => {
@@ -288,9 +273,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, []),
     
     // EVENTS
-    addEvent: useCallback(async (event: Event) => {
-        const { id, ...dbData } = event;
-        const { data, error } = await supabase.from('events').insert([dbData]).select().single();
+    addEvent: useCallback(async (event: Omit<Event, 'id'>) => {
+        const { data, error } = await supabase.from('events').insert([event]).select().single();
         if (error || !data) throw new Error(error.message);
         dispatch({ type: 'ADD_EVENT_SUCCESS', payload: data as Event });
     }, []),
@@ -308,10 +292,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, []),
     
     // SCHEDULE TEMPLATES
-    addScheduleTemplate: useCallback(async (template: ScheduleTemplate) => {
-        const { error } = await supabase.from('schedule_templates').insert([template]);
-        if (error) throw new Error(error.message);
-        dispatch({ type: 'ADD_SCHEDULE_TEMPLATE_SUCCESS', payload: template });
+    addScheduleTemplate: useCallback(async (template: Omit<ScheduleTemplate, 'id'>) => {
+        const { data, error } = await supabase.from('schedule_templates').insert([template]).select().single();
+        if (error || !data) throw new Error(error.message);
+        dispatch({ type: 'ADD_SCHEDULE_TEMPLATE_SUCCESS', payload: data as ScheduleTemplate });
     }, []),
     
     updateScheduleTemplate: useCallback(async (template: ScheduleTemplate) => {
@@ -324,6 +308,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { error } = await supabase.from('schedule_templates').delete().match({ id: templateId });
         if (error) throw new Error(error.message);
         dispatch({ type: 'DELETE_SCHEDULE_TEMPLATE_SUCCESS', payload: templateId });
+    }, []),
+      
+    // RECURRING CLASSES
+    addRecurringClasses: useCallback(async (classes: Omit<RecurringClass, 'id'>[]) => {
+        const { data, error } = await supabase.from('recurring_classes').insert(classes).select();
+        if (error || !data) throw new Error(error.message);
+        dispatch({ type: 'ADD_RECURRING_CLASS_SUCCESS', payload: data as RecurringClass[] });
     }, []),
   };
 
@@ -339,7 +330,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const fetchInitialData = async () => {
-      if (!state.session) return;
+      if (!state.session) {
+        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [], tasks: [] }});
+        return;
+      };
       const [projectsRes, templatesRes, recurringRes, eventsRes, tasksRes] = await Promise.all([
           supabase.from('projects').select('*'),
           supabase.from('schedule_templates').select('*'),
@@ -352,17 +346,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [], tasks: [] } });
         return;
       }
-      const formattedProjects = (projectsRes.data || []).map((p: any) => ({ ...p, tasks: [], columns: p.columns && p.columns.length > 0 ? p.columns : [ { id: 'todo', title: 'Suunnitteilla' }, { id: 'inProgress', title: 'Työn alla' }, { id: 'done', title: 'Valmis' } ] }));
+      const formattedProjects = (projectsRes.data || []).map((p: any) => ({ ...p, start_date: new Date(p.start_date), end_date: p.end_date ? new Date(p.end_date) : undefined, tasks: [], columns: p.columns && p.columns.length > 0 ? p.columns : [ { id: 'todo', title: 'Suunnitteilla' }, { id: 'inProgress', title: 'Työn alla' }, { id: 'done', title: 'Valmis' } ] }));
       const formattedRecurring = (recurringRes.data || []).map((rc: any) => ({ ...rc, start_date: new Date(rc.start_date), end_date: new Date(rc.end_date) }));
       const formattedEvents = (eventsRes.data || []).map((e: any) => ({ ...e, date: new Date(e.date) }));
       const formattedTasks = (tasksRes.data || []).map((t: any) => ({ ...t, due_date: t.due_date ? new Date(t.due_date) : undefined }));
       dispatch({ type: 'INITIALIZE_DATA', payload: { projects: formattedProjects, scheduleTemplates: templatesRes.data || [], recurringClasses: formattedRecurring, manualEvents: formattedEvents, tasks: formattedTasks } });
     };
-    if (state.session) {
-      fetchInitialData();
-    } else {
-      dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [], tasks: [] }});
-    }
+    fetchInitialData();
   }, [state.session]);
 
   return (
@@ -380,7 +370,6 @@ export function useApp() {
   return context;
 }
 
-// UUSI HOOK PALVELUFUNKTIOIDEN KÄYTTÖÖN
 export function useAppServices() {
     const context = useContext(AppServiceContext);
     if (!context) { throw new Error('useAppServices must be used within AppProvider'); }
