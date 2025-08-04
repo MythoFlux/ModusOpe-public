@@ -217,21 +217,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const services = {
     // PROJECTS
     addProject: useCallback(async (projectPayload: AddProjectPayload) => {
-        // MUUTETTU: Käytetään oikeaa nimeä (template_group_name)
         const { template_group_name, ...projectDataFromForm } = projectPayload;
         const { id, files, columns, tasks, ...dbData } = projectDataFromForm;
         const { data: newProjectData, error } = await supabase.from('projects').insert([dbData]).select().single();
         if (error || !newProjectData) throw new Error(error.message);
-        const finalProject = { ...projectDataFromForm, ...newProjectData };
 
-        // MUUTETTU: Käytetään oikeaa nimeä (template_group_name)
+        // --- TÄMÄ ON KORJATTU KOHTA ---
+        // Muunnetaan Supabaselta tulleet päivämäärä-stringit takaisin Date-olioiksi
+        const finalProject: Project = {
+          ...(projectDataFromForm as Project), // Käytetään alkuperäistä payloadia pohjana
+          ...newProjectData, // Ylikirjoitetaan id, created_at jne. Supabasen palauttamilla arvoilla
+          start_date: new Date(newProjectData.start_date),
+          end_date: newProjectData.end_date ? new Date(newProjectData.end_date) : undefined,
+        };
+        // --- KORJAUKSEN LOPPU ---
+
         if (template_group_name) {
             const { newRecurringClasses } = createProjectWithTemplates(finalProject, state.scheduleTemplates);
             if (newRecurringClasses.length > 0) {
-                const classesWithUserId = newRecurringClasses.map(rc => ({ ...rc, project_id: newProjectData.id, user_id: state.session?.user.id }));
-                const { error: recurringError } = await supabase.from('recurring_classes').insert(classesWithUserId);
+                // Käytetään `any` tyyppiä väliaikaisesti, koska `user_id` ei ole RecurringClass-tyypissä
+                const classesToInsert: any[] = newRecurringClasses.map(rc => ({ ...rc, project_id: newProjectData.id, user_id: state.session?.user.id }));
+                const { data: newClassesData, error: recurringError } = await supabase.from('recurring_classes').insert(classesToInsert).select();
+                
                 if (recurringError) throw new Error(recurringError.message);
-                dispatch({ type: 'ADD_RECURRING_CLASS_SUCCESS', payload: classesWithUserId as RecurringClass[] });
+
+                // Muunnetaan palautetut päivämäärät Date-olioiksi ennen dispatchia
+                const formattedNewClasses = (newClassesData || []).map((rc: any) => ({
+                    ...rc,
+                    start_date: new Date(rc.start_date),
+                    end_date: new Date(rc.end_date),
+                }));
+
+                dispatch({ type: 'ADD_RECURRING_CLASS_SUCCESS', payload: formattedNewClasses as RecurringClass[] });
             }
         }
         dispatch({ type: 'ADD_PROJECT_SUCCESS', payload: finalProject as Project });
