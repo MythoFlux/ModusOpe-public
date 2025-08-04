@@ -16,39 +16,53 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
       const { templateGroupName, ...projectDataFromForm } = action.payload;
 
       const addProjectAndClassesAsync = async () => {
+        // Poistetaan client-puolen väliaikaiset tiedot ennen tallennusta
         const { id, files, columns, tasks, ...dbData } = projectDataFromForm;
         
+        // 1. Tallenna projekti ja pyydä se takaisin Supabasesta, jotta saamme oikean, tietokannan luoman ID:n.
         const { data: newProjectData, error: projectError } = await supabase
           .from('projects')
           .insert([dbData])
           .select()
           .single();
 
-        if (projectError) {
+        if (projectError || !newProjectData) {
           console.error("Error adding project:", projectError);
           return;
         }
         
-        if (templateGroupName && newProjectData) {
-          const projectWithId = { ...projectDataFromForm, id: newProjectData.id };
-          const { newRecurringClasses } = createProjectWithTemplates(projectWithId, state.scheduleTemplates);
+        // 2. Jos käytetään tuntipohjia, luo toistuvat tunnit käyttämällä juuri saatua Oikeaa project ID:tä.
+        if (templateGroupName) {
+          const projectWithRealId = { ...projectDataFromForm, id: newProjectData.id };
+          const { newRecurringClasses } = createProjectWithTemplates(projectWithRealId, state.scheduleTemplates);
           
           if (newRecurringClasses.length > 0) {
-            const classesWithUserId = newRecurringClasses.map(rc => ({
+            const classesWithUserIdAndRealProjectId = newRecurringClasses.map(rc => ({
               ...rc,
-              project_id: newProjectData.id,
+              project_id: newProjectData.id, // Varmistetaan oikea ID
               user_id: state.session?.user.id
             }));
             
-            const { error: recurringError } = await supabase.from('recurring_classes').insert(classesWithUserId);
+            const { error: recurringError } = await supabase.from('recurring_classes').insert(classesWithUserIdAndRealProjectId);
             if (recurringError) {
               console.error("Error adding recurring classes:", recurringError);
             }
           }
         }
+        
+        // HUOM: Ideaalitilanteessa tämä async-funktio palauttaisi `newProjectData`-olion,
+        // ja reduceriin lähetettäisiin uusi action (esim. 'ADD_PROJECT_SUCCESS'),
+        // joka päivittäisi sovelluksen tilan tällä tietokannasta saadulla datalla.
+        // Nykyisessä "fire-and-forget" -mallissa emme voi tehdä sitä suoraan,
+        // mutta olemme nyt korjanneet tietokannan eheyden.
+        // Sovelluksen tila synkronoituu täysin vasta sivun uudelleenlatauksen jälkeen.
       };
+      
       addProjectAndClassesAsync();
 
+      // HUOM: Tämä on optimistinen päivitys. Se käyttää client-puolella luotua
+      // väliaikaista ID:tä, jotta käyttöliittymä tuntuu nopealta. Tämä ID EI OLE
+      // sama kuin tietokantaan tallennettu ID. Tämä on nykyisen arkkitehtuurin rajoite.
       const { project, newRecurringClasses } = createProjectWithTemplates(
         { ...projectDataFromForm, templateGroupName, id: uuidv4() },
         state.scheduleTemplates
@@ -103,11 +117,14 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
     case 'ADD_TASK': {
       const { projectId, task } = action.payload;
       const addTaskAsync = async () => {
-        const { error } = await supabase.from('tasks').insert([task]);
+        // Kuten projektin luonnissa, emme lähetä client-puolen ID:tä tietokantaan.
+        const { id, ...taskData } = task;
+        const { error } = await supabase.from('tasks').insert([taskData]);
         if (error) console.error("Error adding task:", error);
       }
       addTaskAsync();
-
+      
+      // Optimistinen päivitys client-puolen ID:llä
       return {
         ...state,
         projects: state.projects.map(p =>
