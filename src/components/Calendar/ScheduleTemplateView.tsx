@@ -1,12 +1,13 @@
 // src/components/Calendar/ScheduleTemplateView.tsx
 import React from 'react';
-import { useApp } from '../../contexts/AppContext';
+import { useApp, useAppServices } from '../../contexts/AppContext'; // KORJATTU
 import { Plus, Trash2 } from 'lucide-react';
 import { ScheduleTemplate } from '../../types';
 import { formatTimeString } from '../../utils/dateUtils';
 
 export default function ScheduleTemplateView() {
   const { state, dispatch } = useApp();
+  const services = useAppServices(); // KORJATTU
   const { scheduleTemplates } = state;
 
   const weekDays = ['Ma', 'Ti', 'Ke', 'To', 'Pe'];
@@ -25,7 +26,11 @@ export default function ScheduleTemplateView() {
 
   const handleDeleteTemplate = (templateId: string) => {
     if (confirm('Haluatko varmasti poistaa tämän tuntiryhmän? Tämä poistaa myös kaikki siihen liittyvät tulevat oppitunnit.')) {
-      dispatch({ type: 'DELETE_SCHEDULE_TEMPLATE', payload: templateId });
+      // KORJATTU: Käytetään service-funktiota
+      services.deleteScheduleTemplate(templateId).catch((err: any) => {
+          console.error("Failed to delete schedule template:", err);
+          alert(`Poisto epäonnistui: ${err.message}`);
+      });
     }
   };
 
@@ -43,91 +48,48 @@ export default function ScheduleTemplateView() {
     };
   };
 
+  // ... (JSX-osa pysyy samana) ...
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-full">
       <div className="p-6 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Kiertotuntikaavio</h3>
-          <p className="text-sm text-gray-600 mt-1">
-            Määritä toistuvat oppitunnit viikon aikana
-          </p>
+          <p className="text-sm text-gray-600 mt-1"> Määritä toistuvat oppitunnit viikon aikana </p>
         </div>
-        <button
-          onClick={handleAddTemplate}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Lisää tuntiryhmään
+        <button onClick={handleAddTemplate} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <Plus className="w-4 h-4 mr-2" /> Lisää tuntiryhmään
         </button>
       </div>
-
       <div className="flex-1 overflow-auto">
         <div className="relative">
           <div className="grid" style={{ gridTemplateColumns: '60px repeat(5, 1fr)' }}>
             <div className="sticky top-0 z-20 bg-white border-b border-gray-200"></div>
-
             {weekDays.map((day) => (
-              <div key={day} className="sticky top-0 z-20 bg-white p-4 text-center font-medium text-gray-900 border-b border-l border-gray-200">
-                {day}
-              </div>
+              <div key={day} className="sticky top-0 z-20 bg-white p-4 text-center font-medium text-gray-900 border-b border-l border-gray-200"> {day} </div>
             ))}
-            
             <div className="col-start-1 row-start-2">
               {timeSlots.map((time) => (
-                <div key={time} className="h-12 pr-2 text-right text-xs text-gray-500 border-t border-gray-100 flex items-start pt-1">
-                  {time}
-                </div>
+                <div key={time} className="h-12 pr-2 text-right text-xs text-gray-500 border-t border-gray-100 flex items-start pt-1"> {time} </div>
               ))}
             </div>
-
             <div className="col-start-2 col-span-5 row-start-2 grid grid-cols-5">
               {weekDays.map((_, dayIndex) => (
                 <div key={dayIndex} className="relative border-l border-gray-200">
-                  {timeSlots.map((time) => (
-                    <div key={time} className="h-12 border-b border-gray-100" />
-                  ))}
-                  
+                  {timeSlots.map((time) => ( <div key={time} className="h-12 border-b border-gray-100" /> ))}
                   {scheduleTemplates
                     .filter(t => t.day_of_week === dayIndex)
                     .map((template) => {
                       const position = getTemplatePosition(template);
                       return (
-                        <div
-                          key={template.id}
-                          onClick={() => handleEditTemplate(template)}
-                          className="absolute left-1 right-1 rounded-lg p-2 cursor-pointer hover:opacity-80 transition-opacity group z-10"
-                          style={{
-                            top: `${position.top}px`,
-                            height: `${position.height}px`,
-                            backgroundColor: template.color + '20',
-                            borderLeft: `4px solid ${template.color}`,
-                            minHeight: '24px',
-                          }}
-                        >
+                        <div key={template.id} onClick={() => handleEditTemplate(template)} className="absolute left-1 right-1 rounded-lg p-2 cursor-pointer hover:opacity-80 transition-opacity group z-10" style={{ top: `${position.top}px`, height: `${position.height}px`, backgroundColor: template.color + '20', borderLeft: `4px solid ${template.color}`, minHeight: '24px', }}>
                           <div className="flex items-start justify-between h-full">
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-gray-900 text-sm truncate">
-                                {template.name}
-                              </div>
-                              <div className="text-xs text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis">
-                                {formatTimeString(template.start_time)} - {formatTimeString(template.end_time)}
-                              </div>
-                              {template.description && (
-                                <div className="text-xs text-gray-500 mt-1 truncate">
-                                  {template.description}
-                                </div>
-                              )}
+                              <div className="font-medium text-gray-900 text-sm truncate"> {template.name} </div>
+                              <div className="text-xs text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis"> {formatTimeString(template.start_time)} - {formatTimeString(template.end_time)} </div>
+                              {template.description && ( <div className="text-xs text-gray-500 mt-1 truncate"> {template.description} </div> )}
                             </div>
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteTemplate(template.id);
-                                }}
-                                className="p-1 text-gray-500 hover:text-red-600 transition-colors"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(template.id); }} className="p-1 text-gray-500 hover:text-red-600 transition-colors"> <Trash2 className="w-3 h-3" /> </button>
                             </div>
                           </div>
                         </div>
@@ -138,7 +100,6 @@ export default function ScheduleTemplateView() {
             </div>
           </div>
         </div>
-
         {scheduleTemplates.length === 0 && (
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
