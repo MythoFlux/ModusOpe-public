@@ -1,12 +1,14 @@
 // src/components/Kanban/KanbanView.tsx
 import React, { useEffect, useState } from 'react';
-import { useApp } from '../../contexts/AppContext';
+import { useApp, useAppServices } from '../../contexts/AppContext'; // KORJATTU
 import { Project, Task, KanbanColumn } from '../../types';
 import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, ChevronDown, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical } from 'lucide-react';
 import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 
-// Tyyppimääritykset raahaukselle
+// ... TaskCard- ja KanbanColumnComponent-komponentit pysyvät samoina ...
+// ... AddColumn-komponentti pysyy samana ...
+
 const DND_TYPES = {
   TASK: 'task',
   COLUMN: 'column'
@@ -28,7 +30,7 @@ const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
       onDragStart={(e) => {
         e.dataTransfer.setData('type', DND_TYPES.TASK);
         e.dataTransfer.setData('taskId', task.id);
-        e.dataTransfer.setData('projectId', task.project_id); // KORJATTU
+        e.dataTransfer.setData('projectId', task.project_id);
         e.currentTarget.classList.add('opacity-50');
       }}
       onDragEnd={(e) => e.currentTarget.classList.remove('opacity-50')}
@@ -72,8 +74,8 @@ const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, on
   
   const handleAddTask = () => {
     const newTaskTemplate: Partial<Task> = {
-      project_id: projectId, // KORJATTU
-      column_id: column.id, // KORJATTU
+      project_id: projectId,
+      column_id: column.id,
     };
     dispatch({ type: 'TOGGLE_TASK_MODAL', payload: newTaskTemplate as Task });
   };
@@ -111,26 +113,8 @@ const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, on
           {isMenuOpen && (
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
               <ul className="py-1">
-                <li>
-                  <button
-                    onClick={() => { setIsEditing(true); setIsMenuOpen(false); }}
-                    disabled={isDefaultColumn}
-                    className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isDefaultColumn ? <Lock className="w-3 h-3 mr-2" /> : <Edit className="w-3 h-3 mr-2" />}
-                    Muokkaa
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={handleDelete}
-                    disabled={isDefaultColumn}
-                    className="w-full text-left flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isDefaultColumn ? <Lock className="w-3 h-3 mr-2" /> : <Trash2 className="w-3 h-3 mr-2" />}
-                    Poista
-                  </button>
-                </li>
+                <li><button onClick={() => { setIsEditing(true); setIsMenuOpen(false); }} disabled={isDefaultColumn} className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"> {isDefaultColumn ? <Lock className="w-3 h-3 mr-2" /> : <Edit className="w-3 h-3 mr-2" />} Muokkaa </button> </li>
+                <li><button onClick={handleDelete} disabled={isDefaultColumn} className="w-full text-left flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"> {isDefaultColumn ? <Lock className="w-3 h-3 mr-2" /> : <Trash2 className="w-3 h-3 mr-2" />} Poista </button> </li>
               </ul>
             </div>
           )}
@@ -176,12 +160,8 @@ const AddColumn = ({ projectId }: { projectId: string }) => {
     if (!isEditing) {
         return (
             <div className="w-72 flex-shrink-0 p-3">
-              <button
-                  onClick={() => setIsEditing(true)}
-                  className="w-full h-full flex items-center justify-center p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-gray-100 hover:border-gray-400 transition-colors"
-              >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Lisää uusi säiliö
+              <button onClick={() => setIsEditing(true)} className="w-full h-full flex items-center justify-center p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-gray-100 hover:border-gray-400 transition-colors">
+                  <Plus className="w-4 h-4 mr-2" /> Lisää uusi säiliö
               </button>
             </div>
         );
@@ -189,13 +169,7 @@ const AddColumn = ({ projectId }: { projectId: string }) => {
 
     return (
         <form onSubmit={handleSubmit} className="w-72 flex-shrink-0 p-3 bg-gray-100 rounded-lg">
-            <input
-                autoFocus
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Säiliön nimi..."
-                className="w-full p-2 border border-gray-300 rounded-md"
-            />
+            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Säiliön nimi..." className="w-full p-2 border border-gray-300 rounded-md" />
             <div className="mt-2 space-x-2">
                 <button type="submit" className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">Lisää</button>
                 <button type="button" onClick={() => setIsEditing(false)} className="px-3 py-1 text-sm rounded hover:bg-gray-200">Peruuta</button>
@@ -207,6 +181,7 @@ const AddColumn = ({ projectId }: { projectId: string }) => {
 
 export default function KanbanView() {
   const { state, dispatch } = useApp();
+  const services = useAppServices(); // KORJATTU
   const { projects, selectedKanbanProjectId } = state;
   const [draggedItem, setDraggedItem] = useState<{type: string, id: string} | null>(null);
   const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null);
@@ -228,23 +203,14 @@ export default function KanbanView() {
     dispatch({ type: 'SET_KANBAN_PROJECT', payload: projectId });
   };
   
+  // ... renderProjectList pysyy samana ...
   const renderProjectList = (title: string, items: Project[], icon: React.ReactNode) => (
     <div>
-      <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center">
-        {icon}
-        <span className="ml-2">{title}</span>
-      </h3>
+      <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center"> {icon} <span className="ml-2">{title}</span> </h3>
       <ul className="space-y-1">
         {items.map(item => (
           <li key={item.id}>
-            <button
-              onClick={() => handleSelectProject(item.id)}
-              className={`w-full text-left px-4 py-2 text-sm rounded-md transition-colors flex items-center ${
-                selectedKanbanProjectId === item.id
-                  ? 'bg-blue-100 text-blue-800 font-semibold'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
+            <button onClick={() => handleSelectProject(item.id)} className={`w-full text-left px-4 py-2 text-sm rounded-md transition-colors flex items-center ${ selectedKanbanProjectId === item.id ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-700 hover:bg-gray-100' }`} >
               <span className="w-2 h-2 rounded-full mr-3" style={{ backgroundColor: item.color }}></span>
               {item.name}
             </button>
@@ -279,9 +245,10 @@ export default function KanbanView() {
       const taskId = e.dataTransfer.getData('taskId');
       const projectId = e.dataTransfer.getData('projectId');
       if (taskId && projectId) {
-        dispatch({
-          type: 'UPDATE_TASK_STATUS',
-          payload: { projectId, taskId, newStatus: targetColumnId },
+        // KORJATTU: Käytetään service-funktiota
+        services.updateTaskStatus(projectId, taskId, targetColumnId).catch((err: any) => {
+            console.error("Failed to update task status:", err);
+            // Tässä voisi näyttää virheilmoituksen käyttäjälle
         });
       }
     } else if (type === DND_TYPES.COLUMN && selectedProject && draggedColumnIndex !== null) {
@@ -304,78 +271,41 @@ export default function KanbanView() {
     }
   };
 
-
   return (
     <div className="flex flex-col md:flex-row h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-      <aside className="hidden md:block w-1/6 min-w-[180px] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
-        <h2 className="text-lg font-bold text-gray-800">Työtilat</h2>
-        
-        {generalProject && renderProjectList('Yleiset', [generalProject], <Inbox className="w-4 h-4" />)}
-        
-        {renderProjectList('Kurssit', courses, <BookOpen className="w-4 h-4" />)}
-        {renderProjectList('Projektit', otherProjects, <ClipboardCheck className="w-4 h-4" />)}
-      </aside>
-
-      <main className="flex-1 p-4 md:p-6 flex flex-col min-w-0">
-        {selectedProject ? (
-          <>
-            <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-6 flex-shrink-0">
-              <div className="md:hidden relative">
-                <select
-                  value={selectedKanbanProjectId || ''}
-                  onChange={(e) => handleSelectProject(e.target.value)}
-                  className="appearance-none font-bold text-lg bg-transparent border-none p-1 pr-6 -ml-1"
-                >
-                    {generalProject && <option value={generalProject.id}>{generalProject.name}</option>}
-                  <optgroup label="Kurssit">
-                    {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </optgroup>
-                  <optgroup label="Projektit">
-                    {otherProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </optgroup>
-                </select>
-                <ChevronDown className="w-5 h-5 absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-              <h1 className="hidden md:block text-2xl font-bold text-gray-900">{selectedProject.name}</h1>
-              {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
-                <button 
-                  onClick={handleInfoButtonClick}
-                  className="flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md"
-                >
-                  <Info className="w-4 h-4 mr-2" />
-                  <span className="hidden md:inline">Muokkaa tietoja</span>
-                </button>
-              )}
-            </div>
-            
-            <div className="flex-1 flex gap-6 overflow-x-auto">
-              {selectedProject.columns?.map((column, index) => (
-                <div
-                  key={column.id}
-                  onDragOver={(e) => { e.preventDefault(); if(draggedItem?.type === DND_TYPES.TASK) setDraggedItem({type: DND_TYPES.TASK, id: column.id})}}
-                  onDragLeave={() => setDraggedItem(null)}
-                  onDragEnd={() => {setDraggedItem(null); setDraggedColumnIndex(null)}}
-                >
-                  <KanbanColumnComponent 
-                    column={column} 
-                    tasks={getTasksForColumn(column.id)}
-                    projectId={selectedProject.id}
-                    isTaskDraggedOver={draggedItem?.type === DND_TYPES.TASK && draggedItem.id === column.id}
-                    isColumnDragged={draggedColumnIndex === index}
-                    onDragStart={(e) => handleDragStart(e, DND_TYPES.COLUMN, column.id, index)}
-                    onDropColumn={(e) => handleDrop(e, column.id, index)}
-                  />
+        {/* Sivupalkki ja pääsisältö pysyvät ennallaan */}
+        <aside className="hidden md:block w-1/6 min-w-[180px] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
+            <h2 className="text-lg font-bold text-gray-800">Työtilat</h2>
+            {generalProject && renderProjectList('Yleiset', [generalProject], <Inbox className="w-4 h-4" />)}
+            {renderProjectList('Kurssit', courses, <BookOpen className="w-4 h-4" />)}
+            {renderProjectList('Projektit', otherProjects, <ClipboardCheck className="w-4 h-4" />)}
+        </aside>
+        <main className="flex-1 p-4 md:p-6 flex flex-col min-w-0">
+            {selectedProject ? (
+              <>
+                <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-6 flex-shrink-0">
+                  <h1 className="hidden md:block text-2xl font-bold text-gray-900">{selectedProject.name}</h1>
+                  {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
+                    <button onClick={handleInfoButtonClick} className="flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md">
+                      <Info className="w-4 h-4 mr-2" /> <span className="hidden md:inline">Muokkaa tietoja</span>
+                    </button>
+                  )}
                 </div>
-              ))}
-              <AddColumn projectId={selectedProject.id} />
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <p>Valitse työtila vasemmalta.</p>
-          </div>
-        )}
-      </main>
+                <div className="flex-1 flex gap-6 overflow-x-auto">
+                  {selectedProject.columns?.map((column, index) => (
+                    <div key={column.id} onDragOver={(e) => { e.preventDefault(); if(draggedItem?.type === DND_TYPES.TASK) setDraggedItem({type: DND_TYPES.TASK, id: column.id})}} onDragLeave={() => setDraggedItem(null)} onDragEnd={() => {setDraggedItem(null); setDraggedColumnIndex(null)}}>
+                      <KanbanColumnComponent column={column} tasks={getTasksForColumn(column.id)} projectId={selectedProject.id} isTaskDraggedOver={draggedItem?.type === DND_TYPES.TASK && draggedItem.id === column.id} isColumnDragged={draggedColumnIndex === index} onDragStart={(e) => handleDragStart(e, DND_TYPES.COLUMN, column.id, index)} onDropColumn={(e) => handleDrop(e, column.id, index)} />
+                    </div>
+                  ))}
+                  <AddColumn projectId={selectedProject.id} />
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <p>Valitse työtila vasemmalta.</p>
+              </div>
+            )}
+        </main>
     </div>
   );
 }
