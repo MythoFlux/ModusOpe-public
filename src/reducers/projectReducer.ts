@@ -120,6 +120,14 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
     // === TEHTÄVÄT ===
     case 'ADD_TASK': {
       const { projectId, task } = action.payload;
+
+      const addTaskAsync = async () => {
+        const { files, ...dbData } = task;
+        const { error } = await supabase.from('tasks').insert([dbData]);
+        if (error) console.error("Error adding task:", error);
+      }
+      addTaskAsync();
+
       return {
         ...state,
         projects: state.projects.map(p =>
@@ -130,6 +138,14 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
 
     case 'UPDATE_TASK': {
       const { projectId, task } = action.payload;
+
+      const updateTaskAsync = async () => {
+        const { files, ...dbData } = task;
+        const { error } = await supabase.from('tasks').update(dbData).match({ id: task.id });
+        if (error) console.error("Error updating task:", error);
+      };
+      updateTaskAsync();
+
       return {
         ...state,
         projects: state.projects.map(p =>
@@ -142,6 +158,13 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
 
     case 'DELETE_TASK': {
       const { projectId, taskId } = action.payload;
+
+      const deleteTaskAsync = async () => {
+          const { error } = await supabase.from('tasks').delete().match({ id: taskId });
+          if(error) console.error("Error deleting task:", error);
+      }
+      deleteTaskAsync();
+
       return {
         ...state,
         projects: state.projects.map(p =>
@@ -154,10 +177,28 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
 
     case 'UPDATE_TASK_STATUS': {
         const { projectId, taskId, newStatus } = action.payload;
+
+        const updateStatusAsync = async () => {
+            const { error } = await supabase.from('tasks').update({ columnId: newStatus }).match({ id: taskId });
+            if (error) console.error("Error updating task status:", error);
+        }
+        updateStatusAsync();
+
         return {
             ...state,
             projects: state.projects.map(p => {
                 if (p.id !== projectId) return p;
+
+                const taskToMove = p.tasks.find(t => t.id === taskId);
+                if (!taskToMove) return p;
+
+                const otherProject = state.projects.find(op => op.tasks.some(t => t.id === taskId) && op.id !== p.id);
+                
+                // Jos tehtävä siirretään toiseen projektiin (ei toteutettu vielä, mutta varaudutaan)
+                if (otherProject) {
+                   // ...
+                }
+
                 return {
                     ...p,
                     tasks: p.tasks.map(t =>
@@ -167,6 +208,7 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
             }),
         };
     }
+
 
     // === ALITEHTÄVÄT ===
     case 'ADD_SUBTASK': {
