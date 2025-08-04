@@ -1,5 +1,5 @@
 // src/components/Calendar/MonthView.tsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { getDaysInMonth, isSameDay, isToday, formatTimeString } from '../../utils/dateUtils';
 import { Event } from '../../types';
@@ -8,6 +8,7 @@ import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 export default function MonthView() {
   const { state, dispatch } = useApp();
   const { selectedDate, events } = state;
+  const [showCourses, setShowCourses] = useState(false);
 
   const daysInMonth = useMemo(() => getDaysInMonth(selectedDate), [selectedDate]);
   const currentMonth = selectedDate.getMonth();
@@ -15,7 +16,12 @@ export default function MonthView() {
   const eventsByDay = useMemo(() => {
     const map = new Map<string, Event[]>();
     daysInMonth.forEach(day => {
-      const dayEvents = events.filter(event => isSameDay(new Date(event.date), day) && event.type !== 'class');
+      const dayEvents = events.filter(event => {
+        const isSame = isSameDay(new Date(event.date), day);
+        if (!isSame) return false;
+        if (showCourses) return true; // Show all events if checkbox is checked
+        return event.type !== 'class'; // Otherwise, hide 'class' type events
+      });
       
       dayEvents.sort((a, b) => {
         if (!a.start_time) return -1;
@@ -25,7 +31,7 @@ export default function MonthView() {
       map.set(day.toISOString().split('T')[0], dayEvents);
     });
     return map;
-  }, [daysInMonth, events]);
+  }, [daysInMonth, events, showCourses]);
 
   const handleDateClick = (date: Date) => {
     dispatch({ type: 'SET_SELECTED_DATE', payload: date });
@@ -48,12 +54,23 @@ export default function MonthView() {
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      <div className="grid grid-cols-7 border-b border-gray-200">
+      <div className="grid grid-cols-7 border-b border-gray-200 items-center">
         {weekDays.map((day) => (
           <div key={day} className="p-4 text-center text-sm font-medium text-gray-600">
             {day}
           </div>
         ))}
+      </div>
+       <div className="p-2 border-b border-gray-200">
+        <label className="flex items-center space-x-2 cursor-pointer text-sm text-gray-600">
+          <input
+            type="checkbox"
+            checked={showCourses}
+            onChange={() => setShowCourses(!showCourses)}
+            className="rounded text-blue-600 focus:ring-blue-500"
+          />
+          <span>Näytä kurssit</span>
+        </label>
       </div>
 
       <div className="grid grid-cols-7">
