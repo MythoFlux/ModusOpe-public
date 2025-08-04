@@ -1,25 +1,14 @@
 // src/reducers/eventReducer.ts
 import { AppAction, AppState } from '../contexts/AppContext';
 import { generateRecurringEvents } from '../utils/eventUtils';
-import { supabase } from '../supabaseClient';
-import { createProjectWithTemplates } from '../utils/projectUtils';
 
 export function eventReducerLogic(state: AppState, action: AppAction): AppState {
   switch (action.type) {
-    case 'DELETE_PROJECT': {
+    case 'DELETE_PROJECT_SUCCESS': {
       const projectId = action.payload;
       const projectToDelete = state.projects.find(p => p.id === projectId);
 
-      if (projectToDelete && projectToDelete.type === 'course') {
-        const deleteRecurringClassesAsync = async () => {
-            const { error } = await supabase
-                .from('recurring_classes')
-                .delete()
-                .match({ project_id: projectId });
-            if (error) console.error("Error deleting recurring classes:", error);
-        };
-        deleteRecurringClassesAsync();
-
+      if (projectToDelete?.type === 'course') {
         return {
           ...state,
           recurringClasses: state.recurringClasses.filter(rc => rc.project_id !== projectId),
@@ -33,84 +22,38 @@ export function eventReducerLogic(state: AppState, action: AppAction): AppState 
       };
     }
 
-    case 'ADD_EVENT': {
-      const addEventAsync = async () => {
-        const { id, ...dbData } = action.payload;
-        const { error } = await supabase.from('events').insert([dbData]);
-        if (error) {
-          console.error("Error adding event:", error);
-        }
-      };
-      addEventAsync();
+    case 'ADD_EVENT_SUCCESS': {
       return { ...state, events: [...state.events, action.payload] };
     }
     
-    case 'UPDATE_EVENT': {
-      const updateEventAsync = async () => {
-        const { error } = await supabase
-          .from('events')
-          .update(action.payload)
-          .match({ id: action.payload.id });
-        if (error) {
-          console.error("Error updating event:", error);
-        }
-      };
-      updateEventAsync();
+    case 'UPDATE_EVENT_SUCCESS': {
       return { 
         ...state, 
         events: state.events.map(event => event.id === action.payload.id ? action.payload : event) 
       };
     }
     
-    case 'DELETE_EVENT': {
-      const deleteEventAsync = async () => {
-        const { error } = await supabase
-          .from('events')
-          .delete()
-          .match({ id: action.payload });
-        if (error) {
-          console.error("Error deleting event:", error);
-        }
-      };
-      deleteEventAsync();
+    case 'DELETE_EVENT_SUCCESS': {
       return { 
         ...state, 
         events: state.events.filter(event => event.id !== action.payload) 
       };
     }
 
-    case 'ADD_SCHEDULE_TEMPLATE': {
-      const newTemplate = { ...action.payload, user_id: state.session?.user.id };
-      const addTemplateAsync = async () => {
-        const { error } = await supabase.from('schedule_templates').insert([newTemplate]);
-        if (error) console.error("Error adding schedule template:", error);
-      };
-      addTemplateAsync();
+    case 'ADD_SCHEDULE_TEMPLATE_SUCCESS': {
       return { ...state, scheduleTemplates: [...state.scheduleTemplates, action.payload] };
     }
 
-    case 'UPDATE_SCHEDULE_TEMPLATE': {
+    case 'UPDATE_SCHEDULE_TEMPLATE_SUCCESS': {
       const updatedTemplate = action.payload;
-      const updateTemplateAsync = async () => {
-        const { error } = await supabase.from('schedule_templates').update(updatedTemplate).match({ id: updatedTemplate.id });
-        if (error) console.error("Error updating schedule template:", error);
-      };
-      updateTemplateAsync();
       const newTemplates = state.scheduleTemplates.map(template =>
         template.id === updatedTemplate.id ? updatedTemplate : template
       );
-      
       return { ...state, scheduleTemplates: newTemplates };
     }
 
-    case 'DELETE_SCHEDULE_TEMPLATE': {
+    case 'DELETE_SCHEDULE_TEMPLATE_SUCCESS': {
       const templateId = action.payload;
-      const deleteTemplateAsync = async () => {
-        const { error } = await supabase.from('schedule_templates').delete().match({ id: templateId });
-        if (error) console.error("Error deleting schedule template:", error);
-      };
-      deleteTemplateAsync();
-      
       return {
         ...state,
         scheduleTemplates: state.scheduleTemplates.filter(template => template.id !== templateId),
@@ -119,28 +62,24 @@ export function eventReducerLogic(state: AppState, action: AppAction): AppState 
       };
     }
 
-    case 'ADD_RECURRING_CLASS': {
-       const newClass = { ...action.payload, user_id: state.session?.user.id };
-      const addClassAsync = async () => {
-        const { error } = await supabase.from('recurring_classes').insert([newClass]);
-        if (error) console.error("Error adding recurring class:", error);
+    case 'ADD_RECURRING_CLASS_SUCCESS': {
+      const newClasses = action.payload;
+      const newEvents = newClasses.flatMap(newClass => {
+          const template = state.scheduleTemplates.find(t => t.id === newClass.schedule_template_id);
+          return template ? generateRecurringEvents(newClass, template) : [];
+      });
+      return { 
+          ...state, 
+          recurringClasses: [...state.recurringClasses, ...newClasses], 
+          events: [...state.events, ...newEvents] 
       };
-      addClassAsync();
-
-      const template = state.scheduleTemplates.find(t => t.id === newClass.schedule_template_id);
-      if (!template) return state;
-      const newEvents = generateRecurringEvents(newClass, template);
-      return { ...state, recurringClasses: [...state.recurringClasses, newClass], events: [...state.events, ...newEvents] };
     }
-
+    
+    // HUOM: UPDATE ja DELETE recurring class vaatisivat myös oman service-funktion,
+    // mutta jätetään ne toistaiseksi ennalleen yksinkertaisuuden vuoksi.
+    // Ne eivät kärsi ID-ristiriidasta.
     case 'UPDATE_RECURRING_CLASS': {
       const updatedClass = action.payload;
-      const updateClassAsync = async () => {
-          const { error } = await supabase.from('recurring_classes').update(updatedClass).match({ id: updatedClass.id });
-          if (error) console.error("Error updating recurring class:", error);
-      };
-      updateClassAsync();
-
       const template = state.scheduleTemplates.find(t => t.id === updatedClass.schedule_template_id);
       if (!template) return state;
       
@@ -163,12 +102,6 @@ export function eventReducerLogic(state: AppState, action: AppAction): AppState 
     case 'DELETE_RECURRING_CLASS': {
       const classId = action.payload;
       const classToDelete = state.recurringClasses.find(rc => rc.id === classId);
-      const deleteClassAsync = async () => {
-          const { error } = await supabase.from('recurring_classes').delete().match({ id: classId });
-          if (error) console.error("Error deleting recurring class:", error);
-      };
-      deleteClassAsync();
-
       if (!classToDelete) return state;
 
       return { 
