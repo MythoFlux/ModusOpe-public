@@ -217,12 +217,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const services = {
     // PROJECTS
     addProject: useCallback(async (projectPayload: AddProjectPayload) => {
-        const { templateGroupName, ...projectDataFromForm } = projectPayload;
+        // MUUTETTU: Käytetään oikeaa nimeä (template_group_name)
+        const { template_group_name, ...projectDataFromForm } = projectPayload;
         const { id, files, columns, tasks, ...dbData } = projectDataFromForm;
         const { data: newProjectData, error } = await supabase.from('projects').insert([dbData]).select().single();
         if (error || !newProjectData) throw new Error(error.message);
         const finalProject = { ...projectDataFromForm, ...newProjectData };
-        if (templateGroupName) {
+
+        // MUUTETTU: Käytetään oikeaa nimeä (template_group_name)
+        if (template_group_name) {
             const { newRecurringClasses } = createProjectWithTemplates(finalProject, state.scheduleTemplates);
             if (newRecurringClasses.length > 0) {
                 const classesWithUserId = newRecurringClasses.map(rc => ({ ...rc, project_id: newProjectData.id, user_id: state.session?.user.id }));
@@ -249,10 +252,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // TASKS
     addTask: useCallback(async (task: Omit<Task, 'id'>) => {
-      // Lähetetään koko task-olio, mukaan lukien subtasks ja files
       const { data, error } = await supabase.from('tasks').insert([task]).select().single();
       if (error || !data) throw new Error(error.message);
-      // Käytetään Supabasen palauttamaa dataa, joka sisältää nyt myös tallennetut jsonb-kentät
       const newTask = { 
         ...data, 
         due_date: data.due_date ? new Date(data.due_date) : undefined,
@@ -261,7 +262,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, []),
 
     updateTask: useCallback(async (task: Task) => {
-      // Lähetetään koko task-olio päivitykseen
       const { error } = await supabase.from('tasks').update(task).match({ id: task.id });
       if (error) throw new Error(error.message);
       dispatch({ type: 'UPDATE_TASK_SUCCESS', payload: { projectId: task.project_id, task: task } });
@@ -356,7 +356,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const formattedProjects = (projectsRes.data || []).map((p: any) => ({ ...p, start_date: new Date(p.start_date), end_date: p.end_date ? new Date(p.end_date) : undefined, tasks: [], columns: p.columns && p.columns.length > 0 ? p.columns : [ { id: 'todo', title: 'Suunnitteilla' }, { id: 'inProgress', title: 'Työn alla' }, { id: 'done', title: 'Valmis' } ] }));
       const formattedRecurring = (recurringRes.data || []).map((rc: any) => ({ ...rc, start_date: new Date(rc.start_date), end_date: new Date(rc.end_date) }));
       const formattedEvents = (eventsRes.data || []).map((e: any) => ({ ...e, date: new Date(e.date) }));
-      // MUUTETTU: Varmistetaan, että subtasks ja files ovat aina taulukoita
       const formattedTasks = (tasksRes.data || []).map((t: any) => ({ ...t, due_date: t.due_date ? new Date(t.due_date) : undefined, subtasks: t.subtasks || [], files: t.files || [] }));
       dispatch({ type: 'INITIALIZE_DATA', payload: { projects: formattedProjects, scheduleTemplates: templatesRes.data || [], recurringClasses: formattedRecurring, manualEvents: formattedEvents, tasks: formattedTasks } });
     };
