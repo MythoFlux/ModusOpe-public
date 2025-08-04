@@ -18,9 +18,9 @@ export default function MonthView() {
       const dayEvents = events.filter(event => isSameDay(new Date(event.date), day) && event.type !== 'class');
       
       dayEvents.sort((a, b) => {
-        if (!a.startTime) return -1;
-        if (!b.startTime) return 1;
-        return a.startTime.localeCompare(b.startTime);
+        if (!a.start_time) return -1;
+        if (!b.start_time) return 1;
+        return a.start_time.localeCompare(b.start_time);
       });
       map.set(day.toISOString().split('T')[0], dayEvents);
     });
@@ -93,8 +93,8 @@ export default function MonthView() {
                     className="text-xs px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity"
                     style={{ backgroundColor: event.color + '20', color: event.color }}
                   >
-                    {event.startTime && (
-                      <span className="font-medium">{formatTimeString(event.startTime)} </span>
+                    {event.start_time && (
+                      <span className="font-medium">{formatTimeString(event.start_time)} </span>
                     )}
                     {event.title}
                   </div>
