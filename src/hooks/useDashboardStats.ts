@@ -4,7 +4,6 @@ import { Event, Project, Task } from '../types';
 import { isToday, addDays } from '../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../contexts/AppContext';
 
-// Laajennettu Task-tyyppi, joka sisältää projektin nimen ja värin
 export interface DashboardTask extends Task {
   projectName: string;
   projectColor: string;
@@ -23,16 +22,10 @@ interface UseDashboardStatsProps {
   projects: Project[];
 }
 
-/**
- * Custom-hook, joka laskee ja suodattaa kojelaudalla näytettävät tiedot.
- * @param events - Lista kaikista tapahtumista.
- * @param projects - Lista kaikista projekteista.
- * @returns - Objekti, joka sisältää lasketut tilastotiedot.
- */
 export function useDashboardStats({ events, projects }: UseDashboardStatsProps): DashboardStats {
   const today = useMemo(() => {
     const d = new Date();
-    d.setHours(0, 0, 0, 0); // Asetetaan päivän alkuun vertailua varten
+    d.setHours(0, 0, 0, 0);
     return d;
   }, []);
   
@@ -49,18 +42,18 @@ export function useDashboardStats({ events, projects }: UseDashboardStatsProps):
   ), [projects]);
   
   const upcomingTasks = useMemo(() => allTasks
-    .filter(task => !task.completed && task.dueDate && new Date(task.dueDate) >= today)
-    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+    .filter(task => !task.completed && task.due_date && new Date(task.due_date) >= today) // KORJATTU
+    .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime()) // KORJATTU
     .slice(0, 5), [allTasks, today]);
 
   const urgentTasks = useMemo(() => allTasks
-    .filter(task => !task.completed && task.dueDate && new Date(task.dueDate) >= today && new Date(task.dueDate) <= nextWeek)
-    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+    .filter(task => !task.completed && task.due_date && new Date(task.due_date) >= today && new Date(task.due_date) <= nextWeek) // KORJATTU
+    .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime()) // KORJATTU
     .slice(0, 5), [allTasks, today, nextWeek]);
 
   const overdueTasks = useMemo(() => allTasks
-    .filter(task => !task.completed && task.dueDate && new Date(task.dueDate) < today)
-    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+    .filter(task => !task.completed && task.due_date && new Date(task.due_date) < today) // KORJATTU
+    .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime()) // KORJATTU
     .slice(0, 5), [allTasks, today]);
   
   const activeProjects = useMemo(() => projects.filter(p => p.id !== GENERAL_TASKS_PROJECT_ID), [projects]);
