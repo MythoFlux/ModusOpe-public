@@ -21,7 +21,7 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
       name: file.name,
       type: 'upload' as const,
       size: file.size,
-      uploadDate: new Date()
+      upload_date: new Date()
     }));
     onFilesChange([...files, ...newFiles]);
   };
@@ -44,7 +44,7 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
       name: fileName,
       type: 'google-drive' as const,
       url: googleDriveUrl,
-      uploadDate: new Date()
+      upload_date: new Date()
     };
     
     onFilesChange([...files, newFile]);
@@ -58,7 +58,7 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
       type: 'google-drive' as const,
       url: file.webViewLink || file.webContentLink,
       size: file.size ? parseInt(file.size) : undefined,
-      uploadDate: new Date()
+      upload_date: new Date()
     }));
     
     onFilesChange([...files, ...newFiles]);
@@ -158,7 +158,7 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
                     <div>
                       <div className="font-medium text-gray-900">{file.name}</div>
                       <div className="text-sm text-gray-500">
-                        {file.type === 'google-drive' ? 'Google Drive' : file.size ? formatFileSize(file.size) : 'Tiedosto'} • {file.uploadDate.toLocaleDateString('fi-FI')}
+                        {file.type === 'google-drive' ? 'Google Drive' : file.size ? formatFileSize(file.size) : 'Tiedosto'} • {file.upload_date.toLocaleDateString('fi-FI')}
                       </div>
                     </div>
                   </div>
