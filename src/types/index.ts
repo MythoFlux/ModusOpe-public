@@ -11,7 +11,7 @@ export interface FileAttachment {
   type: 'upload' | 'google-drive';
   url?: string;
   size?: number;
-  uploadDate: Date;
+  upload_date: Date;
 }
 
 export interface Event {
