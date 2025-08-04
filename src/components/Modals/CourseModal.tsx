@@ -1,9 +1,10 @@
 // src/components/Modals/CourseModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, BookOpen, FileText, Calendar, Clock } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
+import { X, BookOpen, FileText, Calendar, Clock, Loader2 } from 'lucide-react';
+import { useApp, useAppServices } from '../../contexts/AppContext';
 import { useConfirmation } from '../../hooks/useConfirmation';
 import { DEFAULT_COLOR } from '../../constants/colors';
+import { Project } from '../../types';
 import FormInput from '../Forms/FormInput';
 import FormTextarea from '../Forms/FormTextarea';
 import FormSelect from '../Forms/FormSelect';
@@ -11,8 +12,10 @@ import ColorSelector from '../Forms/ColorSelector';
 
 export default function CourseModal() {
   const { state, dispatch } = useApp();
+  const services = useAppServices();
   const { showCourseModal, courseModalInfo, projects, scheduleTemplates, session } = state;
   const { getConfirmation } = useConfirmation();
+  const [isLoading, setIsLoading] = useState(false);
 
   const selectedCourse = courseModalInfo?.id
     ? projects.find(p => p.id === courseModalInfo.id && p.type === 'course')
@@ -35,7 +38,7 @@ export default function CourseModal() {
         color: selectedCourse.color,
         start_date: new Date(selectedCourse.start_date).toISOString().split('T')[0],
         end_date: selectedCourse.end_date ? new Date(selectedCourse.end_date).toISOString().split('T')[0] : '',
-        template_group_name: ''
+        template_group_name: '' // Ei muokata luonnin jälkeen
       });
     } else {
       setFormData({
@@ -49,16 +52,16 @@ export default function CourseModal() {
     }
   }, [selectedCourse, showCourseModal]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!session?.user) {
         alert("Sinun täytyy olla kirjautunut luodaksesi kurssin.");
         return;
     }
+    setIsLoading(true);
 
     const courseData: any = {
-      id: selectedCourse?.id || undefined,
+      id: selectedCourse?.id,
       name: formData.name,
       description: formData.description,
       type: 'course',
@@ -71,24 +74,36 @@ export default function CourseModal() {
       user_id: session.user.id
     };
 
-    if (selectedCourse) {
-      dispatch({ type: 'UPDATE_PROJECT', payload: { ...courseData, id: selectedCourse.id } });
-    } else {
-      dispatch({ type: 'ADD_PROJECT', payload: courseData });
+    try {
+        if (selectedCourse) {
+            await services.updateProject(courseData as Project);
+        } else {
+            await services.addProject(courseData);
+        }
+        dispatch({ type: 'CLOSE_MODALS' });
+    } catch (error: any) {
+        alert(`Tallennus epäonnistui: ${error.message}`);
+    } finally {
+        setIsLoading(false);
     }
-
-    dispatch({ type: 'CLOSE_MODALS' });
   };
 
   const handleDelete = async () => {
     if (selectedCourse) {
       const confirmed = await getConfirmation({
         title: 'Vahvista poisto',
-        message: `Haluatko varmasti poistaa kurssin "${selectedCourse.name}"? Tätä toimintoa ei voi perua.`
+        message: `Haluatko varmasti poistaa kurssin "${selectedCourse.name}"? Tämä poistaa myös kaikki kurssiin liittyvät oppitunnit ja tapahtumat. Toimintoa ei voi perua.`
       });
       if (confirmed) {
-        dispatch({ type: 'DELETE_PROJECT', payload: selectedCourse.id });
-        dispatch({ type: 'CLOSE_MODALS' });
+        setIsLoading(true);
+        try {
+            await services.deleteProject(selectedCourse.id);
+            dispatch({ type: 'CLOSE_MODALS' });
+        } catch (error: any) {
+            alert(`Poisto epäonnistui: ${error.message}`);
+        } finally {
+            setIsLoading(false);
+        }
       }
     }
   };
@@ -190,7 +205,8 @@ export default function CourseModal() {
                         <button
                             type="button"
                             onClick={handleDelete}
-                            className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            disabled={isLoading}
+                            className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                         >
                             Poista kurssi
                         </button>
@@ -205,8 +221,10 @@ export default function CourseModal() {
                         </button>
                         <button
                             type="submit"
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            disabled={isLoading}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
                         >
+                            {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                             {selectedCourse ? 'Päivitä kurssi' : 'Luo kurssi'}
                         </button>
                     </div>
