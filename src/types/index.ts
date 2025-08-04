@@ -86,3 +86,11 @@ export interface RecurringClass {
 }
 
 export type CalendarView = 'month' | 'week' | 'day' | 'schedule';
+
+// LISÄTTY PUUTTUVA TYYPPIMÄÄRITYS
+export interface AddProjectPayload extends Omit<Project, 'id' | 'tasks' | 'columns'> {
+  id?: string;
+  tasks?: Task[];
+  columns?: KanbanColumn[];
+  template_group_name?: string;
+}
