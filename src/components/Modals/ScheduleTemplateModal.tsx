@@ -1,8 +1,7 @@
 // src/components/Modals/ScheduleTemplateModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Clock, Type, FileText } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
-import { useApp } from '../../contexts/AppContext';
+import { X, Clock, Type, FileText, Loader2 } from 'lucide-react';
+import { useApp, useAppServices } from '../../contexts/AppContext';
 import { ScheduleTemplate } from '../../types';
 import { DEFAULT_COLOR } from '../../constants/colors';
 import FormInput from '../Forms/FormInput';
@@ -12,7 +11,9 @@ import ColorSelector from '../Forms/ColorSelector';
 
 export default function ScheduleTemplateModal() {
   const { state, dispatch } = useApp();
+  const services = useAppServices();
   const { showScheduleTemplateModal, selectedScheduleTemplate, session } = state;
+  const [isLoading, setIsLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -45,15 +46,16 @@ export default function ScheduleTemplateModal() {
     }
   }, [selectedScheduleTemplate, showScheduleTemplateModal]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session?.user && !selectedScheduleTemplate) {
       alert("Sinun täytyy olla kirjautunut luodaksesi tuntipohjan.");
       return;
     }
+    setIsLoading(true);
 
     const templateData: ScheduleTemplate = {
-      id: selectedScheduleTemplate?.id || uuidv4(),
+      id: selectedScheduleTemplate?.id || '', // ID will be handled by service
       name: formData.name,
       description: formData.description,
       day_of_week: Number(formData.day_of_week),
@@ -62,13 +64,18 @@ export default function ScheduleTemplateModal() {
       color: formData.color,
     };
 
-    if (selectedScheduleTemplate) {
-      dispatch({ type: 'UPDATE_SCHEDULE_TEMPLATE', payload: templateData });
-    } else {
-      dispatch({ type: 'ADD_SCHEDULE_TEMPLATE', payload: templateData });
+    try {
+        if (selectedScheduleTemplate) {
+            await services.updateScheduleTemplate(templateData);
+        } else {
+            await services.addScheduleTemplate(templateData);
+        }
+        dispatch({ type: 'CLOSE_MODALS' });
+    } catch (error: any) {
+        alert(`Tallennus epäonnistui: ${error.message}`);
+    } finally {
+        setIsLoading(false);
     }
-
-    dispatch({ type: 'CLOSE_MODALS' });
   };
 
   if (!showScheduleTemplateModal) return null;
@@ -163,8 +170,10 @@ export default function ScheduleTemplateModal() {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              disabled={isLoading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
             >
+              {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {selectedScheduleTemplate ? 'Päivitä' : 'Luo'}
             </button>
           </div>
