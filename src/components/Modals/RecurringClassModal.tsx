@@ -17,7 +17,7 @@ export default function RecurringClassModal() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    templateGroupName: '',
+    template_group_name: '',
     start_date: '',
     end_date: ''
   });
@@ -45,7 +45,7 @@ export default function RecurringClassModal() {
       setFormData({
         title: selectedRecurringClass.title,
         description: selectedRecurringClass.description || '',
-        templateGroupName: template?.name || '',
+        template_group_name: template?.name || '',
         start_date: selectedRecurringClass.start_date.toISOString().split('T')[0],
         end_date: selectedRecurringClass.end_date.toISOString().split('T')[0]
       });
@@ -57,7 +57,7 @@ export default function RecurringClassModal() {
       setFormData({
         title: '',
         description: '',
-        templateGroupName: templateGroupNames[0] || '',
+        template_group_name: templateGroupNames[0] || '',
         start_date: today.toISOString().split('T')[0],
         end_date: endOfYear.toISOString().split('T')[0]
       });
@@ -69,7 +69,7 @@ export default function RecurringClassModal() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const selectedTemplates = templateGroups[formData.templateGroupName];
+    const selectedTemplates = templateGroups[formData.template_group_name];
     if (!selectedTemplates || selectedTemplates.length === 0) return;
 
     selectedTemplates.forEach((template, index) => {
@@ -81,7 +81,7 @@ export default function RecurringClassModal() {
         start_date: new Date(formData.start_date),
         end_date: new Date(formData.end_date),
         color: template.color,
-        group_name: formData.templateGroupName,
+        group_name: formData.template_group_name,
         project_id: courseModalInfo?.id,
         files: files
       };
@@ -179,8 +179,8 @@ export default function RecurringClassModal() {
                   label="Tuntiryhmä"
                   icon={<Clock className="w-4 h-4 inline mr-2" />}
                   required
-                  value={formData.templateGroupName}
-                  onChange={(e) => setFormData({ ...formData, templateGroupName: e.target.value })}
+                  value={formData.template_group_name}
+                  onChange={(e) => setFormData({ ...formData, template_group_name: e.target.value })}
                 >
                   <option value="">Valitse tuntiryhmä</option>
                   {templateGroupNames.map(groupName => (
@@ -189,9 +189,9 @@ export default function RecurringClassModal() {
                     </option>
                   ))}
                 </FormSelect>
-                {formData.templateGroupName && (
+                {formData.template_group_name && (
                   <div className="mt-2 p-2 bg-blue-50 rounded text-sm text-blue-800">
-                    <strong>Ajankohdat:</strong> {getTemplateGroupInfo(formData.templateGroupName)}
+                    <strong>Ajankohdat:</strong> {getTemplateGroupInfo(formData.template_group_name)}
                   </div>
                 )}
                 {templateGroupNames.length === 0 && (
@@ -225,9 +225,9 @@ export default function RecurringClassModal() {
                 <p className="text-sm text-blue-800">
                   <strong>Huomio:</strong> Tämä luo toistuvat oppitunnit valitun ajanjakson aikana 
                   kaikkiin valitun tuntiryhmän aikoihin.
-                  {formData.templateGroupName && templateGroups[formData.templateGroupName] && (
+                  {formData.template_group_name && templateGroups[formData.template_group_name] && (
                     <span className="block mt-1">
-                      Luodaan {templateGroups[formData.templateGroupName].length} oppituntia viikossa.
+                      Luodaan {templateGroups[formData.template_group_name].length} oppituntia viikossa.
                     </span>
                   )}
                 </p>
