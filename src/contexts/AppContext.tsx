@@ -9,13 +9,11 @@ import { eventReducerLogic } from '../reducers/eventReducer';
 import { uiReducerLogic } from '../reducers/uiReducer';
 import { updateDeadlineEvents, generateRecurringEvents } from '../utils/eventUtils';
 
-// --- MUUTETTU FUNKTIO ALKAA ---
-// Lisätty manualEvents-parametri, joka sisältää tietokannasta haetut tapahtumat
 function getInitialEvents(
   projects: Project[],
   recurringClasses: RecurringClass[],
   templates: ScheduleTemplate[],
-  manualEvents: Event[] // <-- LISÄTTY
+  manualEvents: Event[]
 ): Event[] {
   const projectDeadlines = projects
     .filter(project => project.end_date && project.type !== 'course')
@@ -23,31 +21,29 @@ function getInitialEvents(
       id: `project-deadline-${project.id}`,
       title: `DL: ${project.name}`,
       date: new Date(project.end_date!),
-      type: 'deadline',
+      type: 'deadline' as const,
       color: '#EF4444',
-      projectId: project.id,
+      project_id: project.id,
     }));
 
   const taskDeadlines = projects.flatMap(p => p.tasks)
-    .filter(task => task.dueDate)
+    .filter(task => task.due_date)
     .map(task => ({
         id: `task-deadline-${task.id}`,
         title: `Tehtävä: ${task.title}`,
-        date: new Date(task.dueDate!),
-        type: 'deadline',
+        date: new Date(task.due_date!),
+        type: 'deadline' as const,
         color: '#F59E0B',
-        projectId: task.projectId,
+        project_id: task.project_id,
     }));
 
   const recurringEvents = recurringClasses.flatMap(rc => {
-      const template = templates.find(t => t.id === rc.scheduleTemplateId);
+      const template = templates.find(t => t.id === rc.schedule_template_id);
       return template ? generateRecurringEvents(rc, template) : [];
   });
 
-  // Yhdistetään dynaamisesti luodut tapahtumat ja tietokannasta haetut manuaaliset tapahtumat
   return [...projectDeadlines, ...taskDeadlines, ...recurringEvents, ...manualEvents];
 }
-// --- MUUTETTU FUNKTIO PÄÄTTYY ---
 
 
 export const GENERAL_TASKS_PROJECT_ID = 'general_tasks_project';
@@ -105,7 +101,6 @@ export interface AppState {
 
 export type AppAction =
   | { type: 'SET_SESSION'; payload: Session | null }
-  // --- MUUTETTU RIVI ---
   | { type: 'INITIALIZE_DATA'; payload: { projects: Project[]; scheduleTemplates: ScheduleTemplate[]; recurringClasses: RecurringClass[]; manualEvents: Event[]; tasks: Task[] } }
   | { type: 'ADD_EVENT'; payload: Event }
   | { type: 'UPDATE_EVENT'; payload: Event }
@@ -181,20 +176,16 @@ function appReducer(state: AppState, action: AppAction): AppState {
       if (state.session === action.payload) return state;
       return { ...state, session: action.payload };
     case 'INITIALIZE_DATA':
-      // --- MUUTETTU KOHTA ALKAA ---
       const { projects, scheduleTemplates, recurringClasses, manualEvents, tasks } = action.payload;
 
-      // Jaotellaan tehtävät: ne, jotka kuuluvat projekteihin ja ne, jotka ovat yleisiä
-      const projectTasks = tasks.filter(t => t.projectId && t.projectId !== GENERAL_TASKS_PROJECT_ID);
-      const generalTasks = tasks.filter(t => !t.projectId || t.projectId === GENERAL_TASKS_PROJECT_ID);
+      const projectTasks = tasks.filter(t => t.project_id && t.project_id !== GENERAL_TASKS_PROJECT_ID);
+      const generalTasks = tasks.filter(t => !t.project_id || t.project_id === GENERAL_TASKS_PROJECT_ID);
 
-      // Lisätään tehtävät niitä vastaaviin projekteihin
       const projectsWithTasks = projects.map(p => ({
         ...p,
-        tasks: projectTasks.filter(t => t.projectId === p.id)
+        tasks: projectTasks.filter(t => t.project_id === p.id)
       }));
 
-      // Päivitetään yleisten tehtävien projekti
       const updatedGeneralTasksProject = {
         ...generalTasksProject,
         tasks: generalTasks,
@@ -210,7 +201,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
         events: getInitialEvents(initialProjectsWithGeneral, recurringClasses, scheduleTemplates, manualEvents),
         loading: false,
       };
-      // --- MUUTETTU KOHTA PÄÄTTYY ---
     default:
       const stateAfterUi = uiReducerLogic(state, action);
       const stateAfterEvent = eventReducerLogic(stateAfterUi, action);
@@ -248,13 +238,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const fetchInitialData = async () => {
       if (!state.session) return;
       
-      // --- MUUTETTU KOHTA ALKAA ---
       const [projectsRes, templatesRes, recurringRes, eventsRes, tasksRes] = await Promise.all([
           supabase.from('projects').select('*'),
           supabase.from('schedule_templates').select('*'),
           supabase.from('recurring_classes').select('*'),
-          supabase.from('events').select('*'), // <-- LISÄTTY events-taulun haku
-          supabase.from('tasks').select('*') // <-- LISÄTTY tasks-taulun haku
+          supabase.from('events').select('*'),
+          supabase.from('tasks').select('*')
       ]);
 
       if (projectsRes.error || templatesRes.error || recurringRes.error || eventsRes.error || tasksRes.error) {
@@ -262,12 +251,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [], tasks: [] } });
         return;
       }
-      // --- MUUTETTU KOHTA PÄÄTTYY ---
       
       const formattedProjects = (projectsRes.data || []).map((p: any) => ({
         ...p,
-        start_date: new Date(p.start_date),
-        end_date: p.end_date ? new Date(p.end_date) : undefined,
         tasks: [],
         columns: p.columns && p.columns.length > 0 ? p.columns : [
           { id: 'todo', title: 'Suunnitteilla' },
@@ -278,39 +264,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const formattedRecurring = (recurringRes.data || []).map((rc: any) => ({
         ...rc,
-        startDate: new Date(rc.startDate),
-        endDate: new Date(rc.endDate),
+        start_date: new Date(rc.start_date),
+        end_date: new Date(rc.end_date),
       }));
       
-      // --- LISÄTTY KOHTA ALKAA ---
-      // Muotoillaan tietokannasta haetut tapahtumat oikeaan muotoon
       const formattedEvents = (eventsRes.data || []).map((e: any) => ({
         ...e,
-        // Varmistetaan, että päivämäärä on Date-olio
         date: new Date(e.date),
-        // Muunnetaan snake_case avaimet camelCase-avaimiksi sovelluksen sisäistä käyttöä varten
-        startTime: e.start_time,
-        endTime: e.end_time,
-        projectId: e.project_id,
-        scheduleTemplateId: e.schedule_template_id,
-        groupName: e.group_name
       }));
       
       const formattedTasks = (tasksRes.data || []).map((t: any) => ({
         ...t,
-        dueDate: t.dueDate ? new Date(t.dueDate) : undefined,
+        due_date: t.due_date ? new Date(t.due_date) : undefined,
       }));
-      // --- LISÄTTY KOHTA PÄÄTTYY ---
 
-      // --- MUUTETTU KOHTA ---
       dispatch({ 
         type: 'INITIALIZE_DATA', 
         payload: { 
           projects: formattedProjects, 
           scheduleTemplates: templatesRes.data || [], 
           recurringClasses: formattedRecurring,
-          manualEvents: formattedEvents, // <-- Lisätään haetut tapahtumat mukaan
-          tasks: formattedTasks // <-- Lisätään haetut tehtävät mukaan
+          manualEvents: formattedEvents,
+          tasks: formattedTasks
         } 
       });
     };
