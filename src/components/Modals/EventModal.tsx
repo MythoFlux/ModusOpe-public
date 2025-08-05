@@ -191,16 +191,6 @@ export default function EventModal() {
                 disabled={isDeadlineEvent}
               />
               <FormTextarea
-                id="event-description"
-                label="Kuvaus"
-                icon={<FileText className="w-4 h-4 inline mr-2" />}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                placeholder="Tapahtuman kuvaus"
-                disabled={isDeadlineEvent}
-              />
-               <FormTextarea
                 id="event-more-info"
                 label="Lisätietoa (esim. linkit)"
                 icon={<Info className="w-4 h-4 inline mr-2" />}
@@ -208,6 +198,16 @@ export default function EventModal() {
                 onChange={(e) => setFormData({ ...formData, more_info: e.target.value })}
                 rows={2}
                 placeholder="Lisää linkkejä tai muuta tärkeää tietoa"
+                disabled={isDeadlineEvent}
+              />
+              <FormTextarea
+                id="event-description"
+                label="Kuvaus"
+                icon={<FileText className="w-4 h-4 inline mr-2" />}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={3}
+                placeholder="Tapahtuman kuvaus"
                 disabled={isDeadlineEvent}
               />
               <FormInput
