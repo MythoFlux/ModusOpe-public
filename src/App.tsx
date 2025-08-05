@@ -1,3 +1,4 @@
+// src/App.tsx
 import React, { useState } from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
 import Sidebar from './components/Layout/Sidebar';
@@ -10,7 +11,6 @@ import EventModal from './components/Modals/EventModal';
 import ProjectModal from './components/Modals/ProjectModal';
 import CourseModal from './components/Modals/CourseModal';
 import ScheduleTemplateModal from './components/Modals/ScheduleTemplateModal';
-import RecurringClassModal from './components/Modals/RecurringClassModal';
 import TaskModal from './components/Modals/TaskModal';
 import KanbanView from './components/Kanban/KanbanView';
 import ConfirmationModal from './components/Modals/ConfirmationModal';
@@ -58,7 +58,6 @@ function AppContent() {
           <h1 className="text-lg font-bold ml-4">ModusOpe</h1>
         </header>
 
-        {/* --- TÄMÄ RIVI ON MUUTETTU --- */}
         <main className="flex-1 overflow-y-auto">
           {renderContent()}
         </main>
@@ -111,7 +110,6 @@ function AppContent() {
       <ProjectModal />
       <CourseModal />
       <ScheduleTemplateModal />
-      <RecurringClassModal />
       <TaskModal />
       <ConfirmationModal />
     </div>
