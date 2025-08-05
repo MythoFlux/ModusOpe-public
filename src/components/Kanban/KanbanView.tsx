@@ -1,14 +1,12 @@
 // src/components/Kanban/KanbanView.tsx
 import React, { useEffect, useState } from 'react';
-import { useApp, useAppServices } from '../../contexts/AppContext'; // KORJATTU
+import { useApp, useAppServices } from '../../contexts/AppContext';
 import { Project, Task, KanbanColumn } from '../../types';
-import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, ChevronDown, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical } from 'lucide-react';
+import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical } from 'lucide-react';
 import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 
-// ... TaskCard- ja KanbanColumnComponent-komponentit pysyvät samoina ...
-// ... AddColumn-komponentti pysyy samana ...
-
+// TaskCard- ja KanbanColumnComponent-komponentit pysyvät samoina
 const DND_TYPES = {
   TASK: 'task',
   COLUMN: 'column'
@@ -181,7 +179,7 @@ const AddColumn = ({ projectId }: { projectId: string }) => {
 
 export default function KanbanView() {
   const { state, dispatch } = useApp();
-  const services = useAppServices(); // KORJATTU
+  const services = useAppServices();
   const { projects, selectedKanbanProjectId } = state;
   const [draggedItem, setDraggedItem] = useState<{type: string, id: string} | null>(null);
   const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null);
@@ -203,7 +201,6 @@ export default function KanbanView() {
     dispatch({ type: 'SET_KANBAN_PROJECT', payload: projectId });
   };
   
-  // ... renderProjectList pysyy samana ...
   const renderProjectList = (title: string, items: Project[], icon: React.ReactNode) => (
     <div>
       <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center"> {icon} <span className="ml-2">{title}</span> </h3>
@@ -245,10 +242,8 @@ export default function KanbanView() {
       const taskId = e.dataTransfer.getData('taskId');
       const projectId = e.dataTransfer.getData('projectId');
       if (taskId && projectId) {
-        // KORJATTU: Käytetään service-funktiota
         services.updateTaskStatus(projectId, taskId, targetColumnId).catch((err: any) => {
             console.error("Failed to update task status:", err);
-            // Tässä voisi näyttää virheilmoituksen käyttäjälle
         });
       }
     } else if (type === DND_TYPES.COLUMN && selectedProject && draggedColumnIndex !== null) {
@@ -273,21 +268,55 @@ export default function KanbanView() {
 
   return (
     <div className="flex flex-col md:flex-row h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        {/* Sivupalkki ja pääsisältö pysyvät ennallaan */}
         <aside className="hidden md:block w-1/6 min-w-[180px] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800">Työtilat</h2>
             {generalProject && renderProjectList('Yleiset', [generalProject], <Inbox className="w-4 h-4" />)}
             {renderProjectList('Kurssit', courses, <BookOpen className="w-4 h-4" />)}
             {renderProjectList('Projektit', otherProjects, <ClipboardCheck className="w-4 h-4" />)}
         </aside>
+
         <main className="flex-1 p-4 md:p-6 flex flex-col min-w-0">
+            {/* KORJATTU: Mobiilinäkymän pudotusvalikko työtilan valintaan */}
+            <div className="md:hidden mb-4">
+              <label htmlFor="kanban-project-select" className="block text-sm font-medium text-gray-700 mb-1">
+                Valitse työtila
+              </label>
+              <select
+                id="kanban-project-select"
+                value={selectedKanbanProjectId || ''}
+                onChange={(e) => handleSelectProject(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+              >
+                {generalProject && (
+                  <optgroup label="Yleiset">
+                    <option value={generalProject.id}>{generalProject.name}</option>
+                  </optgroup>
+                )}
+                {courses.length > 0 && (
+                  <optgroup label="Kurssit">
+                    {courses.map(course => (
+                      <option key={course.id} value={course.id}>{course.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {otherProjects.length > 0 && (
+                  <optgroup label="Projektit">
+                    {otherProjects.map(project => (
+                      <option key={project.id} value={project.id}>{project.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+
             {selectedProject ? (
               <>
                 <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-6 flex-shrink-0">
-                  <h1 className="hidden md:block text-2xl font-bold text-gray-900">{selectedProject.name}</h1>
+                  {/* KORJATTU: Otsikko näkyy nyt myös mobiilissa */}
+                  <h1 className="text-2xl font-bold text-gray-900 truncate pr-4">{selectedProject.name}</h1>
                   {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
-                    <button onClick={handleInfoButtonClick} className="flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md">
-                      <Info className="w-4 h-4 mr-2" /> <span className="hidden md:inline">Muokkaa tietoja</span>
+                    <button onClick={handleInfoButtonClick} className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md">
+                      <Info className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Muokkaa tietoja</span>
                     </button>
                   )}
                 </div>
@@ -302,7 +331,7 @@ export default function KanbanView() {
               </>
             ) : (
               <div className="flex items-center justify-center h-full text-gray-500">
-                <p>Valitse työtila vasemmalta.</p>
+                <p>Valitse työtila yllä olevasta valikosta.</p>
               </div>
             )}
         </main>
