@@ -1,20 +1,16 @@
 // src/contexts/AppContext.tsx
 import React, { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { Event, Project, Task, CalendarView, ScheduleTemplate, RecurringClass, KanbanColumn, Subtask, AddProjectPayload } from '../types';
+import { Event, Project, Task, CalendarView, ScheduleTemplate, KanbanColumn, Subtask, AddProjectPayload } from '../types';
 import { supabase } from '../supabaseClient';
 
 import { projectReducerLogic } from '../reducers/projectReducer';
 import { eventReducerLogic } from '../reducers/eventReducer';
 import { uiReducerLogic } from '../reducers/uiReducer';
-import { updateDeadlineEvents, generateRecurringEvents } from '../utils/eventUtils';
-import { createProjectWithTemplates } from '../utils/projectUtils';
+import { updateDeadlineEvents, generateEventsForCourse } from '../utils/eventUtils';
 
-// Helper function to get initial events (remains the same)
 function getInitialEvents(
   projects: Project[],
-  recurringClasses: RecurringClass[],
-  templates: ScheduleTemplate[],
   manualEvents: Event[]
 ): Event[] {
   const projectDeadlines = projects
@@ -38,15 +34,9 @@ function getInitialEvents(
         color: '#F59E0B',
         project_id: task.project_id,
     }));
-
-  const recurringEvents = recurringClasses.flatMap(rc => {
-      const template = templates.find(t => t.id === rc.schedule_template_id);
-      return template ? generateRecurringEvents(rc, template) : [];
-  });
-
-  return [...projectDeadlines, ...taskDeadlines, ...recurringEvents, ...manualEvents];
+  
+  return [...projectDeadlines, ...taskDeadlines, ...manualEvents];
 }
-
 
 export const GENERAL_TASKS_PROJECT_ID = 'general_tasks_project';
 
@@ -65,7 +55,6 @@ const generalTasksProject: Project = {
   ],
 };
 
-
 export interface ConfirmationModalState {
   isOpen: boolean;
   title?: string;
@@ -80,20 +69,17 @@ export interface AppState {
   events: Event[];
   projects: Project[];
   scheduleTemplates: ScheduleTemplate[];
-  recurringClasses: RecurringClass[];
   currentView: CalendarView;
   selectedDate: Date;
   showEventModal: boolean;
   showProjectModal: boolean;
   showCourseModal: boolean;
   showScheduleTemplateModal: boolean;
-  showRecurringClassModal: boolean;
   showTaskModal: boolean;
   selectedEvent?: Event;
   selectedProjectId?: string;
   courseModalInfo?: { id?: string };
   selectedScheduleTemplate?: ScheduleTemplate;
-  selectedRecurringClass?: RecurringClass;
   selectedTask?: Task;
   isSidebarCollapsed: boolean;
   isMobileMenuOpen: boolean;
@@ -103,8 +89,8 @@ export interface AppState {
 
 export type AppAction =
   | { type: 'SET_SESSION'; payload: Session | null }
-  | { type: 'INITIALIZE_DATA'; payload: { projects: Project[]; scheduleTemplates: ScheduleTemplate[]; recurringClasses: RecurringClass[]; manualEvents: Event[]; tasks: Task[] } }
-  | { type: 'ADD_EVENT_SUCCESS'; payload: Event }
+  | { type: 'INITIALIZE_DATA'; payload: { projects: Project[]; scheduleTemplates: ScheduleTemplate[]; manualEvents: Event[]; tasks: Task[] } }
+  | { type: 'ADD_EVENT_SUCCESS'; payload: Event | Event[] }
   | { type: 'UPDATE_EVENT_SUCCESS'; payload: Event }
   | { type: 'DELETE_EVENT_SUCCESS'; payload: string }
   | { type: 'ADD_PROJECT_SUCCESS'; payload: Project }
@@ -119,16 +105,12 @@ export type AppAction =
   | { type: 'ADD_SCHEDULE_TEMPLATE_SUCCESS'; payload: ScheduleTemplate }
   | { type: 'UPDATE_SCHEDULE_TEMPLATE_SUCCESS'; payload: ScheduleTemplate }
   | { type: 'DELETE_SCHEDULE_TEMPLATE_SUCCESS'; payload: string }
-  | { type: 'ADD_RECURRING_CLASS_SUCCESS'; payload: RecurringClass[] }
-  | { type: 'UPDATE_RECURRING_CLASS_SUCCESS'; payload: RecurringClass } // Added for completeness
-  | { type: 'DELETE_RECURRING_CLASS_SUCCESS'; payload: string } // Added for completeness
   | { type: 'SET_VIEW'; payload: CalendarView }
   | { type: 'SET_SELECTED_DATE'; payload: Date }
   | { type: 'TOGGLE_EVENT_MODAL'; payload?: Event }
   | { type: 'TOGGLE_PROJECT_MODAL'; payload?: string }
   | { type: 'TOGGLE_COURSE_MODAL'; payload?: { id?: string } }
   | { type: 'TOGGLE_SCHEDULE_TEMPLATE_MODAL'; payload?: ScheduleTemplate }
-  | { type: 'TOGGLE_RECURRING_CLASS_MODAL'; payload?: RecurringClass }
   | { type: 'TOGGLE_TASK_MODAL'; payload?: Task }
   | { type: 'CLOSE_MODALS' }
   | { type: 'TOGGLE_SIDEBAR' }
@@ -156,14 +138,12 @@ const initialState: AppState = {
   events: [],
   projects: [],
   scheduleTemplates: [],
-  recurringClasses: [],
   currentView: 'month',
   selectedDate: new Date(),
   showEventModal: false,
   showProjectModal: false,
   showCourseModal: false,
   showScheduleTemplateModal: false,
-  showRecurringClassModal: false,
   showTaskModal: false,
   isSidebarCollapsed: false,
   isMobileMenuOpen: false,
@@ -180,7 +160,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       newState = { ...state, session: action.payload };
       break;
     case 'INITIALIZE_DATA':
-      const { projects, scheduleTemplates, recurringClasses, manualEvents, tasks } = action.payload;
+      const { projects, scheduleTemplates, manualEvents, tasks } = action.payload;
       const projectTasks = tasks.filter(t => t.project_id && t.project_id !== GENERAL_TASKS_PROJECT_ID);
       const generalTasks = tasks.filter(t => !t.project_id || t.project_id === GENERAL_TASKS_PROJECT_ID);
       const projectsWithTasks = projects.map(p => ({ ...p, tasks: projectTasks.filter(t => t.project_id === p.id) }));
@@ -190,8 +170,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         projects: initialProjectsWithGeneral,
         scheduleTemplates,
-        recurringClasses,
-        events: getInitialEvents(initialProjectsWithGeneral, recurringClasses, scheduleTemplates, manualEvents),
+        events: getInitialEvents(initialProjectsWithGeneral, manualEvents),
         loading: false,
       };
       break;
@@ -220,11 +199,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { template_group_name, ...projectDataFromForm } = projectPayload;
         const { id, files, columns, tasks, ...dbData } = projectDataFromForm;
 
-        // 1. Insert the project and get the new row with the real ID
         const { data: newProjectData, error } = await supabase.from('projects').insert([dbData]).select().single();
         if (error || !newProjectData) throw new Error(error.message);
 
-        // 2. Format the project data correctly (dates to Date objects)
         const finalProject: Project = {
           ...(projectDataFromForm as Project),
           ...newProjectData,
@@ -238,43 +215,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ],
         };
 
-        // 3. If a template group was selected, generate and insert recurring classes
-        if (template_group_name && finalProject.type === 'course') {
+        dispatch({ type: 'ADD_PROJECT_SUCCESS', payload: finalProject });
+
+        if (template_group_name && finalProject.type === 'course' && finalProject.end_date) {
             const templatesInGroup = state.scheduleTemplates.filter(t => t.name === template_group_name);
-            const recurringEndDate = finalProject.end_date
-                ? finalProject.end_date
-                : new Date(finalProject.start_date.getFullYear(), 11, 31);
-
             if (templatesInGroup.length > 0) {
-                const newRecurringClasses: any[] = templatesInGroup.map(template => ({
-                    title: finalProject.name,
-                    description: `Oppitunti kurssille ${finalProject.name}`,
-                    schedule_template_id: template.id,
-                    start_date: finalProject.start_date,
-                    end_date: recurringEndDate,
-                    color: finalProject.color,
-                    group_name: template.name,
-                    project_id: finalProject.id,
-                    files: finalProject.files || [],
-                    user_id: state.session!.user.id
-                }));
-
-                const { data: newClassesData, error: recurringError } = await supabase.from('recurring_classes').insert(newRecurringClasses).select();
+              const eventsToCreate = generateEventsForCourse(finalProject, templatesInGroup);
+              
+              if (eventsToCreate.length > 0) {
+                const { data: newEventsData, error: eventError } = await supabase.from('events').insert(eventsToCreate).select();
                 
-                if (recurringError) throw new Error(recurringError.message);
-
-                const formattedNewClasses = (newClassesData || []).map((rc: any) => ({
-                    ...rc,
-                    start_date: new Date(rc.start_date),
-                    end_date: new Date(rc.end_date),
+                if (eventError) throw new Error(eventError.message);
+                
+                const formattedNewEvents = (newEventsData || []).map((e: any) => ({
+                    ...e,
+                    date: new Date(e.date),
                 }));
-
-                dispatch({ type: 'ADD_RECURRING_CLASS_SUCCESS', payload: formattedNewClasses as RecurringClass[] });
+                
+                dispatch({ type: 'ADD_EVENT_SUCCESS', payload: formattedNewEvents as Event[] });
+              }
             }
         }
-
-        // 4. Finally, dispatch the action to add the new project to the state
-        dispatch({ type: 'ADD_PROJECT_SUCCESS', payload: finalProject });
     }, [state.scheduleTemplates, state.session]),
 
     updateProject: useCallback(async (project: Project) => {
@@ -298,28 +259,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...data, 
         due_date: data.due_date ? new Date(data.due_date) : undefined,
       };
-      // KORJATTU: Varmistetaan, että null project_id ohjautuu oikeaan paikkaan
       dispatch({ type: 'ADD_TASK_SUCCESS', payload: { projectId: data.project_id || GENERAL_TASKS_PROJECT_ID, task: newTask as Task } });
     }, []),
 
     updateTask: useCallback(async (task: Task) => {
       const { error } = await supabase.from('tasks').update(task).match({ id: task.id });
       if (error) throw new Error(error.message);
-      // KORJATTU: Varmistetaan, että null project_id ohjautuu oikeaan paikkaan
       dispatch({ type: 'UPDATE_TASK_SUCCESS', payload: { projectId: task.project_id || GENERAL_TASKS_PROJECT_ID, task: task } });
     }, []),
     
     deleteTask: useCallback(async (projectId: string, taskId: string) => {
       const { error } = await supabase.from('tasks').delete().match({ id: taskId });
       if (error) throw new Error(error.message);
-      // KORJATTU: Varmistetaan, että null project_id ohjautuu oikeaan paikkaan
       dispatch({ type: 'DELETE_TASK_SUCCESS', payload: { projectId: projectId || GENERAL_TASKS_PROJECT_ID, taskId } });
     }, []),
     
     updateTaskStatus: useCallback(async (projectId: string, taskId: string, newStatus: string) => {
         const { error } = await supabase.from('tasks').update({ column_id: newStatus }).match({ id: taskId });
         if (error) throw new Error(error.message);
-        // KORJATTU: Varmistetaan, että null project_id ohjautuu oikeaan paikkaan
         dispatch({ type: 'UPDATE_TASK_STATUS_SUCCESS', payload: { projectId: projectId || GENERAL_TASKS_PROJECT_ID, taskId, newStatus } });
     }, []),
     
@@ -327,7 +284,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addEvent: useCallback(async (event: Omit<Event, 'id'>) => {
         const { data, error } = await supabase.from('events').insert([event]).select().single();
         if (error || !data) throw new Error(error.message);
-        dispatch({ type: 'ADD_EVENT_SUCCESS', payload: data as Event });
+        const newEvent = { ...data, date: new Date(data.date) };
+        dispatch({ type: 'ADD_EVENT_SUCCESS', payload: newEvent as Event });
     }, []),
     
     updateEvent: useCallback(async (event: Event) => {
@@ -360,13 +318,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (error) throw new Error(error.message);
         dispatch({ type: 'DELETE_SCHEDULE_TEMPLATE_SUCCESS', payload: templateId });
     }, []),
-      
-    // RECURRING CLASSES
-    addRecurringClasses: useCallback(async (classes: Omit<RecurringClass, 'id'>[]) => {
-        const { data, error } = await supabase.from('recurring_classes').insert(classes).select();
-        if (error || !data) throw new Error(error.message);
-        dispatch({ type: 'ADD_RECURRING_CLASS_SUCCESS', payload: data as RecurringClass[] });
-    }, []),
   };
 
   useEffect(() => {
@@ -382,26 +333,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const fetchInitialData = async () => {
       if (!state.session) {
-        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [], tasks: [] }});
+        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], manualEvents: [], tasks: [] }});
         return;
       };
-      const [projectsRes, templatesRes, recurringRes, eventsRes, tasksRes] = await Promise.all([
+      const [projectsRes, templatesRes, eventsRes, tasksRes] = await Promise.all([
           supabase.from('projects').select('*'),
           supabase.from('schedule_templates').select('*'),
-          supabase.from('recurring_classes').select('*'),
           supabase.from('events').select('*'),
           supabase.from('tasks').select('*')
       ]);
-      if (projectsRes.error || templatesRes.error || recurringRes.error || eventsRes.error || tasksRes.error) {
-        console.error('Error fetching data:', projectsRes.error || templatesRes.error || recurringRes.error || eventsRes.error || tasksRes.error);
-        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], recurringClasses: [], manualEvents: [], tasks: [] } });
+      if (projectsRes.error || templatesRes.error || eventsRes.error || tasksRes.error) {
+        console.error('Error fetching data:', projectsRes.error || templatesRes.error || eventsRes.error || tasksRes.error);
+        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], manualEvents: [], tasks: [] } });
         return;
       }
       const formattedProjects = (projectsRes.data || []).map((p: any) => ({ ...p, start_date: new Date(p.start_date), end_date: p.end_date ? new Date(p.end_date) : undefined, tasks: [], columns: p.columns && p.columns.length > 0 ? p.columns : [ { id: 'todo', title: 'Suunnitteilla' }, { id: 'inProgress', title: 'Työn alla' }, { id: 'done', title: 'Valmis' } ] }));
-      const formattedRecurring = (recurringRes.data || []).map((rc: any) => ({ ...rc, start_date: new Date(rc.start_date), end_date: new Date(rc.end_date) }));
       const formattedEvents = (eventsRes.data || []).map((e: any) => ({ ...e, date: new Date(e.date) }));
       const formattedTasks = (tasksRes.data || []).map((t: any) => ({ ...t, due_date: t.due_date ? new Date(t.due_date) : undefined, subtasks: t.subtasks || [], files: t.files || [] }));
-      dispatch({ type: 'INITIALIZE_DATA', payload: { projects: formattedProjects, scheduleTemplates: templatesRes.data || [], recurringClasses: formattedRecurring, manualEvents: formattedEvents, tasks: formattedTasks } });
+      dispatch({ type: 'INITIALIZE_DATA', payload: { projects: formattedProjects, scheduleTemplates: templatesRes.data || [], manualEvents: formattedEvents, tasks: formattedTasks } });
     };
     fetchInitialData();
   }, [state.session]);
