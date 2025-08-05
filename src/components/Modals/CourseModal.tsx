@@ -172,6 +172,16 @@ export default function CourseModal() {
                     placeholder="Lisää linkkejä tai muuta tärkeää tietoa"
                 />
 
+                <FormTextarea
+                    id="course-description"
+                    label="Muistiinpanot"
+                    icon={<FileText className="w-4 h-4 inline mr-2" />}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={5}
+                    placeholder="Kirjoita kuvaus tai lisää muistiinpanoja"
+                />
+
                 {!selectedCourse && (
                   <div>
                       <FormSelect
@@ -198,16 +208,6 @@ export default function CourseModal() {
                       <p className="text-xs text-gray-500 mt-1">Valitsemalla tuntiryhmän luot kurssille oppitunnit automaattisesti kiertotuntikaavion pohjalta.</p>
                   </div>
                 )}
-
-                <FormTextarea
-                    id="course-description"
-                    label="Muistiinpanot"
-                    icon={<FileText className="w-4 h-4 inline mr-2" />}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={5}
-                    placeholder="Kirjoita kuvaus tai lisää muistiinpanoja"
-                />
 
                 <ColorSelector
                   label="Väri"
