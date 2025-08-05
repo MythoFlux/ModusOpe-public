@@ -1,41 +1,54 @@
 // src/utils/eventUtils.ts
-import { Event, Project, RecurringClass, ScheduleTemplate } from '../types';
+import { Event, Project, ScheduleTemplate } from '../types';
 
-export function generateRecurringEvents(recurringClass: RecurringClass, template: ScheduleTemplate): Event[] {
-  const events: Event[] = [];
-  const startDate = new Date(recurringClass.start_date);
-  const endDate = new Date(recurringClass.end_date);
-  const targetDay = template.day_of_week;
-  
-  const currentDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-
-  const currentDay = (currentDate.getDay() + 6) % 7;
-  const daysToAdd = (targetDay - currentDay + 7) % 7;
-  currentDate.setDate(currentDate.getDate() + daysToAdd);
-
-  while (currentDate <= endDate) {
-    const eventDate = new Date(currentDate);
-    const [startHour, startMinute] = template.start_time.split(':').map(Number);
-    eventDate.setHours(startHour, startMinute, 0, 0);
-    
-    events.push({
-      id: `recurring-${recurringClass.id}-${eventDate.getTime()}`,
-      title: recurringClass.title,
-      description: recurringClass.description,
-      date: eventDate,
-      start_time: template.start_time,
-      end_time: template.end_time,
-      type: 'class',
-      color: recurringClass.color,
-      project_id: recurringClass.project_id,
-      schedule_template_id: template.id,
-      group_name: recurringClass.group_name,
-      files: recurringClass.files || [],
-    });
-    currentDate.setDate(currentDate.getDate() + 7);
+// TÄMÄ FUNKTIO ON UUSI JA KORVAA VANHAN LOGIIKAN
+// Sitä käytetään luomaan kaikki kurssin tapahtumat kerralla etukäteen.
+export function generateEventsForCourse(
+  course: Project,
+  templates: ScheduleTemplate[]
+): Omit<Event, 'id'>[] {
+  if (course.type !== 'course' || !course.end_date) {
+    return [];
   }
+
+  const events: Omit<Event, 'id'>[] = [];
+  const startDate = new Date(course.start_date);
+  const endDate = new Date(course.end_date);
+  
+  // Käydään läpi jokainen päivä kurssin alku- ja loppupäivän välillä
+  let currentDate = new Date(startDate);
+  while (currentDate <= endDate) {
+    const dayOfWeek = (currentDate.getDay() + 6) % 7; // Maanantai = 0, Sunnuntai = 6
+    
+    // Etsitään sopivat tuntipohjat tälle viikonpäivälle
+    const matchingTemplates = templates.filter(t => t.day_of_week === dayOfWeek);
+
+    for (const template of matchingTemplates) {
+        const eventDate = new Date(currentDate);
+        const [startHour, startMinute] = template.start_time.split(':').map(Number);
+        eventDate.setHours(startHour, startMinute, 0, 0);
+
+        events.push({
+            title: course.name,
+            description: template.description || course.description,
+            date: eventDate,
+            start_time: template.start_time,
+            end_time: template.end_time,
+            type: 'class',
+            color: course.color,
+            project_id: course.id,
+            schedule_template_id: template.id,
+            group_name: template.name,
+            files: course.files || [],
+        });
+    }
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
   return events;
 }
+
 
 function generateProjectDeadlineEvents(projects: Project[]): Event[] {
   return projects
