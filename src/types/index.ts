@@ -23,7 +23,7 @@ export interface Event {
   end_time?: string;
   type: 'class' | 'meeting' | 'deadline' | 'personal' | 'assignment';
   color: string;
-  project_id?: string;
+  project_id?: string | null; // Sallitaan null
   schedule_template_id?: string;
   group_name?: string;
   files?: FileAttachment[];
@@ -72,22 +72,8 @@ export interface ScheduleTemplate {
   description?: string;
 }
 
-export interface RecurringClass {
-  id: string;
-  title: string;
-  description?: string;
-  schedule_template_id: string;
-  start_date: Date;
-  end_date: Date;
-  color: string;
-  group_name?: string;
-  project_id?: string;
-  files?: FileAttachment[];
-}
-
 export type CalendarView = 'month' | 'week' | 'day' | 'schedule';
 
-// LISÄTTY PUUTTUVA TYYPPIMÄÄRITYS
 export interface AddProjectPayload extends Omit<Project, 'id' | 'tasks' | 'columns'> {
   id?: string;
   tasks?: Task[];
