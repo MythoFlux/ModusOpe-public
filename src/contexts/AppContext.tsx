@@ -1,383 +1,404 @@
-// src/contexts/AppContext.tsx
-import React, { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
-import { Session } from '@supabase/supabase-js';
-import { Event, Project, Task, CalendarView, ScheduleTemplate, KanbanColumn, Subtask, AddProjectPayload } from '../types';
-import { supabase } from '../supabaseClient';
+// src/components/Kanban/KanbanView.tsx
+import React, { useEffect, useState } from 'react';
+import { useApp, useAppServices } from '../../contexts/AppContext';
+import { Project, Task, KanbanColumn } from '../../types';
+import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical, Eye, EyeOff } from 'lucide-react';
+import { formatDate } from '../../utils/dateUtils';
+import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
+import { v4 as uuidv4 } from 'uuid';
 
-import { projectReducerLogic } from '../reducers/projectReducer';
-import { eventReducerLogic } from '../reducers/eventReducer';
-import { uiReducerLogic } from '../reducers/uiReducer';
-import { updateDeadlineEvents, generateEventsForCourse } from '../utils/eventUtils';
-
-function getInitialEvents(
-  projects: Project[],
-  manualEvents: Event[]
-): Event[] {
-  const projectDeadlines = projects
-    .filter(project => project.end_date && project.type !== 'course')
-    .map(project => ({
-      id: `project-deadline-${project.id}`,
-      title: `DL: ${project.name}`,
-      date: new Date(project.end_date!),
-      type: 'deadline' as const,
-      color: '#EF4444',
-      project_id: project.id,
-    }));
-
-  const taskDeadlines = projects.flatMap(p => p.tasks)
-    .filter(task => task.due_date)
-    .map(task => ({
-        id: `task-deadline-${task.id}`,
-        title: `Tehtävä: ${task.title}`,
-        date: new Date(task.due_date!),
-        type: 'deadline' as const,
-        color: '#F59E0B',
-        project_id: task.project_id,
-    }));
-  
-  return [...projectDeadlines, ...taskDeadlines, ...manualEvents];
-}
-
-export const GENERAL_TASKS_PROJECT_ID = 'general_tasks_project';
-
-const generalTasksProject: Project = {
-  id: GENERAL_TASKS_PROJECT_ID,
-  name: 'Yleiset tehtävät',
-  description: 'Tänne kerätään kaikki tehtävät, joita ei ole liitetty mihinkään tiettyyn projektiin.',
-  type: 'none',
-  color: '#6B7280',
-  start_date: new Date(),
-  tasks: [],
-  columns: [
-    { id: 'todo', title: 'Suunnitteilla' },
-    { id: 'inProgress', title: 'Työn alla' },
-    { id: 'done', title: 'Valmis' },
-  ],
+// TaskCard- ja KanbanColumnComponent-komponentit pysyvät samoina
+const DND_TYPES = {
+  TASK: 'task',
+  COLUMN: 'column'
 };
 
-export interface ConfirmationModalState {
-  isOpen: boolean;
-  title?: string;
-  message: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-
-export interface AppState {
-  session: Session | null;
-  loading: boolean;
-  events: Event[];
-  projects: Project[];
-  scheduleTemplates: ScheduleTemplate[];
-  currentView: CalendarView;
-  selectedDate: Date;
-  showEventModal: boolean;
-  showProjectModal: boolean;
-  showCourseModal: boolean;
-  showScheduleTemplateModal: boolean;
-  showTaskModal: boolean;
-  selectedEvent?: Event;
-  selectedProjectId?: string;
-  courseModalInfo?: { id?: string };
-  selectedScheduleTemplate?: ScheduleTemplate;
-  selectedTask?: Task;
-  isSidebarCollapsed: boolean;
-  isMobileMenuOpen: boolean;
-  selectedKanbanProjectId?: string | null;
-  confirmationModal: ConfirmationModalState;
-}
-
-export type AppAction =
-  | { type: 'SET_SESSION'; payload: Session | null }
-  | { type: 'INITIALIZE_DATA'; payload: { projects: Project[]; scheduleTemplates: ScheduleTemplate[]; manualEvents: Event[]; tasks: Task[] } }
-  | { type: 'ADD_EVENT_SUCCESS'; payload: Event | Event[] }
-  | { type: 'UPDATE_EVENT_SUCCESS'; payload: Event }
-  | { type: 'DELETE_EVENT_SUCCESS'; payload: string }
-  | { type: 'ADD_PROJECT_SUCCESS'; payload: Project }
-  | { type: 'UPDATE_PROJECT_SUCCESS'; payload: Project }
-  | { type: 'DELETE_PROJECT_SUCCESS'; payload: string }
-  | { type: 'ADD_TASK_SUCCESS'; payload: { projectId: string; task: Task } }
-  | { type: 'UPDATE_TASK_SUCCESS'; payload: { projectId: string; task: Task } }
-  | { type: 'DELETE_TASK_SUCCESS'; payload: { projectId: string; taskId: string } }
-  | { type: 'ADD_SUBTASK'; payload: { projectId: string; taskId: string; subtask: Subtask } }
-  | { type: 'UPDATE_SUBTASK'; payload: { projectId: string; taskId: string; subtask: Subtask } }
-  | { type: 'DELETE_SUBTASK'; payload: { projectId: string; taskId: string; subtaskId: string } }
-  | { type: 'ADD_SCHEDULE_TEMPLATE_SUCCESS'; payload: ScheduleTemplate }
-  | { type: 'UPDATE_SCHEDULE_TEMPLATE_SUCCESS'; payload: ScheduleTemplate }
-  | { type: 'DELETE_SCHEDULE_TEMPLATE_SUCCESS'; payload: string }
-  | { type: 'SET_VIEW'; payload: CalendarView }
-  | { type: 'SET_SELECTED_DATE'; payload: Date }
-  | { type: 'TOGGLE_EVENT_MODAL'; payload?: Event }
-  | { type: 'TOGGLE_PROJECT_MODAL'; payload?: string }
-  | { type: 'TOGGLE_COURSE_MODAL'; payload?: { id?: string } }
-  | { type: 'TOGGLE_SCHEDULE_TEMPLATE_MODAL'; payload?: ScheduleTemplate }
-  | { type: 'TOGGLE_TASK_MODAL'; payload?: Task }
-  | { type: 'CLOSE_MODALS' }
-  | { type: 'TOGGLE_SIDEBAR' }
-  | { type: 'TOGGLE_MOBILE_MENU' }
-  | { type: 'SET_KANBAN_PROJECT'; payload: string | null }
-  | { type: 'UPDATE_TASK_STATUS_SUCCESS'; payload: { projectId: string; taskId: string; newStatus: string } }
-  | { type: 'ADD_COLUMN'; payload: { projectId: string; column: KanbanColumn } }
-  | { type: 'UPDATE_COLUMN'; payload: { projectId: string; column: KanbanColumn } }
-  | { type: 'DELETE_COLUMN'; payload: { projectId: string; columnId: string } }
-  | { type: 'SHOW_CONFIRMATION_MODAL'; payload: Omit<ConfirmationModalState, 'isOpen'> }
-  | { type: 'CLOSE_CONFIRMATION_MODAL' }
-  | { type: 'REORDER_COLUMNS'; payload: { projectId: string; startIndex: number; endIndex: number } };
-
-const initialConfirmationState: ConfirmationModalState = {
-    isOpen: false,
-    title: '',
-    message: '',
-    onConfirm: () => {},
-    onCancel: () => {},
-};
-
-const initialState: AppState = {
-  session: null,
-  loading: true,
-  events: [],
-  projects: [],
-  scheduleTemplates: [],
-  currentView: 'month',
-  selectedDate: new Date(),
-  showEventModal: false,
-  showProjectModal: false,
-  showCourseModal: false,
-  showScheduleTemplateModal: false,
-  showTaskModal: false,
-  isSidebarCollapsed: false,
-  isMobileMenuOpen: false,
-  selectedKanbanProjectId: null,
-  confirmationModal: initialConfirmationState,
-};
-
-function appReducer(state: AppState, action: AppAction): AppState {
-  let newState: AppState;
-
-  switch (action.type) {
-    case 'SET_SESSION':
-      if (state.session === action.payload) return state;
-      newState = { ...state, session: action.payload };
-      break;
-    case 'INITIALIZE_DATA':
-      const { projects, scheduleTemplates, manualEvents, tasks } = action.payload;
-      const projectTasks = tasks.filter(t => t.project_id && t.project_id !== GENERAL_TASKS_PROJECT_ID);
-      const generalTasks = tasks.filter(t => !t.project_id || t.project_id === GENERAL_TASKS_PROJECT_ID);
-      const projectsWithTasks = projects.map(p => ({ ...p, tasks: projectTasks.filter(t => t.project_id === p.id) }));
-      const updatedGeneralTasksProject = { ...generalTasksProject, tasks: generalTasks };
-      const initialProjectsWithGeneral = [updatedGeneralTasksProject, ...projectsWithTasks];
-      newState = {
-        ...state,
-        projects: initialProjectsWithGeneral,
-        scheduleTemplates,
-        events: getInitialEvents(initialProjectsWithGeneral, manualEvents),
-        loading: false,
-      };
-      break;
-    default:
-      const stateAfterUi = uiReducerLogic(state, action);
-      const stateAfterEvent = eventReducerLogic(stateAfterUi, action);
-      newState = projectReducerLogic(stateAfterEvent, action);
-  }
-
-  if (newState.projects !== state.projects || newState.events !== state.events) {
-      return { ...newState, events: updateDeadlineEvents(newState.projects, newState.events) };
-  }
-
-  return newState;
-}
-
-const AppContext = createContext<{ state: AppState; dispatch: React.Dispatch<AppAction>; } | null>(null);
-const AppServiceContext = createContext<any>(null);
-
-export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(appReducer, initialState);
-
-  const services = {
-    // PROJECTS
-    addProject: useCallback(async (projectPayload: AddProjectPayload) => {
-        const { template_group_name, ...projectDataFromForm } = projectPayload;
-        const { id, files, columns, tasks, ...dbData } = projectDataFromForm;
-        
-        const dataToInsert = { ...dbData, user_id: state.session?.user.id };
-
-        const { data: newProjectData, error } = await supabase.from('projects').insert([dataToInsert]).select().single();
-        if (error || !newProjectData) throw new Error(error.message);
-
-        const finalProject: Project = {
-          ...(projectDataFromForm as Project),
-          ...newProjectData,
-          start_date: new Date(newProjectData.start_date),
-          end_date: newProjectData.end_date ? new Date(newProjectData.end_date) : undefined,
-          tasks: [],
-          columns: projectDataFromForm.columns || [
-            { id: 'todo', title: 'Suunnitteilla' },
-            { id: 'inProgress', title: 'Työn alla' },
-            { id: 'done', title: 'Valmis' },
-          ],
-        };
-
-        dispatch({ type: 'ADD_PROJECT_SUCCESS', payload: finalProject });
-
-        if (template_group_name && finalProject.type === 'course' && finalProject.end_date) {
-            const templatesInGroup = state.scheduleTemplates.filter(t => t.name === template_group_name);
-            if (templatesInGroup.length > 0) {
-              const eventsToCreate = generateEventsForCourse(finalProject, templatesInGroup);
-              
-              if (eventsToCreate.length > 0) {
-                 const eventsWithUser = eventsToCreate.map(e => ({ ...e, user_id: state.session?.user.id }));
-                const { data: newEventsData, error: eventError } = await supabase.from('events').insert(eventsWithUser).select();
-                
-                if (eventError) throw new Error(eventError.message);
-                
-                const formattedNewEvents = (newEventsData || []).map((e: any) => ({
-                    ...e,
-                    date: new Date(e.date),
-                }));
-                
-                dispatch({ type: 'ADD_EVENT_SUCCESS', payload: formattedNewEvents as Event[] });
-              }
-            }
-        }
-    }, [state.scheduleTemplates, state.session]),
-
-    updateProject: useCallback(async (project: Project) => {
-        const { files, tasks, ...dbData } = project;
-        const { data, error } = await supabase.from('projects').update(dbData).match({ id: project.id }).select().single();
-        if (error || !data) throw new Error(error.message);
-        dispatch({ type: 'UPDATE_PROJECT_SUCCESS', payload: project });
-    }, []),
-    
-    deleteProject: useCallback(async (projectId: string) => {
-        const { error } = await supabase.from('projects').delete().match({ id: projectId });
-        if (error) throw new Error(error.message);
-        dispatch({ type: 'DELETE_PROJECT_SUCCESS', payload: projectId });
-    }, []),
-
-    // TASKS
-    addTask: useCallback(async (task: Omit<Task, 'id'>) => {
-      const taskWithUser = { ...task, user_id: state.session?.user.id };
-      const { data, error } = await supabase.from('tasks').insert([taskWithUser]).select().single();
-      if (error || !data) throw new Error(error.message);
-      const newTask = { 
-        ...data, 
-        due_date: data.due_date ? new Date(data.due_date) : undefined,
-      };
-      dispatch({ type: 'ADD_TASK_SUCCESS', payload: { projectId: data.project_id || GENERAL_TASKS_PROJECT_ID, task: newTask as Task } });
-    }, [state.session]),
-
-    updateTask: useCallback(async (task: Task) => {
-      const { error } = await supabase.from('tasks').update(task).match({ id: task.id });
-      if (error) throw new Error(error.message);
-      dispatch({ type: 'UPDATE_TASK_SUCCESS', payload: { projectId: task.project_id || GENERAL_TASKS_PROJECT_ID, task: task } });
-    }, []),
-    
-    deleteTask: useCallback(async (projectId: string, taskId: string) => {
-      const { error } = await supabase.from('tasks').delete().match({ id: taskId });
-      if (error) throw new Error(error.message);
-      dispatch({ type: 'DELETE_TASK_SUCCESS', payload: { projectId: projectId || GENERAL_TASKS_PROJECT_ID, taskId } });
-    }, []),
-    
-    updateTaskStatus: useCallback(async (projectId: string, taskId: string, newStatus: string) => {
-        const { error } = await supabase.from('tasks').update({ column_id: newStatus }).match({ id: taskId });
-        if (error) throw new Error(error.message);
-        dispatch({ type: 'UPDATE_TASK_STATUS_SUCCESS', payload: { projectId: projectId || GENERAL_TASKS_PROJECT_ID, taskId, newStatus } });
-    }, []),
-    
-    // EVENTS
-    addEvent: useCallback(async (event: Omit<Event, 'id'>) => {
-        const eventWithUser = { ...event, user_id: state.session?.user.id };
-        const { data, error } = await supabase.from('events').insert([eventWithUser]).select().single();
-        if (error || !data) throw new Error(error.message);
-        const newEvent = { ...data, date: new Date(data.date) };
-        dispatch({ type: 'ADD_EVENT_SUCCESS', payload: newEvent as Event });
-    }, [state.session]),
-    
-    updateEvent: useCallback(async (event: Event) => {
-        const { error } = await supabase.from('events').update(event).match({ id: event.id });
-        if (error) throw new Error(error.message);
-        dispatch({ type: 'UPDATE_EVENT_SUCCESS', payload: event });
-    }, []),
-    
-    deleteEvent: useCallback(async (eventId: string) => {
-        const { error } = await supabase.from('events').delete().match({ id: eventId });
-        if (error) throw new Error(error.message);
-        dispatch({ type: 'DELETE_EVENT_SUCCESS', payload: eventId });
-    }, []),
-    
-    // SCHEDULE TEMPLATES
-    addScheduleTemplate: useCallback(async (template: Omit<ScheduleTemplate, 'id'>) => {
-        const templateWithUser = { ...template, user_id: state.session?.user.id };
-        const { data, error } = await supabase.from('schedule_templates').insert([templateWithUser]).select().single();
-        if (error || !data) throw new Error(error.message);
-        dispatch({ type: 'ADD_SCHEDULE_TEMPLATE_SUCCESS', payload: data as ScheduleTemplate });
-    }, [state.session]),
-    
-    updateScheduleTemplate: useCallback(async (template: ScheduleTemplate) => {
-        const { error } = await supabase.from('schedule_templates').update(template).match({ id: template.id });
-        if (error) throw new Error(error.message);
-        dispatch({ type: 'UPDATE_SCHEDULE_TEMPLATE_SUCCESS', payload: template });
-    }, []),
-
-    deleteScheduleTemplate: useCallback(async (templateId: string) => {
-        const { error } = await supabase.from('schedule_templates').delete().match({ id: templateId });
-        if (error) throw new Error(error.message);
-        dispatch({ type: 'DELETE_SCHEDULE_TEMPLATE_SUCCESS', payload: templateId });
-    }, []),
+const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
+  const getPriorityIcon = (priority: string) => {
+    switch (priority) {
+      case 'high': return <AlertCircle className="w-4 h-4 text-red-500" />;
+      case 'medium': return <AlertCircle className="w-4 h-4 text-yellow-500" />;
+      default: return <AlertCircle className="w-4 h-4 text-green-500" />;
+    }
   };
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      dispatch({ type: 'SET_SESSION', payload: session });
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      dispatch({ type: 'SET_SESSION', payload: session });
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+  return (
+    <div
+      onClick={onClick}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('type', DND_TYPES.TASK);
+        e.dataTransfer.setData('taskId', task.id);
+        e.dataTransfer.setData('projectId', task.project_id);
+        e.currentTarget.classList.add('opacity-50');
+      }}
+      onDragEnd={(e) => e.currentTarget.classList.remove('opacity-50')}
+      className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer active:cursor-grabbing"
+    >
+      <div className="flex justify-between items-start mb-2">
+        <h4 className="font-semibold text-gray-800 text-sm">{task.title}</h4>
+        {getPriorityIcon(task.priority)}
+      </div>
+      {task.description && <p className="text-xs text-gray-600 mb-3 line-clamp-2">{task.description}</p>}
+      {task.due_date && (
+        <div className="flex items-center text-xs text-gray-500">
+          <Calendar className="w-3 h-3 mr-1.5" />
+          <span>{formatDate(new Date(task.due_date))}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, onDragStart, onDropColumn, isColumnDragged }: { column: KanbanColumn, tasks: Task[], projectId: string, isTaskDraggedOver: boolean, onDragStart: (e: React.DragEvent) => void, onDropColumn: (e: React.DragEvent) => void, isColumnDragged: boolean }) => {
+  const { state, dispatch } = useApp();
+  const services = useAppServices();
+  const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState(column.title);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const isDefaultColumn = ['todo', 'inProgress', 'done'].includes(column.id);
+
+  const handleUpdate = async () => {
+    if (title.trim()) {
+      const project = state.projects.find(p => p.id === projectId);
+      if (!project) return;
+      
+      const updatedColumns = project.columns.map(c => c.id === column.id ? { ...c, title: title.trim() } : c);
+      await services.updateProject({ ...project, columns: updatedColumns });
+      
+      setIsEditing(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (confirm(`Haluatko varmasti poistaa säiliön "${column.title}"? Tämä poistaa myös kaikki sen sisältämät tehtävät.`)) {
+      const project = state.projects.find(p => p.id === projectId);
+      if (!project) return;
+
+      const updatedColumns = project.columns.filter(c => c.id !== column.id);
+      const tasksToMove = project.tasks.filter(t => t.column_id === column.id);
+      
+      // Siirretään poistetun sarakkeen tehtävät 'todo'-sarakkeeseen
+      const updatedTasks = project.tasks.map(t => t.column_id === column.id ? { ...t, column_id: 'todo' } : t);
+
+      await services.updateProject({ ...project, columns: updatedColumns, tasks: updatedTasks });
+      
+      // Päivitetään myös yksittäiset tehtävät tietokannassa
+      for (const task of tasksToMove) {
+        await services.updateTask({ ...task, column_id: 'todo' });
+      }
+    }
+  };
+  
+  const handleAddTask = () => {
+    const newTaskTemplate: Partial<Task> = {
+      project_id: projectId,
+      column_id: column.id,
+    };
+    dispatch({ type: 'TOGGLE_TASK_MODAL', payload: newTaskTemplate as Task });
+  };
+  
+  return (
+    <div 
+        className={`p-3 flex flex-col w-72 flex-shrink-0 rounded-xl transition-colors duration-200 ${isTaskDraggedOver ? 'bg-blue-50' : 'bg-gray-100/60'} ${isColumnDragged ? 'opacity-50' : ''}`}
+        onDrop={onDropColumn}
+    >
+      <div 
+        className="flex justify-between items-center mb-2 px-1 cursor-grab active:cursor-grabbing noselect"
+        draggable={!isDefaultColumn}
+        onDragStart={onDragStart}
+      >
+        <div className='flex items-center'>
+            {!isDefaultColumn && <GripVertical className="w-5 h-5 text-gray-400 mr-1" />}
+            {isEditing ? (
+              <input
+                autoFocus
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={handleUpdate}
+                onKeyDown={(e) => e.key === 'Enter' && handleUpdate()}
+                className="font-semibold text-gray-800 bg-white border border-blue-400 rounded px-1 -ml-1 w-full"
+              />
+            ) : (
+              <h3 className="font-semibold text-gray-800">{column.title}</h3>
+            )}
+        </div>
+
+        <div className="relative">
+          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-1 text-gray-500 hover:bg-gray-200 rounded">
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+          {isMenuOpen && (
+            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+              <ul className="py-1">
+                <li><button onClick={() => { setIsEditing(true); setIsMenuOpen(false); }} disabled={isDefaultColumn} className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"> {isDefaultColumn ? <Lock className="w-3 h-3 mr-2" /> : <Edit className="w-3 h-3 mr-2" />} Muokkaa </button> </li>
+                <li><button onClick={handleDelete} disabled={isDefaultColumn} className="w-full text-left flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"> {isDefaultColumn ? <Lock className="w-3 h-3 mr-2" /> : <Trash2 className="w-3 h-3 mr-2" />} Poista </button> </li>
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <div className="mb-3">
+        <button
+          onClick={handleAddTask}
+          className="w-full flex items-center justify-center p-2 text-sm text-gray-600 bg-white hover:bg-gray-50 rounded-lg transition-colors border border-gray-300"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Lisää tehtävä
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto -mr-2 pr-2 min-h-[300px] space-y-3">
+        {tasks.map(task => (
+          <TaskCard key={task.id} task={task} onClick={() => dispatch({ type: 'TOGGLE_TASK_MODAL', payload: task })} />
+        ))}
+        <div className={`flex items-center justify-center text-xs text-gray-400 p-4 border-2 border-dashed rounded-lg transition-colors ${tasks.length > 0 ? 'border-gray-300' : 'border-gray-300 h-full'} ${isTaskDraggedOver ? 'border-blue-400 bg-blue-100/50' : ''}`}>
+          Pudota tehtäviä tähän
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AddColumn = ({ projectId }: { projectId: string }) => {
+    const { state } = useApp();
+    const services = useAppServices();
+    const [isEditing, setIsEditing] = useState(false);
+    const [title, setTitle] = useState('');
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (title.trim()) {
+            const project = state.projects.find(p => p.id === projectId);
+            if (!project) {
+                alert("Projektia ei löytynyt!");
+                return;
+            }
+            const newColumn: KanbanColumn = { id: uuidv4(), title: title.trim() };
+            const updatedProject = { ...project, columns: [...project.columns, newColumn] };
+
+            try {
+                await services.updateProject(updatedProject);
+                setTitle('');
+                setIsEditing(false);
+            } catch(err) {
+                console.error(err);
+                alert("Säiliön luonti epäonnistui.")
+            }
+        }
+    };
+
+    if (!isEditing) {
+        return (
+            <div className="w-72 flex-shrink-0 p-3">
+              <button onClick={() => setIsEditing(true)} className="w-full h-full flex items-center justify-center p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-gray-100 hover:border-gray-400 transition-colors">
+                  <Plus className="w-4 h-4 mr-2" /> Lisää uusi säiliö
+              </button>
+            </div>
+        );
+    }
+
+    return (
+        <form onSubmit={handleSubmit} className="w-72 flex-shrink-0 p-3 bg-gray-100 rounded-lg">
+            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Säiliön nimi..." className="w-full p-2 border border-gray-300 rounded-md" />
+            <div className="mt-2 space-x-2">
+                <button type="submit" className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">Lisää</button>
+                <button type="button" onClick={() => setIsEditing(false)} className="px-3 py-1 text-sm rounded hover:bg-gray-200">Peruuta</button>
+            </div>
+        </form>
+    );
+};
+
+
+export default function KanbanView() {
+  const { state, dispatch } = useApp();
+  const services = useAppServices();
+  const { projects, selectedKanbanProjectId } = state;
+  const [draggedItem, setDraggedItem] = useState<{type: string, id: string} | null>(null);
+  const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null);
+  const [showDefaultColumns, setShowDefaultColumns] = useState(true);
+
+  const generalProject = projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID);
+  const courses = projects.filter(p => p.type === 'course');
+  const otherProjects = projects.filter(p => p.type !== 'course' && p.id !== GENERAL_TASKS_PROJECT_ID);
 
   useEffect(() => {
-    const fetchInitialData = async () => {
-      if (!state.session) {
-        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], manualEvents: [], tasks: [] }});
-        return;
-      };
-      const [projectsRes, templatesRes, eventsRes, tasksRes] = await Promise.all([
-          supabase.from('projects').select('*'),
-          supabase.from('schedule_templates').select('*'),
-          supabase.from('events').select('*'),
-          supabase.from('tasks').select('*')
-      ]);
-      if (projectsRes.error || templatesRes.error || eventsRes.error || tasksRes.error) {
-        console.error('Error fetching data:', projectsRes.error || templatesRes.error || eventsRes.error || tasksRes.error);
-        dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], manualEvents: [], tasks: [] } });
-        return;
+    if (!selectedKanbanProjectId && projects.length > 0) {
+      const defaultProject = generalProject ? generalProject.id : projects[0].id;
+      dispatch({ type: 'SET_KANBAN_PROJECT', payload: defaultProject });
+    }
+  }, [projects, selectedKanbanProjectId, dispatch, generalProject]);
+
+  const selectedProject = projects.find(p => p.id === selectedKanbanProjectId);
+
+  const handleSelectProject = (projectId: string) => {
+    dispatch({ type: 'SET_KANBAN_PROJECT', payload: projectId });
+  };
+  
+  const renderProjectList = (title: string, items: Project[], icon: React.ReactNode) => (
+    <div>
+      <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center"> {icon} <span className="ml-2">{title}</span> </h3>
+      <ul className="space-y-1">
+        {items.map(item => (
+          <li key={item.id}>
+            <button onClick={() => handleSelectProject(item.id)} className={`w-full text-left px-4 py-2 text-sm rounded-md transition-colors flex items-center ${ selectedKanbanProjectId === item.id ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-700 hover:bg-gray-100' }`} >
+              <span className="w-2 h-2 rounded-full mr-3" style={{ backgroundColor: item.color }}></span>
+              {item.name}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  const getTasksForColumn = (columnId: string) => {
+    if (!selectedProject) return [];
+    if (columnId === 'todo') {
+      return selectedProject.tasks.filter(t => t.column_id === 'todo' || !t.column_id);
+    }
+    return selectedProject.tasks.filter(t => t.column_id === columnId);
+  };
+  
+  const handleDragStart = (e: React.DragEvent, type: string, id: string, index?: number) => {
+      e.dataTransfer.setData('type', type);
+      e.dataTransfer.setData('id', id);
+      if(type === DND_TYPES.COLUMN && index !== undefined) {
+          setDraggedColumnIndex(index);
       }
-      const formattedProjects = (projectsRes.data || []).map((p: any) => ({ ...p, start_date: new Date(p.start_date), end_date: p.end_date ? new Date(p.end_date) : undefined, tasks: [], columns: p.columns && p.columns.length > 0 ? p.columns : [ { id: 'todo', title: 'Suunnitteilla' }, { id: 'inProgress', title: 'Työn alla' }, { id: 'done', title: 'Valmis' } ] }));
-      const formattedEvents = (eventsRes.data || []).map((e: any) => ({ ...e, date: new Date(e.date) }));
-      const formattedTasks = (tasksRes.data || []).map((t: any) => ({ ...t, due_date: t.due_date ? new Date(t.due_date) : undefined, subtasks: t.subtasks || [], files: t.files || [] }));
-      dispatch({ type: 'INITIALIZE_DATA', payload: { projects: formattedProjects, scheduleTemplates: templatesRes.data || [], manualEvents: formattedEvents, tasks: formattedTasks } });
-    };
-    fetchInitialData();
-  }, [state.session]);
+      setDraggedItem({type, id});
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetColumnId: string, targetColumnIndex: number) => {
+    e.preventDefault();
+    const type = e.dataTransfer.getData('type');
+
+    if (type === DND_TYPES.TASK) {
+      const taskId = e.dataTransfer.getData('taskId');
+      const projectId = e.dataTransfer.getData('projectId');
+      const sourceProject = projects.find(p => p.id === projectId);
+      const task = sourceProject?.tasks.find(t => t.id === taskId);
+
+      if (task) {
+        const isCompleted = targetColumnId === 'done';
+        if (task.completed !== isCompleted || task.column_id !== targetColumnId) {
+          const updatedTask = { ...task, column_id: targetColumnId, completed: isCompleted };
+          try {
+            await services.updateTask(updatedTask);
+          } catch(err: any) {
+              console.error("Failed to update task:", err);
+          }
+        }
+      }
+    } else if (type === DND_TYPES.COLUMN && selectedProject && draggedColumnIndex !== null) {
+        const reorderedColumns = Array.from(selectedProject.columns);
+        const [removed] = reorderedColumns.splice(draggedColumnIndex, 1);
+        reorderedColumns.splice(targetColumnIndex, 0, removed);
+        
+        await services.updateProject({ ...selectedProject, columns: reorderedColumns });
+    }
+    setDraggedItem(null);
+    setDraggedColumnIndex(null);
+  };
+
+  const handleInfoButtonClick = () => {
+    if (selectedProject && selectedProject.id !== GENERAL_TASKS_PROJECT_ID) {
+      if (selectedProject.type === 'course') {
+        dispatch({ type: 'TOGGLE_COURSE_MODAL', payload: { id: selectedProject.id } });
+      } else {
+        dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: selectedProject.id });
+      }
+    }
+  };
 
   return (
-    <AppContext.Provider value={{ state, dispatch }}>
-      <AppServiceContext.Provider value={services}>
-        {children}
-      </AppServiceContext.Provider>
-    </AppContext.Provider>
+    <div className="flex flex-col md:flex-row h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <aside className="hidden md:block w-1/6 min-w-[180px] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
+            <h2 className="text-lg font-bold text-gray-800">Työtilat</h2>
+            {generalProject && renderProjectList('Yleiset', [generalProject], <Inbox className="w-4 h-4" />)}
+            {renderProjectList('Kurssit', courses, <BookOpen className="w-4 h-4" />)}
+            {renderProjectList('Projektit', otherProjects, <ClipboardCheck className="w-4 h-4" />)}
+        </aside>
+
+        <main className="flex-1 p-4 md:p-6 flex flex-col min-w-0">
+            <div className="md:hidden mb-4">
+              <label htmlFor="kanban-project-select" className="block text-sm font-medium text-gray-700 mb-1">
+                Valitse työtila
+              </label>
+              <select
+                id="kanban-project-select"
+                value={selectedKanbanProjectId || ''}
+                onChange={(e) => handleSelectProject(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+              >
+                {generalProject && (
+                  <optgroup label="Yleiset">
+                    <option value={generalProject.id}>{generalProject.name}</option>
+                  </optgroup>
+                )}
+                {courses.length > 0 && (
+                  <optgroup label="Kurssit">
+                    {courses.map(course => (
+                      <option key={course.id} value={course.id}>{course.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {otherProjects.length > 0 && (
+                  <optgroup label="Projektit">
+                    {otherProjects.map(project => (
+                      <option key={project.id} value={project.id}>{project.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+
+            {selectedProject ? (
+              <>
+                <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-6 flex-shrink-0">
+                  <h1 className="text-2xl font-bold text-gray-900 truncate pr-4">{selectedProject.name}</h1>
+                  <div className="flex items-center space-x-2">
+                    <button 
+                      onClick={() => setShowDefaultColumns(s => !s)} 
+                      className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md"
+                      title={showDefaultColumns ? 'Piilota oletussäiliöt' : 'Näytä oletussäiliöt'}
+                    >
+                      {showDefaultColumns ? <EyeOff className="w-4 h-4 mr-0 md:mr-2" /> : <Eye className="w-4 h-4 mr-0 md:mr-2" />}
+                      <span className="hidden md:inline">{showDefaultColumns ? 'Piilota oletussäiliöt' : 'Näytä oletussäiliöt'}</span>
+                    </button>
+                    {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
+                      <button onClick={handleInfoButtonClick} className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md">
+                        <Info className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Muokkaa</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 flex gap-6 overflow-x-auto">
+                  {selectedProject.columns
+                    ?.filter(column => showDefaultColumns || !['todo', 'inProgress', 'done'].includes(column.id))
+                    .map((column, index) => (
+                      <div key={column.id} onDragOver={(e) => { e.preventDefault(); if(draggedItem?.type === DND_TYPES.TASK) setDraggedItem({type: DND_TYPES.TASK, id: column.id})}} onDragLeave={() => setDraggedItem(null)} onDragEnd={() => {setDraggedItem(null); setDraggedColumnIndex(null)}}>
+                        <KanbanColumnComponent 
+                          column={column} 
+                          tasks={getTasksForColumn(column.id)} 
+                          projectId={selectedProject.id} 
+                          isTaskDraggedOver={draggedItem?.type === DND_TYPES.TASK && draggedItem.id === column.id} 
+                          isColumnDragged={draggedColumnIndex === index} 
+                          onDragStart={(e) => handleDragStart(e, DND_TYPES.COLUMN, column.id, index)} 
+                          onDropColumn={(e) => handleDrop(e, column.id, index)} 
+                        />
+                      </div>
+                  ))}
+                  <AddColumn projectId={selectedProject.id} />
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <p>Valitse työtila yllä olevasta valikosta.</p>
+              </div>
+            )}
+        </main>
+    </div>
   );
-}
-
-export function useApp() {
-  const context = useContext(AppContext);
-  if (!context) { throw new Error('useApp must be used within AppProvider'); }
-  return context;
-}
-
-export function useAppServices() {
-    const context = useContext(AppServiceContext);
-    if (!context) { throw new Error('useAppServices must be used within AppProvider'); }
-    return context;
 }
