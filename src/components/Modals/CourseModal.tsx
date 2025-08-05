@@ -4,7 +4,7 @@ import { X, BookOpen, FileText, Calendar, Clock, Loader2 } from 'lucide-react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
 import { useConfirmation } from '../../hooks/useConfirmation';
 import { DEFAULT_COLOR } from '../../constants/colors';
-import { Project } from '../../types';
+import { Project, AddProjectPayload } from '../../types';
 import FormInput from '../Forms/FormInput';
 import FormTextarea from '../Forms/FormTextarea';
 import FormSelect from '../Forms/FormSelect';
@@ -67,25 +67,37 @@ export default function CourseModal() {
     }
     setIsLoading(true);
 
-    const courseData: any = {
-      id: selectedCourse?.id,
-      name: formData.name,
-      description: formData.description,
-      type: 'course',
-      color: formData.color,
-      start_date: new Date(formData.start_date + 'T00:00:00'),
-      end_date: formData.end_date ? new Date(formData.end_date + 'T00:00:00') : undefined,
-      tasks: selectedCourse?.tasks || [],
-      files: selectedCourse?.files || [],
-      template_group_name: formData.template_group_name,
-      user_id: session.user.id
-    };
-
     try {
         if (selectedCourse) {
-            await services.updateProject(courseData as Project);
+            // Rakenna päivitykseen tarkoitettu objekti ilman template_group_name-kenttää
+            const courseUpdateData: Project = {
+              id: selectedCourse.id,
+              name: formData.name,
+              description: formData.description,
+              type: 'course',
+              color: formData.color,
+              start_date: new Date(formData.start_date + 'T00:00:00'),
+              end_date: formData.end_date ? new Date(formData.end_date + 'T00:00:00') : undefined,
+              tasks: selectedCourse.tasks || [],
+              files: selectedCourse.files || [],
+              columns: selectedCourse.columns || []
+            };
+            await services.updateProject(courseUpdateData);
         } else {
-            await services.addProject(courseData);
+            // Rakenna uuden kurssin luontiin tarkoitettu objekti
+            const courseCreateData: AddProjectPayload = {
+              name: formData.name,
+              description: formData.description,
+              type: 'course',
+              color: formData.color,
+              start_date: new Date(formData.start_date + 'T00:00:00'),
+              end_date: formData.end_date ? new Date(formData.end_date + 'T00:00:00') : undefined,
+              tasks: [],
+              files: [],
+              template_group_name: formData.template_group_name,
+              user_id: session.user.id
+            };
+            await services.addProject(courseCreateData);
         }
         dispatch({ type: 'CLOSE_MODALS' });
     } catch (error: any) {
