@@ -296,7 +296,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     updateEvent: useCallback(async (event: Event, updateAll?: boolean) => {
       if (updateAll && event.project_id && event.type === 'class') {
-        // Hakee kaikki kurssin oppitunnit
         const { data: courseEvents, error: fetchError } = await supabase
           .from('events')
           .select('id')
@@ -305,25 +304,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
         if (fetchError) throw new Error(fetchError.message);
     
-        // Rakentaa päivitettävät tiedot
         const updatedFields = {
           title: event.title,
           description: event.description,
+          more_info: event.more_info,
           color: event.color,
           files: event.files,
         };
 
-        // Luo päivityspyynnöt jokaiselle tapahtumalle
         const updatePromises = courseEvents.map((e: { id: string }) => 
           supabase.from('events').update(updatedFields).match({ id: e.id })
         );
         
-        // Suorittaa kaikki päivitykset
         const results = await Promise.all(updatePromises);
         const aFailure = results.find(res => res.error);
         if (aFailure) throw new Error(aFailure.error.message);
 
-        // Päivittää tilan käyttöliittymässä
         const updatedEventList = state.events.map(e => 
           e.project_id === event.project_id && e.type === 'class'
             ? { ...e, ...updatedFields } 
@@ -332,7 +328,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'UPDATE_MULTIPLE_EVENTS_SUCCESS', payload: updatedEventList });
         
       } else {
-        // Yksittäisen tapahtuman päivitys
         const { error } = await supabase.from('events').update(event).match({ id: event.id });
         if (error) throw new Error(error.message);
         dispatch({ type: 'UPDATE_EVENT_SUCCESS', payload: event });
