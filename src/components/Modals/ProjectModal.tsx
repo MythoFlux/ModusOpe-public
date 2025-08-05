@@ -88,7 +88,6 @@ export default function ProjectModal() {
     // tässä, pitäisi luoda erillinen `updateTasksForProject`-servicefunktio.
     const projectData: any = {
       id: selectedProject?.id,
-      user_id: state.session!.user.id, // LISÄTTY: Liitetään käyttäjän ID mukaan
       name: formData.name,
       description: formData.description,
       type: formData.type,
