@@ -198,8 +198,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addProject: useCallback(async (projectPayload: AddProjectPayload) => {
         const { template_group_name, ...projectDataFromForm } = projectPayload;
         const { id, files, columns, tasks, ...dbData } = projectDataFromForm;
+        
+        const dataToInsert = { ...dbData, user_id: state.session?.user.id };
 
-        const { data: newProjectData, error } = await supabase.from('projects').insert([dbData]).select().single();
+        const { data: newProjectData, error } = await supabase.from('projects').insert([dataToInsert]).select().single();
         if (error || !newProjectData) throw new Error(error.message);
 
         const finalProject: Project = {
@@ -223,7 +225,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               const eventsToCreate = generateEventsForCourse(finalProject, templatesInGroup);
               
               if (eventsToCreate.length > 0) {
-                const { data: newEventsData, error: eventError } = await supabase.from('events').insert(eventsToCreate).select();
+                 const eventsWithUser = eventsToCreate.map(e => ({ ...e, user_id: state.session?.user.id }));
+                const { data: newEventsData, error: eventError } = await supabase.from('events').insert(eventsWithUser).select();
                 
                 if (eventError) throw new Error(eventError.message);
                 
@@ -253,14 +256,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // TASKS
     addTask: useCallback(async (task: Omit<Task, 'id'>) => {
-      const { data, error } = await supabase.from('tasks').insert([task]).select().single();
+      const taskWithUser = { ...task, user_id: state.session?.user.id };
+      const { data, error } = await supabase.from('tasks').insert([taskWithUser]).select().single();
       if (error || !data) throw new Error(error.message);
       const newTask = { 
         ...data, 
         due_date: data.due_date ? new Date(data.due_date) : undefined,
       };
       dispatch({ type: 'ADD_TASK_SUCCESS', payload: { projectId: data.project_id || GENERAL_TASKS_PROJECT_ID, task: newTask as Task } });
-    }, []),
+    }, [state.session]),
 
     updateTask: useCallback(async (task: Task) => {
       const { error } = await supabase.from('tasks').update(task).match({ id: task.id });
@@ -282,11 +286,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     // EVENTS
     addEvent: useCallback(async (event: Omit<Event, 'id'>) => {
-        const { data, error } = await supabase.from('events').insert([event]).select().single();
+        const eventWithUser = { ...event, user_id: state.session?.user.id };
+        const { data, error } = await supabase.from('events').insert([eventWithUser]).select().single();
         if (error || !data) throw new Error(error.message);
         const newEvent = { ...data, date: new Date(data.date) };
         dispatch({ type: 'ADD_EVENT_SUCCESS', payload: newEvent as Event });
-    }, []),
+    }, [state.session]),
     
     updateEvent: useCallback(async (event: Event) => {
         const { error } = await supabase.from('events').update(event).match({ id: event.id });
@@ -302,10 +307,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     // SCHEDULE TEMPLATES
     addScheduleTemplate: useCallback(async (template: Omit<ScheduleTemplate, 'id'>) => {
-        const { data, error } = await supabase.from('schedule_templates').insert([template]).select().single();
+        const templateWithUser = { ...template, user_id: state.session?.user.id };
+        const { data, error } = await supabase.from('schedule_templates').insert([templateWithUser]).select().single();
         if (error || !data) throw new Error(error.message);
         dispatch({ type: 'ADD_SCHEDULE_TEMPLATE_SUCCESS', payload: data as ScheduleTemplate });
-    }, []),
+    }, [state.session]),
     
     updateScheduleTemplate: useCallback(async (template: ScheduleTemplate) => {
         const { error } = await supabase.from('schedule_templates').update(template).match({ id: template.id });
