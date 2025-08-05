@@ -65,6 +65,9 @@ export default function Auth() {
         <form className="mt-8 space-y-6" onSubmit={handleAuthAction}>
           <div className="space-y-4">
             <input
+              id="email"
+              name="email"
+              autoComplete="email"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               type="email"
               placeholder="Sähköpostiosoite"
@@ -73,6 +76,9 @@ export default function Auth() {
               onChange={(e) => setEmail(e.target.value)}
             />
             <input
+              id="password"
+              name="password"
+              autoComplete="current-password"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               type="password"
               placeholder="Salasana"
