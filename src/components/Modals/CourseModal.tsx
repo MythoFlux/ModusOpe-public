@@ -38,15 +38,17 @@ export default function CourseModal() {
         color: selectedCourse.color,
         start_date: new Date(selectedCourse.start_date).toISOString().split('T')[0],
         end_date: selectedCourse.end_date ? new Date(selectedCourse.end_date).toISOString().split('T')[0] : '',
-        template_group_name: '' // Ei muokata luonnin jälkeen
+        template_group_name: ''
       });
     } else {
+      const today = new Date();
+      const endOfYear = new Date(today.getFullYear(), 11, 31);
       setFormData({
         name: '',
         description: '',
         color: DEFAULT_COLOR,
-        start_date: new Date().toISOString().split('T')[0],
-        end_date: '',
+        start_date: today.toISOString().split('T')[0],
+        end_date: endOfYear.toISOString().split('T')[0], // Asetetaan oletusloppupäivä
         template_group_name: ''
       });
     }
@@ -56,6 +58,11 @@ export default function CourseModal() {
     e.preventDefault();
     if (!session?.user) {
         alert("Sinun täytyy olla kirjautunut luodaksesi kurssin.");
+        return;
+    }
+    // Varmistetaan, että päättymispäivä on valittu, jos tuntipohja on valittu
+    if (formData.template_group_name && !formData.end_date) {
+        alert("Valitse kurssille päättymispäivä, jotta oppitunnit voidaan luoda oikein.");
         return;
     }
     setIsLoading(true);
@@ -195,6 +202,7 @@ export default function CourseModal() {
                     id="end_date"
                     label="Päättymispäivä"
                     type="date"
+                    required // Tehdään vaadituksi, jos tuntipohja valitaan
                     value={formData.end_date}
                     onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                   />
