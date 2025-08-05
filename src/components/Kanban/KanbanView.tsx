@@ -375,7 +375,7 @@ export default function KanbanView() {
                       title={showDefaultColumns ? 'Piilota oletussäiliöt' : 'Näytä oletussäiliöt'}
                     >
                       {showDefaultColumns ? <EyeOff className="w-4 h-4 mr-0 md:mr-2" /> : <Eye className="w-4 h-4 mr-0 md:mr-2" />}
-                      <span className="hidden md:inline">{showDefaultColumns ? 'Piilota oletus' : 'Näytä oletus'}</span>
+                      <span className="hidden md:inline">{showDefaultColumns ? 'Piilota oletussäiliöt' : 'Näytä oletussäiliöt'}</span>
                     </button>
                     {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
                       <button onClick={handleInfoButtonClick} className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md">
