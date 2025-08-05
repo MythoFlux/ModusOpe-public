@@ -1,6 +1,6 @@
 // src/components/Modals/CourseModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, BookOpen, FileText, Calendar, Clock, Loader2 } from 'lucide-react';
+import { X, BookOpen, FileText, Calendar, Clock, Loader2, Info } from 'lucide-react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
 import { useConfirmation } from '../../hooks/useConfirmation';
 import { DEFAULT_COLOR } from '../../constants/colors';
@@ -24,6 +24,7 @@ export default function CourseModal() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    more_info: '',
     color: DEFAULT_COLOR,
     start_date: '',
     end_date: '',
@@ -35,6 +36,7 @@ export default function CourseModal() {
       setFormData({
         name: selectedCourse.name,
         description: selectedCourse.description || '',
+        more_info: selectedCourse.more_info || '',
         color: selectedCourse.color,
         start_date: new Date(selectedCourse.start_date).toISOString().split('T')[0],
         end_date: selectedCourse.end_date ? new Date(selectedCourse.end_date).toISOString().split('T')[0] : '',
@@ -46,6 +48,7 @@ export default function CourseModal() {
       setFormData({
         name: '',
         description: '',
+        more_info: '',
         color: DEFAULT_COLOR,
         start_date: today.toISOString().split('T')[0],
         end_date: endOfYear.toISOString().split('T')[0], // Asetetaan oletusloppupäivä
@@ -74,6 +77,7 @@ export default function CourseModal() {
               id: selectedCourse.id,
               name: formData.name,
               description: formData.description,
+              more_info: formData.more_info,
               type: 'course',
               color: formData.color,
               start_date: new Date(formData.start_date + 'T00:00:00'),
@@ -88,6 +92,7 @@ export default function CourseModal() {
             const courseCreateData: AddProjectPayload = {
               name: formData.name,
               description: formData.description,
+              more_info: formData.more_info,
               type: 'course',
               color: formData.color,
               start_date: new Date(formData.start_date + 'T00:00:00'),
@@ -190,8 +195,18 @@ export default function CourseModal() {
                     icon={<FileText className="w-4 h-4 inline mr-2" />}
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={10}
+                    rows={5}
                     placeholder="Kirjoita kuvaus tai lisää muistiinpanoja"
+                />
+                
+                <FormTextarea
+                    id="course-more-info"
+                    label="Lisätietoa (esim. linkit)"
+                    icon={<Info className="w-4 h-4 inline mr-2" />}
+                    value={formData.more_info}
+                    onChange={(e) => setFormData({ ...formData, more_info: e.target.value })}
+                    rows={3}
+                    placeholder="Lisää linkkejä tai muuta tärkeää tietoa"
                 />
 
                 <ColorSelector
