@@ -1,6 +1,6 @@
 // src/components/Modals/EventModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, Type, FileText, File, Loader2 } from 'lucide-react';
+import { X, Calendar, Clock, Type, FileText, File, Loader2, AlertTriangle } from 'lucide-react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
 import { useConfirmation } from '../../hooks/useConfirmation';
 import { Event, FileAttachment } from '../../types';
@@ -29,7 +29,8 @@ export default function EventModal() {
     project_id: '',
     color: DEFAULT_COLOR
   });
-
+  
+  const [updateAllInCourse, setUpdateAllInCourse] = useState(false);
   const [files, setFiles] = useState<FileAttachment[]>([]);
 
   const isDeadlineEvent = selectedEvent?.id.startsWith('project-deadline-') || selectedEvent?.id.startsWith('task-deadline-');
@@ -61,6 +62,7 @@ export default function EventModal() {
       });
       setFiles([]);
     }
+    setUpdateAllInCourse(false); // Resetoi valintaruutu aina modaalin avautuessa
     setActiveTab('details');
   }, [selectedEvent, state.selectedDate]);
 
@@ -99,7 +101,7 @@ export default function EventModal() {
     
     try {
         if (selectedEvent) {
-            await services.updateEvent(eventData);
+            await services.updateEvent(eventData, updateAllInCourse);
         } else {
             const { id, ...newEventData } = eventData;
             await services.addEvent(newEventData);
@@ -202,7 +204,7 @@ export default function EventModal() {
                 required
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                disabled={isDeadlineEvent}
+                disabled={isDeadlineEvent || updateAllInCourse}
               />
               <div className="grid grid-cols-2 gap-4">
                 <FormInput
@@ -212,7 +214,7 @@ export default function EventModal() {
                   type="time"
                   value={formData.start_time}
                   onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                  disabled={isDeadlineEvent}
+                  disabled={isDeadlineEvent || updateAllInCourse}
                 />
                 <FormInput
                   id="end_time"
@@ -220,7 +222,7 @@ export default function EventModal() {
                   type="time"
                   value={formData.end_time}
                   onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                  disabled={isDeadlineEvent}
+                  disabled={isDeadlineEvent || updateAllInCourse}
                 />
               </div>
               <FormSelect
@@ -255,6 +257,35 @@ export default function EventModal() {
                   </option>
                 ))}
               </FormSelect>
+              
+              {selectedEvent?.type === 'class' && selectedEvent.project_id && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-yellow-800">
+                        Laaja muokkaus
+                      </p>
+                      <div className="mt-2 text-sm text-yellow-700">
+                        <label className="flex items-center space-x-2">
+                           <input
+                            type="checkbox"
+                            checked={updateAllInCourse}
+                            onChange={() => setUpdateAllInCourse(!updateAllInCourse)}
+                            className="h-4 w-4 rounded text-yellow-600 focus:ring-yellow-500 border-gray-300"
+                           />
+                           <span>Päivitä kaikki tämän kurssin oppitunnit</span>
+                        </label>
+                        <p className="text-xs mt-1">
+                          Huom: Päivämäärä ja kellonajat eivät muutu muissa tapahtumissa.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </form>
           ) : (
             <AttachmentSection 
