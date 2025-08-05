@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
 import { Project, Task, KanbanColumn } from '../../types';
-import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical } from 'lucide-react';
+import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical, Eye, EyeOff } from 'lucide-react';
 import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 
@@ -183,6 +183,7 @@ export default function KanbanView() {
   const { projects, selectedKanbanProjectId } = state;
   const [draggedItem, setDraggedItem] = useState<{type: string, id: string} | null>(null);
   const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null);
+  const [showDefaultColumns, setShowDefaultColumns] = useState(true);
 
   const generalProject = projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID);
   const courses = projects.filter(p => p.type === 'course');
@@ -246,7 +247,6 @@ export default function KanbanView() {
 
       if (task) {
         const isCompleted = targetColumnId === 'done';
-        // Päivitetään vain, jos tila tai sarake muuttuu
         if (task.completed !== isCompleted || task.column_id !== targetColumnId) {
           const updatedTask = { ...task, column_id: targetColumnId, completed: isCompleted };
           services.updateTask(updatedTask).catch((err: any) => {
@@ -320,17 +320,37 @@ export default function KanbanView() {
               <>
                 <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-6 flex-shrink-0">
                   <h1 className="text-2xl font-bold text-gray-900 truncate pr-4">{selectedProject.name}</h1>
-                  {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
-                    <button onClick={handleInfoButtonClick} className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md">
-                      <Info className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Muokkaa tietoja</span>
+                  <div className="flex items-center space-x-2">
+                    <button 
+                      onClick={() => setShowDefaultColumns(s => !s)} 
+                      className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md"
+                      title={showDefaultColumns ? 'Piilota oletussäiliöt' : 'Näytä oletussäiliöt'}
+                    >
+                      {showDefaultColumns ? <EyeOff className="w-4 h-4 mr-0 md:mr-2" /> : <Eye className="w-4 h-4 mr-0 md:mr-2" />}
+                      <span className="hidden md:inline">{showDefaultColumns ? 'Piilota oletus' : 'Näytä oletus'}</span>
                     </button>
-                  )}
+                    {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
+                      <button onClick={handleInfoButtonClick} className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md">
+                        <Info className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Muokkaa</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="flex-1 flex gap-6 overflow-x-auto">
-                  {selectedProject.columns?.map((column, index) => (
-                    <div key={column.id} onDragOver={(e) => { e.preventDefault(); if(draggedItem?.type === DND_TYPES.TASK) setDraggedItem({type: DND_TYPES.TASK, id: column.id})}} onDragLeave={() => setDraggedItem(null)} onDragEnd={() => {setDraggedItem(null); setDraggedColumnIndex(null)}}>
-                      <KanbanColumnComponent column={column} tasks={getTasksForColumn(column.id)} projectId={selectedProject.id} isTaskDraggedOver={draggedItem?.type === DND_TYPES.TASK && draggedItem.id === column.id} isColumnDragged={draggedColumnIndex === index} onDragStart={(e) => handleDragStart(e, DND_TYPES.COLUMN, column.id, index)} onDropColumn={(e) => handleDrop(e, column.id, index)} />
-                    </div>
+                  {selectedProject.columns
+                    ?.filter(column => showDefaultColumns || !['todo', 'inProgress', 'done'].includes(column.id))
+                    .map((column, index) => (
+                      <div key={column.id} onDragOver={(e) => { e.preventDefault(); if(draggedItem?.type === DND_TYPES.TASK) setDraggedItem({type: DND_TYPES.TASK, id: column.id})}} onDragLeave={() => setDraggedItem(null)} onDragEnd={() => {setDraggedItem(null); setDraggedColumnIndex(null)}}>
+                        <KanbanColumnComponent 
+                          column={column} 
+                          tasks={getTasksForColumn(column.id)} 
+                          projectId={selectedProject.id} 
+                          isTaskDraggedOver={draggedItem?.type === DND_TYPES.TASK && draggedItem.id === column.id} 
+                          isColumnDragged={draggedColumnIndex === index} 
+                          onDragStart={(e) => handleDragStart(e, DND_TYPES.COLUMN, column.id, index)} 
+                          onDropColumn={(e) => handleDrop(e, column.id, index)} 
+                        />
+                      </div>
                   ))}
                   <AddColumn projectId={selectedProject.id} />
                 </div>
