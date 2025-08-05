@@ -125,6 +125,8 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
             <h4 className="text-sm font-medium text-gray-700 mb-2">Tai liitä linkki manuaalisesti:</h4>
             <div className="flex space-x-2">
               <input
+                id="gdrive-url-manual"
+                name="gdrive-url-manual"
                 type="url"
                 value={googleDriveUrl}
                 onChange={(e) => setGoogleDriveUrl(e.target.value)}
