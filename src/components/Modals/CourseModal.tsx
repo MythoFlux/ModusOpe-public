@@ -161,6 +161,16 @@ export default function CourseModal() {
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Esim. FY7"
                  />
+                 
+                 <FormTextarea
+                    id="course-more-info"
+                    label="Lisätietoa (esim. linkit)"
+                    icon={<Info className="w-4 h-4 inline mr-2" />}
+                    value={formData.more_info}
+                    onChange={(e) => setFormData({ ...formData, more_info: e.target.value })}
+                    rows={3}
+                    placeholder="Lisää linkkejä tai muuta tärkeää tietoa"
+                />
 
                 {!selectedCourse && (
                   <div>
@@ -197,16 +207,6 @@ export default function CourseModal() {
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={5}
                     placeholder="Kirjoita kuvaus tai lisää muistiinpanoja"
-                />
-                
-                <FormTextarea
-                    id="course-more-info"
-                    label="Lisätietoa (esim. linkit)"
-                    icon={<Info className="w-4 h-4 inline mr-2" />}
-                    value={formData.more_info}
-                    onChange={(e) => setFormData({ ...formData, more_info: e.target.value })}
-                    rows={3}
-                    placeholder="Lisää linkkejä tai muuta tärkeää tietoa"
                 />
 
                 <ColorSelector
