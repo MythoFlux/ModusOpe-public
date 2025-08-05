@@ -28,6 +28,18 @@ export function eventReducerLogic(state: AppState, action: AppAction): AppState 
       };
     }
     
+    case 'UPDATE_MULTIPLE_EVENTS_SUCCESS': {
+        // Tämä korvaa aiemman listan suoraan päivitetyllä listalla,
+        // koska emme voi luottaa yksittäisiin ID-arvoihin, jos tapahtumia on poistettu/lisätty
+        // Varmempi tapa olisi iteroida ja päivittää, mutta tämä on yksinkertaisempi, jos palvelin palauttaa koko päivitetyn listan
+        // Oletetaan, että payload on täydellinen lista tapahtumista tai ainakin kaikki päivitetyt tapahtumat.
+        const updatedEventMap = new Map(action.payload.map(e => [e.id, e]));
+        return {
+            ...state,
+            events: state.events.map(event => updatedEventMap.get(event.id) || event),
+        };
+    }
+
     case 'DELETE_EVENT_SUCCESS': {
       return { 
         ...state, 
