@@ -40,6 +40,9 @@ export default function EventModal() {
 
   const isRecurringEvent = selectedEvent?.schedule_template_id && selectedEvent.id.startsWith('recurring-');
   
+  // KORJATTU: Lisätty tarkistus myös deadline-tyypeille
+  const isDeadlineEvent = selectedEvent?.id.startsWith('project-deadline-') || selectedEvent?.id.startsWith('task-deadline-');
+
   const similarEvents = React.useMemo(() => {
     if (!selectedEvent || !isRecurringEvent || !selectedEvent.group_name) return [];
     
@@ -95,6 +98,12 @@ export default function EventModal() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // KORJATTU: Estetään deadline-eventtien muokkaus, koska ne ovat vain visualisointeja
+    if (isDeadlineEvent) {
+      alert("Määräaikoja ei voi muokata suoraan kalenterista. Muokkaa sen sijaan projektia tai tehtävää, johon määräaika liittyy.");
+      return;
+    }
+
     if (!session?.user && !selectedEvent) {
         alert("Sinun täytyy olla kirjautunut luodaksesi tapahtuman.");
         return;
@@ -108,8 +117,7 @@ export default function EventModal() {
     }
 
     const eventData: Event = {
-      id: selectedEvent?.id || '', // ID will be set by Supabase for new events
-      // POISTETTU: user_id poistettu, tietokanta hoitaa tämän
+      id: selectedEvent?.id || '',
       title: formData.title,
       description: formData.description,
       date: eventDate,
@@ -117,7 +125,7 @@ export default function EventModal() {
       end_time: formData.end_time || undefined,
       type: formData.type,
       color: formData.color,
-      project_id: formData.project_id || null, // MUUTETTU: Käytetään null tyhjän merkkijonon sijaan
+      project_id: formData.project_id || null,
       schedule_template_id: selectedEvent?.schedule_template_id || undefined,
       group_name: selectedEvent?.group_name || undefined,
       files: files
@@ -140,7 +148,7 @@ export default function EventModal() {
                 }
             }
         } else {
-            const { id, ...newEventData } = eventData; // Poistetaan tyhjä id ennen lähetystä
+            const { id, ...newEventData } = eventData;
             await services.addEvent(newEventData);
         }
         dispatch({ type: 'CLOSE_MODALS' });
@@ -154,26 +162,46 @@ export default function EventModal() {
   const handleDelete = async () => {
     if (selectedEvent) {
       const isBulkDelete = bulkEditOptions.applyToAll && isRecurringEvent && similarEvents.length > 0;
-      let eventsToDeleteCount = 1;
-      if (isBulkDelete) {
-          const startDate = new Date(bulkEditOptions.start_date);
-          const endDate = new Date(bulkEditOptions.end_date);
-          eventsToDeleteCount += similarEvents.filter(event => {
-              const eventDate = new Date(event.date);
-              return eventDate >= startDate && eventDate <= endDate;
-          }).length;
+      
+      // KORJATTU: Tarkistetaan, onko kyseessä tehtävän deadline
+      const isTaskDeadline = selectedEvent.id.startsWith('task-deadline-');
+      const isProjectDeadline = selectedEvent.id.startsWith('project-deadline-');
+
+      // KORJATTU: Muokataan vahvistusviestiä sen mukaan, mitä ollaan poistamassa.
+      let message = `Haluatko varmasti poistaa tapahtuman "${selectedEvent.title}"? Toimintoa ei voi perua.`;
+      if (isTaskDeadline) {
+        const taskTitle = selectedEvent.title.replace('Tehtävä: ', '');
+        message = `Haluatko varmasti poistaa tehtävän "${taskTitle}"? Tämä poistaa tehtävän projektista pysyvästi. Toimintoa ei voi perua.`;
+      } else if (isProjectDeadline) {
+        alert("Projektin määräaikaa ei voi poistaa kalenterista. Poista projekti tai sen päättymispäivä projektinäkymästä.");
+        return;
+      } else if (isBulkDelete) {
+         let eventsToDeleteCount = 1;
+         const startDate = new Date(bulkEditOptions.start_date);
+         const endDate = new Date(bulkEditOptions.end_date);
+         eventsToDeleteCount += similarEvents.filter(event => {
+             const eventDate = new Date(event.date);
+             return eventDate >= startDate && eventDate <= endDate;
+         }).length;
+         message = `Haluatko varmasti poistaa ${eventsToDeleteCount} tapahtumaa tästä sarjasta? Toimintoa ei voi perua.`;
       }
 
-      const message = isBulkDelete
-        ? `Haluatko varmasti poistaa ${eventsToDeleteCount} tapahtumaa tästä sarjasta? Toimintoa ei voi perua.`
-        : `Haluatko varmasti poistaa tapahtuman "${selectedEvent.title}"? Toimintoa ei voi perua.`;
-      
       const confirmed = await getConfirmation({ title: 'Vahvista poisto', message });
 
       if (confirmed) {
         setIsLoading(true);
         try {
-            if (isBulkDelete) {
+            // KORJATTU: Lisätty logiikka tehtävän poistamiselle
+            if (isTaskDeadline) {
+                const taskId = selectedEvent.id.replace('task-deadline-', '');
+                const projectId = selectedEvent.project_id;
+                if (projectId && taskId) {
+                    await services.deleteTask(projectId, taskId);
+                } else {
+                    throw new Error("Tehtävän tai projektin tietoja puuttuu, poisto epäonnistui.");
+                }
+            } else if (isBulkDelete) {
+                // Tämä logiikka säilyy ennallaan toistuville tapahtumille
                 const startDate = new Date(bulkEditOptions.start_date);
                 const endDate = new Date(bulkEditOptions.end_date);
                 for (const event of similarEvents) {
@@ -182,8 +210,11 @@ export default function EventModal() {
                         await services.deleteEvent(event.id);
                     }
                 }
+                await services.deleteEvent(selectedEvent.id);
+            } else {
+                // Oletus: poistetaan normaali tapahtuma
+                await services.deleteEvent(selectedEvent.id);
             }
-            await services.deleteEvent(selectedEvent.id);
             dispatch({ type: 'CLOSE_MODALS' });
         } catch (error: any) {
             alert(`Poisto epäonnistui: ${error.message}`);
@@ -229,6 +260,7 @@ export default function EventModal() {
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 placeholder="Tapahtuman otsikko"
+                disabled={isDeadlineEvent} // Estetään muokkaus
               />
               <FormTextarea
                 id="event-description"
@@ -238,6 +270,7 @@ export default function EventModal() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
                 placeholder="Tapahtuman kuvaus"
+                disabled={isDeadlineEvent} // Estetään muokkaus
               />
               <FormInput
                 id="event-date"
@@ -247,6 +280,7 @@ export default function EventModal() {
                 required
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                disabled={isDeadlineEvent} // Estetään muokkaus
               />
               <div className="grid grid-cols-2 gap-4">
                 <FormInput
@@ -256,6 +290,7 @@ export default function EventModal() {
                   type="time"
                   value={formData.start_time}
                   onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                  disabled={isDeadlineEvent} // Estetään muokkaus
                 />
                 <FormInput
                   id="end_time"
@@ -263,6 +298,7 @@ export default function EventModal() {
                   type="time"
                   value={formData.end_time}
                   onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                  disabled={isDeadlineEvent} // Estetään muokkaus
                 />
               </div>
               <FormSelect
@@ -270,6 +306,7 @@ export default function EventModal() {
                 label="Tyyppi"
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value as Event['type'] })}
+                disabled={isDeadlineEvent} // Estetään muokkaus
               >
                 <option value="class">Tunti</option>
                 <option value="meeting">Kokous</option>
@@ -287,6 +324,7 @@ export default function EventModal() {
                 label="Projekti (valinnainen)"
                 value={formData.project_id}
                 onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                disabled={isDeadlineEvent} // Estetään muokkaus
               >
                 <option value="">Ei projektia</option>
                 {projects.map(project => (
@@ -349,7 +387,7 @@ export default function EventModal() {
               <button
                 type="submit"
                 form="event-details-form"
-                disabled={isLoading}
+                disabled={isLoading || isDeadlineEvent} // KORJATTU: Estetään tallennus jos kyseessä on deadline
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
               >
                 {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
