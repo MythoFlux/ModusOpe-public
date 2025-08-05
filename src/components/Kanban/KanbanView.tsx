@@ -241,10 +241,18 @@ export default function KanbanView() {
     if (type === DND_TYPES.TASK) {
       const taskId = e.dataTransfer.getData('taskId');
       const projectId = e.dataTransfer.getData('projectId');
-      if (taskId && projectId) {
-        services.updateTaskStatus(projectId, taskId, targetColumnId).catch((err: any) => {
-            console.error("Failed to update task status:", err);
-        });
+      const sourceProject = projects.find(p => p.id === projectId);
+      const task = sourceProject?.tasks.find(t => t.id === taskId);
+
+      if (task) {
+        const isCompleted = targetColumnId === 'done';
+        // Päivitetään vain, jos tila tai sarake muuttuu
+        if (task.completed !== isCompleted || task.column_id !== targetColumnId) {
+          const updatedTask = { ...task, column_id: targetColumnId, completed: isCompleted };
+          services.updateTask(updatedTask).catch((err: any) => {
+              console.error("Failed to update task:", err);
+          });
+        }
       }
     } else if (type === DND_TYPES.COLUMN && selectedProject && draggedColumnIndex !== null) {
         dispatch({
@@ -276,7 +284,6 @@ export default function KanbanView() {
         </aside>
 
         <main className="flex-1 p-4 md:p-6 flex flex-col min-w-0">
-            {/* KORJATTU: Mobiilinäkymän pudotusvalikko työtilan valintaan */}
             <div className="md:hidden mb-4">
               <label htmlFor="kanban-project-select" className="block text-sm font-medium text-gray-700 mb-1">
                 Valitse työtila
@@ -312,7 +319,6 @@ export default function KanbanView() {
             {selectedProject ? (
               <>
                 <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-6 flex-shrink-0">
-                  {/* KORJATTU: Otsikko näkyy nyt myös mobiilissa */}
                   <h1 className="text-2xl font-bold text-gray-900 truncate pr-4">{selectedProject.name}</h1>
                   {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
                     <button onClick={handleInfoButtonClick} className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md">
