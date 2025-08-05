@@ -1,13 +1,13 @@
 // src/components/Calendar/ScheduleTemplateView.tsx
 import React from 'react';
-import { useApp, useAppServices } from '../../contexts/AppContext'; // KORJATTU
+import { useApp, useAppServices } from '../../contexts/AppContext';
 import { Plus, Trash2 } from 'lucide-react';
 import { ScheduleTemplate } from '../../types';
 import { formatTimeString } from '../../utils/dateUtils';
 
 export default function ScheduleTemplateView() {
   const { state, dispatch } = useApp();
-  const services = useAppServices(); // KORJATTU
+  const services = useAppServices();
   const { scheduleTemplates } = state;
 
   const weekDays = ['Ma', 'Ti', 'Ke', 'To', 'Pe'];
@@ -26,7 +26,6 @@ export default function ScheduleTemplateView() {
 
   const handleDeleteTemplate = (templateId: string) => {
     if (confirm('Haluatko varmasti poistaa tämän tuntiryhmän? Tämä poistaa myös kaikki siihen liittyvät tulevat oppitunnit.')) {
-      // KORJATTU: Käytetään service-funktiota
       services.deleteScheduleTemplate(templateId).catch((err: any) => {
           console.error("Failed to delete schedule template:", err);
           alert(`Poisto epäonnistui: ${err.message}`);
@@ -38,17 +37,17 @@ export default function ScheduleTemplateView() {
     const [startHour, startMinute] = template.start_time.split(':').map(Number);
     const [endHour, endMinute] = template.end_time.split(':').map(Number);
     
-    const startPosition = ((startHour - 6) * 60) + startMinute;
-    const duration = ((endHour - startHour) * 60) + (endMinute - startMinute);
-    const hourRowHeight = 48;
+    // KORJATTU: Aikajanaruudukko alkaa klo 8, joten vähennetään 8 tuntia, ei 6.
+    const startPositionInMinutes = ((startHour - 8) * 60) + startMinute;
+    const durationInMinutes = ((endHour - startHour) * 60) + (endMinute - startMinute);
+    const hourRowHeight = 48; // Yhden tunnin rivin korkeus pikseleinä
     
     return {
-      top: (startPosition / 60) * hourRowHeight,
-      height: Math.max((duration / 60) * hourRowHeight, 24)
+      top: (startPositionInMinutes / 60) * hourRowHeight,
+      height: Math.max((durationInMinutes / 60) * hourRowHeight, 24)
     };
   };
 
-  // ... (JSX-osa pysyy samana) ...
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-full">
       <div className="p-6 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
