@@ -117,7 +117,7 @@ export type AppAction =
   | { type: 'TOGGLE_MOBILE_MENU' }
   | { type: 'SET_KANBAN_PROJECT'; payload: string | null }
   | { type: 'UPDATE_TASK_STATUS_SUCCESS'; payload: { projectId: string; taskId: string; newStatus: string } }
-  | { type: 'ADD_COLUMN'; payload: { projectId: string; title: string } }
+  | { type: 'ADD_COLUMN'; payload: { projectId: string; column: KanbanColumn } }
   | { type: 'UPDATE_COLUMN'; payload: { projectId: string; column: KanbanColumn } }
   | { type: 'DELETE_COLUMN'; payload: { projectId: string; columnId: string } }
   | { type: 'SHOW_CONFIRMATION_MODAL'; payload: Omit<ConfirmationModalState, 'isOpen'> }
@@ -242,7 +242,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, [state.scheduleTemplates, state.session]),
 
     updateProject: useCallback(async (project: Project) => {
-        const { files, columns, tasks, ...dbData } = project;
+        const { files, tasks, ...dbData } = project;
         const { data, error } = await supabase.from('projects').update(dbData).match({ id: project.id }).select().single();
         if (error || !data) throw new Error(error.message);
         dispatch({ type: 'UPDATE_PROJECT_SUCCESS', payload: project });
