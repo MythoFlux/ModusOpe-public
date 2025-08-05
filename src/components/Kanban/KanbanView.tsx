@@ -5,6 +5,7 @@ import { Project, Task, KanbanColumn } from '../../types';
 import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical, Eye, EyeOff } from 'lucide-react';
 import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
+import { v4 as uuidv4 } from 'uuid';
 
 // TaskCard- ja KanbanColumnComponent-komponentit pysyvät samoina
 const DND_TYPES = {
@@ -50,23 +51,43 @@ const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
 };
 
 const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, onDragStart, onDropColumn, isColumnDragged }: { column: KanbanColumn, tasks: Task[], projectId: string, isTaskDraggedOver: boolean, onDragStart: (e: React.DragEvent) => void, onDropColumn: (e: React.DragEvent) => void, isColumnDragged: boolean }) => {
-  const { dispatch } = useApp();
+  const { state, dispatch } = useApp();
+  const services = useAppServices();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(column.title);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const isDefaultColumn = ['todo', 'inProgress', 'done'].includes(column.id);
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     if (title.trim()) {
-      dispatch({ type: 'UPDATE_COLUMN', payload: { projectId, column: { ...column, title } } });
+      const project = state.projects.find(p => p.id === projectId);
+      if (!project) return;
+      
+      const updatedColumns = project.columns.map(c => c.id === column.id ? { ...c, title: title.trim() } : c);
+      await services.updateProject({ ...project, columns: updatedColumns });
+      
       setIsEditing(false);
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (confirm(`Haluatko varmasti poistaa säiliön "${column.title}"? Tämä poistaa myös kaikki sen sisältämät tehtävät.`)) {
-      dispatch({ type: 'DELETE_COLUMN', payload: { projectId, columnId: column.id } });
+      const project = state.projects.find(p => p.id === projectId);
+      if (!project) return;
+
+      const updatedColumns = project.columns.filter(c => c.id !== column.id);
+      const tasksToMove = project.tasks.filter(t => t.column_id === column.id);
+      
+      // Siirretään poistetun sarakkeen tehtävät 'todo'-sarakkeeseen
+      const updatedTasks = project.tasks.map(t => t.column_id === column.id ? { ...t, column_id: 'todo' } : t);
+
+      await services.updateProject({ ...project, columns: updatedColumns, tasks: updatedTasks });
+      
+      // Päivitetään myös yksittäiset tehtävät tietokannassa
+      for (const task of tasksToMove) {
+        await services.updateTask({ ...task, column_id: 'todo' });
+      }
     }
   };
   
@@ -92,6 +113,8 @@ const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, on
             {!isDefaultColumn && <GripVertical className="w-5 h-5 text-gray-400 mr-1" />}
             {isEditing ? (
               <input
+                id={`column-title-editor-${column.id}`}
+                name={`column-title-editor-${column.id}`}
                 autoFocus
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -142,16 +165,30 @@ const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, on
 };
 
 const AddColumn = ({ projectId }: { projectId: string }) => {
-    const { dispatch } = useApp();
+    const { state } = useApp();
+    const services = useAppServices();
     const [isEditing, setIsEditing] = useState(false);
     const [title, setTitle] = useState('');
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (title.trim()) {
-            dispatch({ type: 'ADD_COLUMN', payload: { projectId, title } });
-            setTitle('');
-            setIsEditing(false);
+            const project = state.projects.find(p => p.id === projectId);
+            if (!project) {
+                alert("Projektia ei löytynyt!");
+                return;
+            }
+            const newColumn: KanbanColumn = { id: uuidv4(), title: title.trim() };
+            const updatedProject = { ...project, columns: [...project.columns, newColumn] };
+
+            try {
+                await services.updateProject(updatedProject);
+                setTitle('');
+                setIsEditing(false);
+            } catch(err) {
+                console.error(err);
+                alert("Säiliön luonti epäonnistui.")
+            }
         }
     };
 
@@ -167,7 +204,15 @@ const AddColumn = ({ projectId }: { projectId: string }) => {
 
     return (
         <form onSubmit={handleSubmit} className="w-72 flex-shrink-0 p-3 bg-gray-100 rounded-lg">
-            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Säiliön nimi..." className="w-full p-2 border border-gray-300 rounded-md" />
+            <input
+              id="new-column-title"
+              name="new-column-title"
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Säiliön nimi..."
+              className="w-full p-2 border border-gray-300 rounded-md"
+            />
             <div className="mt-2 space-x-2">
                 <button type="submit" className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">Lisää</button>
                 <button type="button" onClick={() => setIsEditing(false)} className="px-3 py-1 text-sm rounded hover:bg-gray-200">Peruuta</button>
@@ -235,7 +280,7 @@ export default function KanbanView() {
       setDraggedItem({type, id});
   }
 
-  const handleDrop = (e: React.DragEvent, targetColumnId: string, targetColumnIndex: number) => {
+  const handleDrop = async (e: React.DragEvent, targetColumnId: string, targetColumnIndex: number) => {
     e.preventDefault();
     const type = e.dataTransfer.getData('type');
 
@@ -249,16 +294,19 @@ export default function KanbanView() {
         const isCompleted = targetColumnId === 'done';
         if (task.completed !== isCompleted || task.column_id !== targetColumnId) {
           const updatedTask = { ...task, column_id: targetColumnId, completed: isCompleted };
-          services.updateTask(updatedTask).catch((err: any) => {
+          try {
+            await services.updateTask(updatedTask);
+          } catch(err: any) {
               console.error("Failed to update task:", err);
-          });
+          }
         }
       }
     } else if (type === DND_TYPES.COLUMN && selectedProject && draggedColumnIndex !== null) {
-        dispatch({
-            type: 'REORDER_COLUMNS',
-            payload: { projectId: selectedProject.id, startIndex: draggedColumnIndex, endIndex: targetColumnIndex }
-        })
+        const reorderedColumns = Array.from(selectedProject.columns);
+        const [removed] = reorderedColumns.splice(draggedColumnIndex, 1);
+        reorderedColumns.splice(targetColumnIndex, 0, removed);
+        
+        await services.updateProject({ ...selectedProject, columns: reorderedColumns });
     }
     setDraggedItem(null);
     setDraggedColumnIndex(null);
