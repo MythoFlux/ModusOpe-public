@@ -1,13 +1,13 @@
 // src/components/Tasks/TaskList.tsx
 import React, { useMemo } from 'react';
-import { useApp, useAppServices } from '../../contexts/AppContext'; // KORJATTU
+import { useApp, useAppServices } from '../../contexts/AppContext';
 import { CheckSquare, Circle, Calendar, AlertCircle, Plus } from 'lucide-react';
 import { formatDate } from '../../utils/dateUtils';
 import { Task } from '../../types';
 
 export default function TaskList() {
   const { state, dispatch } = useApp();
-  const services = useAppServices(); // KORJATTU
+  const services = useAppServices();
   const { projects } = state;
 
   const allTasks = useMemo(() => projects.flatMap(project => 
@@ -21,12 +21,11 @@ export default function TaskList() {
   const completedTasks = useMemo(() => allTasks.filter(task => task.completed), [allTasks]);
   const pendingTasks = useMemo(() => allTasks.filter(task => !task.completed), [allTasks]);
 
-  const handleTaskClick = (task: Task) => {
-    const originalProject = projects.find(p => p.id === task.project_id);
-    const originalTask = originalProject?.tasks.find(t => t.id === task.id);
-    if (originalTask) {
-      dispatch({ type: 'TOGGLE_TASK_MODAL', payload: originalTask });
-    }
+  // KORJATTU: handleTaskClick-funktio on nyt yksinkertaisempi ja varmempi.
+  // Se poistaa ylimääräiset tiedot ja lähettää puhtaan tehtäväobjektin modaalille.
+  const handleTaskClick = (taskWithProjectInfo: Task & { project_name: string, project_color: string }) => {
+    const { project_name, project_color, ...originalTask } = taskWithProjectInfo;
+    dispatch({ type: 'TOGGLE_TASK_MODAL', payload: originalTask as Task });
   };
 
   const toggleTask = (e: React.MouseEvent, projectId: string, taskId: string, completed: boolean) => {
@@ -35,10 +34,8 @@ export default function TaskList() {
     const task = project?.tasks.find(t => t.id === taskId);
     
     if (task) {
-      // KORJATTU: Käytetään service-funktiota
       services.updateTask({ ...task, completed }).catch((err: any) => {
         console.error("Failed to toggle task:", err);
-        // Tässä voisi näyttää virheilmoituksen käyttäjälle
       });
     }
   };
@@ -54,7 +51,6 @@ export default function TaskList() {
       );
       const updatedTask = { ...task, subtasks: updatedSubtasks };
       
-      // KORJATTU: Käytetään service-funktiota
       services.updateTask(updatedTask).catch((err: any) => {
           console.error("Failed to toggle subtask:", err);
       });
@@ -69,7 +65,6 @@ export default function TaskList() {
     }
   };
 
-  // ... (JSX-osa pysyy samana) ...
   return (
     <div className="p-4 md:p-8">
       <div className="flex items-center justify-between">
@@ -89,7 +84,7 @@ export default function TaskList() {
             </div>
             <div className="divide-y divide-gray-200">
               {pendingTasks.map((task) => (
-                <div key={task.id} className="p-6 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => handleTaskClick(task as Task)}>
+                <div key={task.id} className="p-6 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => handleTaskClick(task)}>
                   <div className="flex items-start space-x-4">
                     <button onClick={(e) => toggleTask(e, task.project_id, task.id, true)} className="mt-1 text-gray-400 hover:text-blue-600 transition-colors z-10 relative">
                       <Circle className="w-5 h-5" />
@@ -129,7 +124,7 @@ export default function TaskList() {
             </div>
             <div className="divide-y divide-gray-200">
               {completedTasks.map((task) => (
-                <div key={task.id} className="p-6 hover:bg-gray-50 transition-colors opacity-60 cursor-pointer" onClick={() => handleTaskClick(task as Task)}>
+                <div key={task.id} className="p-6 hover:bg-gray-50 transition-colors opacity-60 cursor-pointer" onClick={() => handleTaskClick(task)}>
                   <div className="flex items-start space-x-4">
                     <button onClick={(e) => toggleTask(e, task.project_id, task.id, false)} className="mt-1 text-green-600 hover:text-gray-400 transition-colors z-10 relative">
                       <CheckSquare className="w-5 h-5" />
