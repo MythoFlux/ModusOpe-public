@@ -1,6 +1,6 @@
 // src/components/Tasks/TaskList.tsx
 import React, { useMemo } from 'react';
-import { useApp, useAppServices } from '../../contexts/AppContext';
+import { useApp, useAppServices } from '../../contexts/AppContext'; 
 import { CheckSquare, Circle, Calendar, AlertCircle, Plus } from 'lucide-react';
 import { formatDate } from '../../utils/dateUtils';
 import { Task } from '../../types';
@@ -10,9 +10,12 @@ export default function TaskList() {
   const services = useAppServices();
   const { projects } = state;
 
+  // KORJATTU: Lisätään 'client_project_id' jokaiseen tehtävään, jotta tiedämme
+  // mihin projektiin se kuuluu käyttöliittymän tilassa (erityisesti yleisille tehtäville).
   const allTasks = useMemo(() => projects.flatMap(project => 
     project.tasks.map(task => ({
       ...task,
+      client_project_id: project.id, 
       project_name: project.name,
       project_color: project.color
     }))
@@ -21,16 +24,16 @@ export default function TaskList() {
   const completedTasks = useMemo(() => allTasks.filter(task => task.completed), [allTasks]);
   const pendingTasks = useMemo(() => allTasks.filter(task => !task.completed), [allTasks]);
 
-  // KORJATTU: handleTaskClick-funktio on nyt yksinkertaisempi ja varmempi.
-  // Se poistaa ylimääräiset tiedot ja lähettää puhtaan tehtäväobjektin modaalille.
-  const handleTaskClick = (taskWithProjectInfo: Task & { project_name: string, project_color: string }) => {
-    const { project_name, project_color, ...originalTask } = taskWithProjectInfo;
+  const handleTaskClick = (taskWithProjectInfo: Task & { client_project_id: string, project_name: string, project_color: string }) => {
+    // Poistetaan ylimääräiset tiedot ennen modaalille lähettämistä
+    const { client_project_id, project_name, project_color, ...originalTask } = taskWithProjectInfo;
     dispatch({ type: 'TOGGLE_TASK_MODAL', payload: originalTask as Task });
   };
 
-  const toggleTask = (e: React.MouseEvent, projectId: string, taskId: string, completed: boolean) => {
+  // KORJATTU: Käytetään client_project_id:tä oikean projektin löytämiseen tilasta
+  const toggleTask = (e: React.MouseEvent, clientProjectId: string, taskId: string, completed: boolean) => {
     e.stopPropagation();
-    const project = projects.find(p => p.id === projectId);
+    const project = projects.find(p => p.id === clientProjectId);
     const task = project?.tasks.find(t => t.id === taskId);
     
     if (task) {
@@ -40,9 +43,10 @@ export default function TaskList() {
     }
   };
   
-  const toggleSubtask = (e: React.MouseEvent, projectId: string, taskId: string, subtaskId: string, completed: boolean) => {
+  // KORJATTU: Käytetään client_project_id:tä oikean projektin löytämiseen tilasta
+  const toggleSubtask = (e: React.MouseEvent, clientProjectId: string, taskId: string, subtaskId: string, completed: boolean) => {
     e.stopPropagation();
-    const project = projects.find(p => p.id === projectId);
+    const project = projects.find(p => p.id === clientProjectId);
     const task = project?.tasks.find(t => t.id === taskId);
 
     if (task && task.subtasks) {
@@ -86,7 +90,8 @@ export default function TaskList() {
               {pendingTasks.map((task) => (
                 <div key={task.id} className="p-6 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => handleTaskClick(task)}>
                   <div className="flex items-start space-x-4">
-                    <button onClick={(e) => toggleTask(e, task.project_id, task.id, true)} className="mt-1 text-gray-400 hover:text-blue-600 transition-colors z-10 relative">
+                    {/* KORJATTU: Välitetään client_project_id */}
+                    <button onClick={(e) => toggleTask(e, task.client_project_id, task.id, true)} className="mt-1 text-gray-400 hover:text-blue-600 transition-colors z-10 relative">
                       <Circle className="w-5 h-5" />
                     </button>
                     <div className="flex-1 min-w-0">
@@ -99,7 +104,8 @@ export default function TaskList() {
                         <div className="mt-2 space-y-2 pl-4 border-l-2 border-gray-200">
                           {task.subtasks.map(subtask => (
                             <div key={subtask.id} className="flex items-center space-x-2">
-                              <input type="checkbox" checked={subtask.completed} onClick={(e) => toggleSubtask(e, task.project_id, task.id, subtask.id, !subtask.completed)} className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 z-10 relative" />
+                              {/* KORJATTU: Vaihdettu onClick -> onChange ja välitetään client_project_id */}
+                              <input type="checkbox" checked={subtask.completed} onChange={(e) => toggleSubtask(e, task.client_project_id, task.id, subtask.id, !subtask.completed)} className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 z-10 relative" />
                               <span className={`text-sm ${subtask.completed ? 'line-through text-gray-500' : ''}`}> {subtask.title} </span>
                             </div>
                           ))}
@@ -126,7 +132,8 @@ export default function TaskList() {
               {completedTasks.map((task) => (
                 <div key={task.id} className="p-6 hover:bg-gray-50 transition-colors opacity-60 cursor-pointer" onClick={() => handleTaskClick(task)}>
                   <div className="flex items-start space-x-4">
-                    <button onClick={(e) => toggleTask(e, task.project_id, task.id, false)} className="mt-1 text-green-600 hover:text-gray-400 transition-colors z-10 relative">
+                    {/* KORJATTU: Välitetään client_project_id */}
+                    <button onClick={(e) => toggleTask(e, task.client_project_id, task.id, false)} className="mt-1 text-green-600 hover:text-gray-400 transition-colors z-10 relative">
                       <CheckSquare className="w-5 h-5" />
                     </button>
                     <div className="flex-1 min-w-0">
