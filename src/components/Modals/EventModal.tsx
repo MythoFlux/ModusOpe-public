@@ -14,7 +14,7 @@ import ColorSelector from '../Forms/ColorSelector';
 export default function EventModal() {
   const { state, dispatch } = useApp();
   const services = useAppServices();
-  const { showEventModal, selectedEvent, projects, events, session } = state;
+  const { showEventModal, selectedEvent, projects, session } = state;
   const { getConfirmation } = useConfirmation();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -31,28 +31,8 @@ export default function EventModal() {
   });
 
   const [files, setFiles] = useState<FileAttachment[]>([]);
-  
-  const [bulkEditOptions, setBulkEditOptions] = useState({
-    applyToAll: false,
-    start_date: '',
-    end_date: ''
-  });
 
-  const isRecurringEvent = selectedEvent?.schedule_template_id && selectedEvent.id.startsWith('recurring-');
-  
-  // KORJATTU: Lisätty tarkistus myös deadline-tyypeille
   const isDeadlineEvent = selectedEvent?.id.startsWith('project-deadline-') || selectedEvent?.id.startsWith('task-deadline-');
-
-  const similarEvents = React.useMemo(() => {
-    if (!selectedEvent || !isRecurringEvent || !selectedEvent.group_name) return [];
-    
-    return events.filter(event => 
-      event.id !== selectedEvent.id &&
-      event.title === selectedEvent.title &&
-      event.group_name === selectedEvent.group_name &&
-      event.id.startsWith('recurring-')
-    );
-  }, [selectedEvent, events, isRecurringEvent]);
 
   useEffect(() => {
     if (selectedEvent) {
@@ -68,16 +48,6 @@ export default function EventModal() {
         color: selectedEvent.color
       });
       setFiles(selectedEvent.files || []);
-      if (isRecurringEvent && similarEvents.length > 0) {
-        const allDates = [selectedEvent, ...similarEvents].map(e => new Date(e.date));
-        const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
-        const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
-        setBulkEditOptions({
-          applyToAll: false,
-          start_date: minDate.toISOString().split('T')[0],
-          end_date: maxDate.toISOString().split('T')[0]
-        });
-      }
     } else {
       setFormData({
         title: '',
@@ -90,17 +60,15 @@ export default function EventModal() {
         color: DEFAULT_COLOR
       });
       setFiles([]);
-      setBulkEditOptions({ applyToAll: false, start_date: '', end_date: '' });
     }
     setActiveTab('details');
-  }, [selectedEvent, state.selectedDate, isRecurringEvent, similarEvents]);
+  }, [selectedEvent, state.selectedDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // KORJATTU: Estetään deadline-eventtien muokkaus, koska ne ovat vain visualisointeja
     if (isDeadlineEvent) {
-      alert("Määräaikoja ei voi muokata suoraan kalenterista. Muokkaa sen sijaan projektia tai tehtävää, johon määräaika liittyy.");
+      alert("Määräaikoja ei voi muokata suoraan kalenterista. Muokkaa sen sijaan projektia tai tehtävää.");
       return;
     }
 
@@ -126,27 +94,12 @@ export default function EventModal() {
       type: formData.type,
       color: formData.color,
       project_id: formData.project_id || null,
-      schedule_template_id: selectedEvent?.schedule_template_id || undefined,
-      group_name: selectedEvent?.group_name || undefined,
       files: files
     };
     
     try {
         if (selectedEvent) {
             await services.updateEvent(eventData);
-    
-            if (bulkEditOptions.applyToAll && isRecurringEvent && similarEvents.length > 0) {
-                const startDate = new Date(bulkEditOptions.start_date);
-                const endDate = new Date(bulkEditOptions.end_date);
-        
-                for (const event of similarEvents) {
-                    const eventDate = new Date(event.date);
-                    if (eventDate >= startDate && eventDate <= endDate) {
-                        const updatedEvent: Event = { ...event, title: formData.title, description: formData.description, type: formData.type, color: formData.color, project_id: formData.project_id || undefined, files: files };
-                        await services.updateEvent(updatedEvent);
-                    }
-                }
-            }
         } else {
             const { id, ...newEventData } = eventData;
             await services.addEvent(newEventData);
@@ -160,67 +113,36 @@ export default function EventModal() {
   };
 
   const handleDelete = async () => {
-    if (selectedEvent) {
-      const isBulkDelete = bulkEditOptions.applyToAll && isRecurringEvent && similarEvents.length > 0;
-      
-      // KORJATTU: Tarkistetaan, onko kyseessä tehtävän deadline
-      const isTaskDeadline = selectedEvent.id.startsWith('task-deadline-');
-      const isProjectDeadline = selectedEvent.id.startsWith('project-deadline-');
+    if (!selectedEvent) return;
+    
+    let message = `Haluatko varmasti poistaa tapahtuman "${selectedEvent.title}"? Toimintoa ei voi perua.`;
+    let title = 'Vahvista poisto';
 
-      // KORJATTU: Muokataan vahvistusviestiä sen mukaan, mitä ollaan poistamassa.
-      let message = `Haluatko varmasti poistaa tapahtuman "${selectedEvent.title}"? Toimintoa ei voi perua.`;
-      if (isTaskDeadline) {
+    if (selectedEvent.id.startsWith('task-deadline-')) {
         const taskTitle = selectedEvent.title.replace('Tehtävä: ', '');
-        message = `Haluatko varmasti poistaa tehtävän "${taskTitle}"? Tämä poistaa tehtävän projektista pysyvästi. Toimintoa ei voi perua.`;
-      } else if (isProjectDeadline) {
+        message = `Haluatko varmasti poistaa tehtävän "${taskTitle}"? Tämä poistaa tehtävän pysyvästi.`;
+        title = 'Vahvista tehtävän poisto';
+    } else if (selectedEvent.id.startsWith('project-deadline-')) {
         alert("Projektin määräaikaa ei voi poistaa kalenterista. Poista projekti tai sen päättymispäivä projektinäkymästä.");
         return;
-      } else if (isBulkDelete) {
-         let eventsToDeleteCount = 1;
-         const startDate = new Date(bulkEditOptions.start_date);
-         const endDate = new Date(bulkEditOptions.end_date);
-         eventsToDeleteCount += similarEvents.filter(event => {
-             const eventDate = new Date(event.date);
-             return eventDate >= startDate && eventDate <= endDate;
-         }).length;
-         message = `Haluatko varmasti poistaa ${eventsToDeleteCount} tapahtumaa tästä sarjasta? Toimintoa ei voi perua.`;
-      }
+    }
 
-      const confirmed = await getConfirmation({ title: 'Vahvista poisto', message });
+    const confirmed = await getConfirmation({ title, message });
 
-      if (confirmed) {
-        setIsLoading(true);
-        try {
-            // KORJATTU: Lisätty logiikka tehtävän poistamiselle
-            if (isTaskDeadline) {
-                const taskId = selectedEvent.id.replace('task-deadline-', '');
-                const projectId = selectedEvent.project_id;
-                if (projectId && taskId) {
-                    await services.deleteTask(projectId, taskId);
-                } else {
-                    throw new Error("Tehtävän tai projektin tietoja puuttuu, poisto epäonnistui.");
-                }
-            } else if (isBulkDelete) {
-                // Tämä logiikka säilyy ennallaan toistuville tapahtumille
-                const startDate = new Date(bulkEditOptions.start_date);
-                const endDate = new Date(bulkEditOptions.end_date);
-                for (const event of similarEvents) {
-                    const eventDate = new Date(event.date);
-                    if (eventDate >= startDate && eventDate <= endDate) {
-                        await services.deleteEvent(event.id);
-                    }
-                }
-                await services.deleteEvent(selectedEvent.id);
-            } else {
-                // Oletus: poistetaan normaali tapahtuma
-                await services.deleteEvent(selectedEvent.id);
-            }
-            dispatch({ type: 'CLOSE_MODALS' });
-        } catch (error: any) {
-            alert(`Poisto epäonnistui: ${error.message}`);
-        } finally {
-            setIsLoading(false);
-        }
+    if (confirmed) {
+      setIsLoading(true);
+      try {
+          if (selectedEvent.id.startsWith('task-deadline-') && selectedEvent.project_id) {
+              const taskId = selectedEvent.id.replace('task-deadline-', '');
+              await services.deleteTask(selectedEvent.project_id, taskId);
+          } else {
+              await services.deleteEvent(selectedEvent.id);
+          }
+          dispatch({ type: 'CLOSE_MODALS' });
+      } catch (error: any) {
+          alert(`Poisto epäonnistui: ${error.message}`);
+      } finally {
+          setIsLoading(false);
       }
     }
   };
@@ -260,7 +182,7 @@ export default function EventModal() {
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 placeholder="Tapahtuman otsikko"
-                disabled={isDeadlineEvent} // Estetään muokkaus
+                disabled={isDeadlineEvent}
               />
               <FormTextarea
                 id="event-description"
@@ -270,7 +192,7 @@ export default function EventModal() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
                 placeholder="Tapahtuman kuvaus"
-                disabled={isDeadlineEvent} // Estetään muokkaus
+                disabled={isDeadlineEvent}
               />
               <FormInput
                 id="event-date"
@@ -280,7 +202,7 @@ export default function EventModal() {
                 required
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                disabled={isDeadlineEvent} // Estetään muokkaus
+                disabled={isDeadlineEvent}
               />
               <div className="grid grid-cols-2 gap-4">
                 <FormInput
@@ -290,7 +212,7 @@ export default function EventModal() {
                   type="time"
                   value={formData.start_time}
                   onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                  disabled={isDeadlineEvent} // Estetään muokkaus
+                  disabled={isDeadlineEvent}
                 />
                 <FormInput
                   id="end_time"
@@ -298,7 +220,7 @@ export default function EventModal() {
                   type="time"
                   value={formData.end_time}
                   onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                  disabled={isDeadlineEvent} // Estetään muokkaus
+                  disabled={isDeadlineEvent}
                 />
               </div>
               <FormSelect
@@ -306,7 +228,7 @@ export default function EventModal() {
                 label="Tyyppi"
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value as Event['type'] })}
-                disabled={isDeadlineEvent} // Estetään muokkaus
+                disabled={isDeadlineEvent}
               >
                 <option value="class">Tunti</option>
                 <option value="meeting">Kokous</option>
@@ -324,7 +246,7 @@ export default function EventModal() {
                 label="Projekti (valinnainen)"
                 value={formData.project_id}
                 onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                disabled={isDeadlineEvent} // Estetään muokkaus
+                disabled={isDeadlineEvent}
               >
                 <option value="">Ei projektia</option>
                 {projects.map(project => (
@@ -333,29 +255,6 @@ export default function EventModal() {
                   </option>
                 ))}
               </FormSelect>
-
-              {isRecurringEvent && similarEvents.length > 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg space-y-3">
-                  <h4 className="font-semibold text-yellow-800">Sarjan muokkaus</h4>
-                  <div className="flex items-start">
-                    <input
-                      type="checkbox"
-                      id="applyToAll"
-                      className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      checked={bulkEditOptions.applyToAll}
-                      onChange={(e) => setBulkEditOptions({ ...bulkEditOptions, applyToAll: e.target.checked })}
-                    />
-                    <div className="ml-3 text-sm">
-                      <label htmlFor="applyToAll" className="font-medium text-gray-900">
-                        Sovella muutokset koko sarjaan
-                      </label>
-                      <p className="text-gray-600">
-                        Muutokset (myös poisto) koskevat kaikkia tämän sarjan tapahtumia aikavälillä {new Date(bulkEditOptions.start_date).toLocaleDateString('fi-FI')} - {new Date(bulkEditOptions.end_date).toLocaleDateString('fi-FI')}.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </form>
           ) : (
             <AttachmentSection 
@@ -387,7 +286,7 @@ export default function EventModal() {
               <button
                 type="submit"
                 form="event-details-form"
-                disabled={isLoading || isDeadlineEvent} // KORJATTU: Estetään tallennus jos kyseessä on deadline
+                disabled={isLoading || isDeadlineEvent}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
               >
                 {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
