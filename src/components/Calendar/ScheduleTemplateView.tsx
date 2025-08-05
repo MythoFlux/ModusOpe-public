@@ -11,7 +11,7 @@ export default function ScheduleTemplateView() {
   const { scheduleTemplates } = state;
 
   const weekDays = ['Ma', 'Ti', 'Ke', 'To', 'Pe'];
-  const timeSlots = Array.from({ length: 10 }, (_, i) => {
+  const timeSlots = Array.from({ length: 9 }, (_, i) => {
     const hour = (i + 8).toString().padStart(2, '0');
     return `${hour}:00`;
   });
