@@ -1,6 +1,6 @@
 // src/components/Modals/EventModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, Type, FileText, File, Loader2, AlertTriangle } from 'lucide-react';
+import { X, Calendar, Clock, Type, FileText, File, Loader2, AlertTriangle, Info } from 'lucide-react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
 import { useConfirmation } from '../../hooks/useConfirmation';
 import { Event, FileAttachment } from '../../types';
@@ -22,6 +22,7 @@ export default function EventModal() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
+    more_info: '',
     date: '',
     start_time: '',
     end_time: '',
@@ -41,6 +42,7 @@ export default function EventModal() {
       setFormData({
         title: selectedEvent.title,
         description: selectedEvent.description || '',
+        more_info: selectedEvent.more_info || '',
         date: eventDate.toISOString().split('T')[0],
         start_time: selectedEvent.start_time || '',
         end_time: selectedEvent.end_time || '',
@@ -53,6 +55,7 @@ export default function EventModal() {
       setFormData({
         title: '',
         description: '',
+        more_info: '',
         date: state.selectedDate.toISOString().split('T')[0],
         start_time: '',
         end_time: '',
@@ -90,6 +93,7 @@ export default function EventModal() {
       id: selectedEvent?.id || '',
       title: formData.title,
       description: formData.description,
+      more_info: formData.more_info,
       date: eventDate,
       start_time: formData.start_time || undefined,
       end_time: formData.end_time || undefined,
@@ -194,6 +198,16 @@ export default function EventModal() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
                 placeholder="Tapahtuman kuvaus"
+                disabled={isDeadlineEvent}
+              />
+               <FormTextarea
+                id="event-more-info"
+                label="Lisätietoa (esim. linkit)"
+                icon={<Info className="w-4 h-4 inline mr-2" />}
+                value={formData.more_info}
+                onChange={(e) => setFormData({ ...formData, more_info: e.target.value })}
+                rows={2}
+                placeholder="Lisää linkkejä tai muuta tärkeää tietoa"
                 disabled={isDeadlineEvent}
               />
               <FormInput
