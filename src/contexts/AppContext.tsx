@@ -298,25 +298,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...data, 
         due_date: data.due_date ? new Date(data.due_date) : undefined,
       };
-      dispatch({ type: 'ADD_TASK_SUCCESS', payload: { projectId: data.project_id, task: newTask as Task } });
+      // KORJATTU: Varmistetaan, että null project_id ohjautuu oikeaan paikkaan
+      dispatch({ type: 'ADD_TASK_SUCCESS', payload: { projectId: data.project_id || GENERAL_TASKS_PROJECT_ID, task: newTask as Task } });
     }, []),
 
     updateTask: useCallback(async (task: Task) => {
       const { error } = await supabase.from('tasks').update(task).match({ id: task.id });
       if (error) throw new Error(error.message);
-      dispatch({ type: 'UPDATE_TASK_SUCCESS', payload: { projectId: task.project_id, task: task } });
+      // KORJATTU: Varmistetaan, että null project_id ohjautuu oikeaan paikkaan
+      dispatch({ type: 'UPDATE_TASK_SUCCESS', payload: { projectId: task.project_id || GENERAL_TASKS_PROJECT_ID, task: task } });
     }, []),
     
     deleteTask: useCallback(async (projectId: string, taskId: string) => {
       const { error } = await supabase.from('tasks').delete().match({ id: taskId });
       if (error) throw new Error(error.message);
-      dispatch({ type: 'DELETE_TASK_SUCCESS', payload: { projectId, taskId } });
+      // KORJATTU: Varmistetaan, että null project_id ohjautuu oikeaan paikkaan
+      dispatch({ type: 'DELETE_TASK_SUCCESS', payload: { projectId: projectId || GENERAL_TASKS_PROJECT_ID, taskId } });
     }, []),
     
     updateTaskStatus: useCallback(async (projectId: string, taskId: string, newStatus: string) => {
         const { error } = await supabase.from('tasks').update({ column_id: newStatus }).match({ id: taskId });
         if (error) throw new Error(error.message);
-        dispatch({ type: 'UPDATE_TASK_STATUS_SUCCESS', payload: { projectId, taskId, newStatus } });
+        // KORJATTU: Varmistetaan, että null project_id ohjautuu oikeaan paikkaan
+        dispatch({ type: 'UPDATE_TASK_STATUS_SUCCESS', payload: { projectId: projectId || GENERAL_TASKS_PROJECT_ID, taskId, newStatus } });
     }, []),
     
     // EVENTS
