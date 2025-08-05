@@ -27,6 +27,7 @@ export interface Event {
   schedule_template_id?: string;
   group_name?: string;
   files?: FileAttachment[];
+  more_info?: string;
 }
 
 export interface Project {
@@ -41,6 +42,7 @@ export interface Project {
   tasks: Task[];
   columns: KanbanColumn[];
   files?: FileAttachment[];
+  more_info?: string;
 }
 
 export interface Subtask {
