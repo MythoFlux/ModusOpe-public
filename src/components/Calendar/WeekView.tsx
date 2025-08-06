@@ -199,87 +199,72 @@ export default function WeekView() {
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
-        <div className="sticky top-0 bg-white z-20">
-            <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: gridColumns }}>
-              <div className="py-4 px-2 text-center"></div>
-              {displayDates.map((date, index) => (
-                <div key={`header-${index}`} className="py-2 px-2 text-center border-l border-gray-200">
-                  <div className="text-sm font-medium text-gray-600">{displayDays[index]}</div>
-                  <div className={`text-lg font-semibold mt-1 ${isToday(date) ? 'bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mx-auto' : 'text-gray-900'}`}>{date.getDate()}.</div>
-                </div>
-              ))}
+        <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
+          {/* Header */}
+          <div className="sticky top-0 bg-white z-20 col-start-1 col-end-1 row-start-1 row-end-1"></div>
+          {displayDates.map((date, index) => (
+            <div key={`header-${index}`} className="sticky top-0 bg-white z-20 py-2 px-2 text-center border-b border-l border-gray-200">
+              <div className="text-sm font-medium text-gray-600">{displayDays[index]}</div>
+              <div className={`text-lg font-semibold mt-1 ${isToday(date) ? 'bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mx-auto' : 'text-gray-900'}`}>{date.getDate()}.</div>
             </div>
+          ))}
 
-            <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
-                <div className="py-1 px-2 text-xs text-gray-500 text-right flex items-center justify-end border-r border-gray-200">koko pv</div>
-                {displayDates.map((date, index) => {
-                    const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
-                    return (
-                        <div key={`allday-${index}`} className="p-1 border-l border-gray-200 min-h-[30px] space-y-1">
-                            {allDayEvents.map(event => (
-                                <div
-                                    key={event.id}
-                                    onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                    className="text-xs p-1 rounded truncate cursor-pointer hover:opacity-80 transition-opacity"
-                                    style={{ backgroundColor: event.color + '20', color: event.color, borderLeft: `3px solid ${event.color}` }}
-                                >
-                                    {event.title}
-                                </div>
-                            ))}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
+          {/* All-day Events Row */}
+          <div className="sticky top-[74px] bg-white z-20 py-1 px-2 text-xs text-gray-500 text-right flex items-center justify-end border-b border-l-0 border-r border-gray-200">koko pv</div>
+          {displayDates.map((date, index) => {
+            const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
+            return (
+              <div key={`allday-${index}`} className="sticky top-[74px] bg-white z-20 p-1 border-b border-l border-gray-200 min-h-[30px] space-y-1">
+                {allDayEvents.map(event => (
+                  <div
+                    key={event.id}
+                    onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
+                    className="text-xs p-1 rounded truncate cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{ backgroundColor: event.color + '20', color: event.color, borderLeft: `3px solid ${event.color}` }}
+                  >
+                    {event.title}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          
+          {/* Timed Events Grid */}
+          <div className="col-start-1 row-start-3 border-r border-gray-200">
+            {timeSlots.map((time) => (
+              <div key={time} className="h-12 text-xs text-gray-500 pr-2 text-right flex items-start pt-1">{time}</div>
+            ))}
+          </div>
 
-        <div className="relative border-t border-gray-200">
-            <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
-                <div className="col-start-1 border-r border-gray-200">
-                    {timeSlots.map((time) => (
-                        <div key={time} className="h-12 text-xs text-gray-500 pr-2 text-right flex items-start">{time}</div>
-                    ))}
-                </div>
-                <div className="col-start-2 col-span-full grid" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)` }}>
-                    {displayDates.map((_, dateIndex) => (
-                         <div key={dateIndex} className="border-l border-gray-200">
-                             {timeSlots.map((time) => (
-                                 <div key={time} className="h-12 border-b border-gray-100" />
-                             ))}
-                         </div>
-                    ))}
-                </div>
-            </div>
-            <div className="absolute top-0 left-0 w-full h-full grid" style={{ gridTemplateColumns: gridColumns }}>
-                <div className="col-start-1"></div>
-                 {displayDates.map((date, dateIndex) => {
-                    const timedEvents = laidOutEventsByDay.get(date.toISOString().split('T')[0]) || [];
-                    return (
-                        <div key={dateIndex} className="relative">
-                             {timedEvents.map((event) => {
-                                return (
-                                    <div
-                                        key={event.id}
-                                        onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                        className="absolute rounded p-1 cursor-pointer hover:opacity-80 transition-opacity text-xs z-10"
-                                        style={{
-                                            top: `${event.layout.top}px`,
-                                            height: `${event.layout.height}px`,
-                                            left: event.layout.left,
-                                            width: event.layout.width,
-                                            backgroundColor: event.color + '20',
-                                            borderLeft: `3px solid ${event.color}`,
-                                            minHeight: '20px'
-                                        }}
-                                    >
-                                        <div className="font-medium text-gray-900 truncate">{event.title}</div>
-                                        {event.start_time && (<div className="text-gray-600 text-xs">{formatTimeString(event.start_time)}{event.end_time && ` - ${formatTimeString(event.end_time)}`}</div>)}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    );
-                 })}
-            </div>
+          {displayDates.map((date, dateIndex) => {
+            const timedEvents = laidOutEventsByDay.get(date.toISOString().split('T')[0]) || [];
+            return (
+              <div key={dateIndex} className="relative col-start-2 row-start-3" style={{ gridColumn: `${dateIndex + 2}`}}>
+                {timeSlots.map((_, timeIndex) => (
+                  <div key={timeIndex} className="h-12 border-b border-l border-gray-100" />
+                ))}
+                {timedEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
+                    className="absolute rounded p-1 cursor-pointer hover:opacity-80 transition-opacity text-xs z-10"
+                    style={{
+                      top: `${event.layout.top}px`,
+                      height: `${event.layout.height}px`,
+                      left: event.layout.left,
+                      width: event.layout.width,
+                      backgroundColor: event.color + '20',
+                      borderLeft: `3px solid ${event.color}`,
+                      minHeight: '20px'
+                    }}
+                  >
+                    <div className="font-medium text-gray-900 truncate">{event.title}</div>
+                    {event.start_time && (<div className="text-gray-600 text-xs">{formatTimeString(event.start_time)}{event.end_time && ` - ${formatTimeString(event.end_time)}`}</div>)}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
