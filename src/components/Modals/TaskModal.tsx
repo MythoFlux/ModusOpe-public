@@ -195,8 +195,9 @@ export default function TaskModal() {
                 onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
               >
                 <option value="">Ei projektia (Yleiset tehtävät)</option>
-                {projects
+                {[...projects]
                   .filter(project => project.id !== GENERAL_TASKS_PROJECT_ID)
+                  .sort((a, b) => a.name.localeCompare(b.name))
                   .map(project => (
                     <option key={project.id} value={project.id}>
                       {project.name}
