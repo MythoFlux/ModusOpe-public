@@ -265,7 +265,9 @@ export default function EventModal() {
                 disabled={isDeadlineEvent}
               >
                 <option value="">Ei projektia</option>
-                {projects.map(project => (
+                {[...projects]
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map(project => (
                   <option key={project.id} value={project.id}>
                     {project.name}
                   </option>
