@@ -6,6 +6,104 @@ import { Event } from '../../types';
 import { Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 
+// Apufunktio tapahtumien asettelun laskemiseen
+const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[]) => {
+  return useMemo(() => {
+    const layoutMap = new Map<string, (Event & { layout: { top: number; height: number; left: string; width: string } })[]>();
+
+    displayDates.forEach(date => {
+      const dayKey = date.toISOString().split('T')[0];
+      const timedEvents = (eventsByDay.get(dayKey) || [])
+        .filter(e => !!e.start_time)
+        .sort((a, b) => {
+          const aStartTime = a.start_time || '00:00';
+          const bStartTime = b.start_time || '00:00';
+          return aStartTime.localeCompare(bStartTime);
+        });
+
+      if (timedEvents.length === 0) {
+        layoutMap.set(dayKey, []);
+        return;
+      }
+
+      // Muunnetaan tapahtumat minuuteiksi päivän alusta
+      const eventsWithMinutes = timedEvents.map(event => {
+        const eventDate = new Date(event.date);
+        const startMinutes = eventDate.getHours() * 60 + eventDate.getMinutes();
+        let endMinutes;
+        if (event.end_time) {
+          const [endHour, endMinute] = event.end_time.split(':').map(Number);
+          endMinutes = endHour * 60 + endMinute;
+        } else {
+          endMinutes = startMinutes + 60; // Oletuskesto 60 min
+        }
+        return { ...event, startMinutes, endMinutes };
+      });
+
+      // Ryhmitellään päällekkäiset tapahtumat
+      const clusters: (typeof eventsWithMinutes)[] = [];
+      if (eventsWithMinutes.length > 0) {
+        let currentCluster = [eventsWithMinutes[0]];
+        for (let i = 1; i < eventsWithMinutes.length; i++) {
+          const event = eventsWithMinutes[i];
+          const lastEventInCluster = currentCluster[currentCluster.length - 1];
+          if (event.startMinutes < lastEventInCluster.endMinutes) {
+            currentCluster.push(event);
+          } else {
+            clusters.push(currentCluster);
+            currentCluster = [event];
+          }
+        }
+        clusters.push(currentCluster);
+      }
+
+      const dayLayoutEvents: (Event & { layout: any })[] = [];
+
+      clusters.forEach(cluster => {
+        const columns: (typeof cluster)[] = [];
+        cluster.forEach(event => {
+          let placed = false;
+          for (let i = 0; i < columns.length; i++) {
+            const lastEventInColumn = columns[i][columns[i].length - 1];
+            if (lastEventInColumn.endMinutes <= event.startMinutes) {
+              columns[i].push(event);
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) {
+            columns.push([event]);
+          }
+        });
+
+        const totalColumns = columns.length;
+        columns.forEach((column, colIndex) => {
+          column.forEach(event => {
+            const hourRowHeight = 48; // Yhden tunnin rivin korkeus px
+            const top = (event.startMinutes / 60) * hourRowHeight;
+            const height = ((event.endMinutes - event.startMinutes) / 60) * hourRowHeight;
+
+            dayLayoutEvents.push({
+              ...event,
+              layout: {
+                top,
+                height: Math.max(height, 20),
+                width: `calc(${100 / totalColumns}% - 4px)`,
+                left: `calc(${(colIndex / totalColumns) * 100}% + 2px)`,
+              }
+            });
+          });
+        });
+      });
+
+      layoutMap.set(dayKey, dayLayoutEvents);
+    });
+
+    return layoutMap;
+  }, [eventsByDay, displayDates]);
+};
+
+
 export default function WeekView() {
   const { state, dispatch } = useApp();
   const { selectedDate, events } = state;
@@ -50,12 +148,14 @@ export default function WeekView() {
     return map;
   }, [displayDates, events]);
 
+  const laidOutEventsByDay = useEventLayout(eventsByDay, displayDates);
+
   const handleEventClick = (event: Event) => {
-    if (event.type === 'deadline' && event.project_id) { // KORJATTU
-      if (event.project_id === GENERAL_TASKS_PROJECT_ID) { // KORJATTU
+    if (event.type === 'deadline' && event.project_id) {
+      if (event.project_id === GENERAL_TASKS_PROJECT_ID) {
         return; 
       }
-      dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id }); // KORJATTU
+      dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id });
     } else {
       dispatch({ type: 'TOGGLE_EVENT_MODAL', payload: event });
     }
@@ -152,31 +252,20 @@ export default function WeekView() {
             <div className="absolute top-0 left-0 w-full h-full grid" style={{ gridTemplateColumns: gridColumns }}>
                 <div className="col-start-1"></div>
                  {displayDates.map((date, dateIndex) => {
-                    const timedEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !!e.start_time);
+                    const timedEvents = laidOutEventsByDay.get(date.toISOString().split('T')[0]) || [];
                     return (
                         <div key={dateIndex} className="relative">
                              {timedEvents.map((event) => {
-                                const eventDate = new Date(event.date);
-                                const startHour = eventDate.getHours();
-                                const startMinute = eventDate.getMinutes();
-                                const top = (startHour * 48) + (startMinute * 48 / 60);
-
-                                let height = 48;
-                                if (event.end_time && event.start_time) {
-                                    const [endHour, endMinute] = event.end_time.split(':').map(Number);
-                                    const [startHourTime, startMinuteTime] = event.start_time.split(':').map(Number);
-                                    const duration = (endHour - startHourTime) + ((endMinute - startMinuteTime) / 60);
-                                    height = duration * 48;
-                                }
-
                                 return (
                                     <div
                                         key={event.id}
                                         onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                        className="absolute left-1 right-1 rounded p-1 cursor-pointer hover:opacity-80 transition-opacity text-xs z-10"
+                                        className="absolute rounded p-1 cursor-pointer hover:opacity-80 transition-opacity text-xs z-10"
                                         style={{
-                                            top: `${top}px`,
-                                            height: `${Math.max(height, 20)}px`,
+                                            top: `${event.layout.top}px`,
+                                            height: `${event.layout.height}px`,
+                                            left: event.layout.left,
+                                            width: event.layout.width,
                                             backgroundColor: event.color + '20',
                                             borderLeft: `3px solid ${event.color}`,
                                             minHeight: '20px'
