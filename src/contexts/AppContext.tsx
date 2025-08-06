@@ -296,50 +296,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'ADD_EVENT_SUCCESS', payload: newEvent as Event });
     }, [state.session]),
     
-    updateEvent: useCallback(async (event: Event, updateAll?: boolean) => {
-      if (updateAll && event.project_id && event.type === 'class') {
-        // Hakee kaikki kurssin oppitunnit
-        const { data: courseEvents, error: fetchError } = await supabase
-          .from('events')
-          .select('id')
-          .eq('project_id', event.project_id)
-          .eq('type', 'class');
-    
-        if (fetchError) throw new Error(fetchError.message);
-    
-        // Rakentaa päivitettävät tiedot
+    updateEvent: useCallback(async (event: Event, options: { scope: 'single' | 'future' | 'all' | 'range', range: { start: string, end: string } }) => {
+        const { scope, range } = options;
+
+        if (scope === 'single' || !event.project_id || event.type !== 'class' || !event.group_name) {
+            const { group_name, ...eventToUpdate } = event;
+            const { error } = await supabase.from('events').update(eventToUpdate).match({ id: event.id });
+            if (error) throw new Error(error.message);
+            dispatch({ type: 'UPDATE_EVENT_SUCCESS', payload: event });
+            return;
+        }
+
         const updatedFields = {
-          title: event.title,
-          description: event.description,
-          more_info: event.more_info,
-          color: event.color,
-          files: event.files,
+            title: event.title,
+            description: event.description,
+            more_info: event.more_info,
+            color: event.color,
+            files: event.files,
         };
 
-        // Luo päivityspyynnöt jokaiselle tapahtumalle
-        const updatePromises = courseEvents.map((e: { id: string }) => 
-          supabase.from('events').update(updatedFields).match({ id: e.id })
-        );
-        
-        // Suorittaa kaikki päivitykset
-        const results = await Promise.all(updatePromises);
-        const aFailure = results.find(res => res.error);
-        if (aFailure) throw new Error(aFailure.error.message);
+        let query = supabase.from('events').update(updatedFields)
+            .eq('project_id', event.project_id)
+            .eq('group_name', event.group_name);
 
-        // Päivittää tilan käyttöliittymässä
-        const updatedEventList = state.events.map(e => 
-          e.project_id === event.project_id && e.type === 'class'
-            ? { ...e, ...updatedFields } 
-            : e
-        );
-        dispatch({ type: 'UPDATE_MULTIPLE_EVENTS_SUCCESS', payload: updatedEventList });
+        switch (scope) {
+            case 'future':
+                query = query.gte('date', new Date(event.date).toISOString().split('T')[0]);
+                break;
+            case 'range':
+                if (range.start) query = query.gte('date', new Date(range.start).toISOString().split('T')[0]);
+                if (range.end) query = query.lte('date', new Date(range.end).toISOString().split('T')[0]);
+                break;
+            case 'all':
+            default:
+                break;
+        }
+
+        const { data: updatedData, error: updateError } = await query.select();
+        if (updateError) throw new Error(updateError.message);
         
-      } else {
-        // Yksittäisen tapahtuman päivitys
-        const { error } = await supabase.from('events').update(event).match({ id: event.id });
-        if (error) throw new Error(error.message);
-        dispatch({ type: 'UPDATE_EVENT_SUCCESS', payload: event });
-      }
+        const updatedEventList = state.events.map(e => {
+            const updatedVersion = updatedData.find(u => u.id === e.id);
+            if (updatedVersion) {
+                return { ...e, ...updatedFields };
+            }
+            return e;
+        });
+
+        dispatch({ type: 'UPDATE_MULTIPLE_EVENTS_SUCCESS', payload: updatedEventList });
     }, [state.events]),
     
     deleteEvent: useCallback(async (eventId: string) => {
