@@ -199,7 +199,9 @@ export default function CourseModal() {
                           }}
                       >
                           <option value="">Ei valintaa (luo tyhjä kurssi)</option>
-                          {[...new Set(scheduleTemplates.map(t => t.name))].map(groupName => (
+                          {[...new Set(scheduleTemplates.map(t => t.name))]
+                            .sort((a, b) => a.localeCompare(b))
+                            .map(groupName => (
                               <option key={groupName} value={groupName}>
                                   {groupName}
                               </option>
