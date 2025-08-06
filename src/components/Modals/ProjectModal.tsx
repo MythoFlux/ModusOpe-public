@@ -224,7 +224,9 @@ export default function ProjectModal() {
                     onChange={(e) => setFormData({ ...formData, parent_course_id: e.target.value })}
                   >
                     <option value="">Ei liitetty kurssiin</option>
-                    {courses.map(course => (
+                    {[...courses]
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(course => (
                       <option key={course.id} value={course.id}>
                         {course.name}
                       </option>
