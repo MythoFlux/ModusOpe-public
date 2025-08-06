@@ -210,8 +210,8 @@ export default function WeekView() {
               ))}
             </div>
 
-            <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: gridColumns }}>
-                <div className="py-1 px-2 text-xs text-gray-500 text-right flex items-center justify-end">koko pv</div>
+            <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
+                <div className="py-1 px-2 text-xs text-gray-500 text-right flex items-center justify-end border-r border-gray-200">koko pv</div>
                 {displayDates.map((date, index) => {
                     const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
                     return (
@@ -232,9 +232,9 @@ export default function WeekView() {
             </div>
         </div>
 
-        <div className="relative">
+        <div className="relative border-t border-gray-200">
             <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
-                <div className="col-start-1">
+                <div className="col-start-1 border-r border-gray-200">
                     {timeSlots.map((time) => (
                         <div key={time} className="h-12 text-xs text-gray-500 pr-2 text-right flex items-start">{time}</div>
                     ))}
