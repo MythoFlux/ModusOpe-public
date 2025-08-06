@@ -11,6 +11,8 @@ import FormTextarea from '../Forms/FormTextarea';
 import FormSelect from '../Forms/FormSelect';
 import ColorSelector from '../Forms/ColorSelector';
 
+type UpdateScope = 'single' | 'future' | 'all' | 'range';
+
 export default function EventModal() {
   const { state, dispatch } = useApp();
   const services = useAppServices();
@@ -30,8 +32,11 @@ export default function EventModal() {
     project_id: '',
     color: DEFAULT_COLOR
   });
-  
-  const [updateAllInCourse, setUpdateAllInCourse] = useState(false);
+
+  // New state for update scope
+  const [updateScope, setUpdateScope] = useState<UpdateScope>('single');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+
   const [files, setFiles] = useState<FileAttachment[]>([]);
 
   const isDeadlineEvent = selectedEvent?.id.startsWith('project-deadline-') || selectedEvent?.id.startsWith('task-deadline-');
@@ -51,6 +56,11 @@ export default function EventModal() {
         color: selectedEvent.color
       });
       setFiles(selectedEvent.files || []);
+      // Set default date range when modal opens
+      setDateRange({
+          start: eventDate.toISOString().split('T')[0],
+          end: ''
+      });
     } else {
       setFormData({
         title: '',
@@ -65,13 +75,13 @@ export default function EventModal() {
       });
       setFiles([]);
     }
-    setUpdateAllInCourse(false); // Resetoi valintaruutu aina modaalin avautuessa
+    setUpdateScope('single');
     setActiveTab('details');
   }, [selectedEvent, state.selectedDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (isDeadlineEvent) {
       alert("Määräaikoja ei voi muokata suoraan kalenterista. Muokkaa sen sijaan projektia tai tehtävää.");
       return;
@@ -100,12 +110,17 @@ export default function EventModal() {
       type: formData.type,
       color: formData.color,
       project_id: formData.project_id || null,
-      files: files
+      files: files,
+      group_name: selectedEvent?.group_name
     };
-    
+
     try {
         if (selectedEvent) {
-            await services.updateEvent(eventData, updateAllInCourse);
+            const updateOptions = {
+                scope: updateScope,
+                range: dateRange,
+            };
+            await services.updateEvent(eventData, updateOptions);
         } else {
             const { id, ...newEventData } = eventData;
             await services.addEvent(newEventData);
@@ -120,7 +135,7 @@ export default function EventModal() {
 
   const handleDelete = async () => {
     if (!selectedEvent) return;
-    
+
     let message = `Haluatko varmasti poistaa tapahtuman "${selectedEvent.title}"? Toimintoa ei voi perua.`;
     let title = 'Vahvista poisto';
 
@@ -218,7 +233,7 @@ export default function EventModal() {
                 required
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                disabled={isDeadlineEvent || updateAllInCourse}
+                disabled={isDeadlineEvent || updateScope !== 'single'}
               />
               <div className="grid grid-cols-2 gap-4">
                 <FormInput
@@ -228,7 +243,7 @@ export default function EventModal() {
                   type="time"
                   value={formData.start_time}
                   onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                  disabled={isDeadlineEvent || updateAllInCourse}
+                  disabled={isDeadlineEvent || updateScope !== 'single'}
                 />
                 <FormInput
                   id="end_time"
@@ -236,7 +251,7 @@ export default function EventModal() {
                   type="time"
                   value={formData.end_time}
                   onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                  disabled={isDeadlineEvent || updateAllInCourse}
+                  disabled={isDeadlineEvent || updateScope !== 'single'}
                 />
               </div>
               <FormSelect
@@ -252,7 +267,7 @@ export default function EventModal() {
                 <option value="assignment">Tehtävä</option>
                 <option value="personal">Henkilökohtainen</option>
               </FormSelect>
-              <ColorSelector 
+              <ColorSelector
                 label="Väri"
                 selectedColor={formData.color}
                 onChange={(color) => setFormData({ ...formData, color })}
@@ -273,38 +288,51 @@ export default function EventModal() {
                   </option>
                 ))}
               </FormSelect>
-              
+
               {selectedEvent?.type === 'class' && selectedEvent.project_id && (
                 <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0">
-                      <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                    <div className="flex items-start">
+                        <div className="flex-shrink-0">
+                            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                        </div>
+                        <div className="ml-3">
+                            <p className="text-sm font-medium text-yellow-800">
+                                Toistuvan tapahtuman muokkaus
+                            </p>
+                            <div className="mt-2 text-sm text-yellow-700 space-y-2">
+                                <label className="flex items-center space-x-2">
+                                    <input type="radio" name="updateScope" value="single" checked={updateScope === 'single'} onChange={() => setUpdateScope('single')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
+                                    <span>Vain tämä tapahtuma</span>
+                                </label>
+                                <label className="flex items-center space-x-2">
+                                    <input type="radio" name="updateScope" value="future" checked={updateScope === 'future'} onChange={() => setUpdateScope('future')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
+                                    <span>Tämä ja tulevat tapahtumat</span>
+                                </label>
+                                <label className="flex items-center space-x-2">
+                                    <input type="radio" name="updateScope" value="all" checked={updateScope === 'all'} onChange={() => setUpdateScope('all')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
+                                    <span>Kaikki sarjan tapahtumat</span>
+                                </label>
+                                <label className="flex items-center space-x-2">
+                                    <input type="radio" name="updateScope" value="range" checked={updateScope === 'range'} onChange={() => setUpdateScope('range')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
+                                    <span>Valitse aikaväli</span>
+                                </label>
+                                {updateScope === 'range' && (
+                                    <div className="pl-6 pt-2 grid grid-cols-2 gap-4">
+                                        <FormInput label="Alkaa" type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} />
+                                        <FormInput label="Päättyy" type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} />
+                                    </div>
+                                )}
+                                <p className="text-xs mt-1">
+                                    Huom: Päivämäärä ja kellonajat eivät muutu muissa tapahtumissa.
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-yellow-800">
-                        Laaja muokkaus
-                      </p>
-                      <div className="mt-2 text-sm text-yellow-700">
-                        <label className="flex items-center space-x-2">
-                           <input
-                            type="checkbox"
-                            checked={updateAllInCourse}
-                            onChange={() => setUpdateAllInCourse(!updateAllInCourse)}
-                            className="h-4 w-4 rounded text-yellow-600 focus:ring-yellow-500 border-gray-300"
-                           />
-                           <span>Päivitä kaikki tämän kurssin oppitunnit</span>
-                        </label>
-                        <p className="text-xs mt-1">
-                          Huom: Päivämäärä ja kellonajat eivät muutu muissa tapahtumissa.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               )}
             </form>
           ) : (
-            <AttachmentSection 
+            <AttachmentSection
               files={files}
               onFilesChange={setFiles}
               fileInputId="file-upload-event"
