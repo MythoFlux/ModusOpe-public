@@ -1,9 +1,9 @@
 // src/contexts/AppContext.tsx
 import React, { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { Event, Project, Task, CalendarView, ScheduleTemplate, KanbanColumn, Subtask, AddProjectPayload } from '../types';
+import { Event, Project, Task, CalendarView, ScheduleTemplate, KanbanColumn, Subtask, AddProjectPayload, FileAttachment } from '../types'; // LISÄTTY: FileAttachment
 import { supabase } from '../supabaseClient';
-import { v4 as uuidv4 } from 'uuid'; // LISÄTTY
+import { v4 as uuidv4 } from 'uuid';
 
 import { projectReducerLogic } from '../reducers/projectReducer';
 import { eventReducerLogic } from '../reducers/eventReducer';
@@ -35,7 +35,7 @@ function getInitialEvents(
         color: '#F59E0B',
         project_id: task.project_id,
     }));
-  
+
   return [...projectDeadlines, ...taskDeadlines, ...manualEvents];
 }
 
@@ -98,7 +98,7 @@ export type AppAction =
   | { type: 'DELETE_EVENT_SUCCESS'; payload: string }
   | { type: 'ADD_PROJECT_SUCCESS'; payload: Project }
   | { type: 'UPDATE_PROJECT_SUCCESS'; payload: Project }
-  | { type: 'UPDATE_PROJECTS_ORDER_SUCCESS'; payload: Project[] } // UUSI
+  | { type: 'UPDATE_PROJECTS_ORDER_SUCCESS'; payload: Project[] }
   | { type: 'DELETE_PROJECT_SUCCESS'; payload: string }
   | { type: 'ADD_TASK_SUCCESS'; payload: { projectId: string; task: Task } }
   | { type: 'UPDATE_TASK_SUCCESS'; payload: { projectId: string; task: Task } }
@@ -198,27 +198,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
   const services = {
-    // KORJATTU: Lisätty tiedostonlatauspalvelu
+    // KORJATTU: Tiedostonlatauspalvelu palauttaa nyt polun, ei URL:ää
     uploadFile: useCallback(async (file: File): Promise<string> => {
       if (!state.session?.user) throw new Error("User not authenticated");
 
       const fileExt = file.name.split('.').pop();
-      const fileName = `${state.session.user.id}/${uuidv4()}.${fileExt}`;
+      const filePath = `${state.session.user.id}/${uuidv4()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('attachments')
-        .upload(fileName, file);
+        .upload(filePath, file);
 
       if (uploadError) {
         throw uploadError;
       }
-
-      const { data } = supabase.storage
-        .from('attachments')
-        .getPublicUrl(fileName);
-
-      return data.publicUrl;
+      return filePath;
     }, [state.session]),
+
+    // UUSI: Palvelu tiedostojen poistamiseen Storagesta
+    deleteFile: useCallback(async (filePath: string) => {
+      const { error } = await supabase.storage.from('attachments').remove([filePath]);
+      if (error) {
+        console.error("Error deleting file from storage:", error);
+        // Ei heitetä virhettä eteenpäin, jotta tietokantamerkintä poistuu joka tapauksessa
+      }
+    }, []),
+
     addProject: useCallback(async (projectPayload: AddProjectPayload) => {
         const { template_group_name, ...projectDataFromForm } = projectPayload;
         const { id, files, tasks, ...dbData } = projectDataFromForm;
@@ -229,7 +234,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             { id: 'done', title: 'Valmis' },
         ];
         
-        const dataToInsert = { ...dbData, columns: defaultColumns, user_id: state.session?.user.id };
+        const dataToInsert = { ...dbData, columns: defaultColumns, user_id: state.session?.user.id, files };
 
         const { data: newProjectData, error } = await supabase.from('projects').insert([dataToInsert]).select().single();
         if (error || !newProjectData) throw new Error(error.message);
@@ -241,6 +246,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           end_date: newProjectData.end_date ? new Date(newProjectData.end_date) : undefined,
           tasks: [],
           columns: newProjectData.columns,
+          files: newProjectData.files || [],
         };
 
         dispatch({ type: 'ADD_PROJECT_SUCCESS', payload: finalProject });
@@ -268,13 +274,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, [state.scheduleTemplates, state.session]),
 
     updateProject: useCallback(async (project: Project) => {
-        const { files, tasks, ...dbData } = project;
+        const { tasks, ...dbData } = project;
         const { data, error } = await supabase.from('projects').update(dbData).match({ id: project.id }).select().single();
         if (error || !data) throw new Error(error.message);
         dispatch({ type: 'UPDATE_PROJECT_SUCCESS', payload: project });
     }, []),
     
-    // --- UUSI FUNKTIO ALKAA ---
     updateProjectOrder: useCallback(async (orderedProjects: Project[]) => {
       const updates = orderedProjects.map((project, index) => ({
         id: project.id,
@@ -284,16 +289,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.from('projects').upsert(updates);
       if (error) throw new Error(error.message);
       
-      // Päivitetään paikallinen tila vastaamaan uutta järjestystä
       dispatch({ type: 'UPDATE_PROJECTS_ORDER_SUCCESS', payload: orderedProjects });
     }, []),
-    // --- UUSI FUNKTIO PÄÄTTYY ---
     
+    // KORJATTU: Poistaa myös projektiin liitetyt tiedostot
     deleteProject: useCallback(async (projectId: string) => {
+        const projectToDelete = state.projects.find(p => p.id === projectId);
+        if(projectToDelete?.files && projectToDelete.files.length > 0) {
+            const filePaths = projectToDelete.files
+                .filter(f => f.type === 'upload' && f.url)
+                .map(f => f.url!);
+            if (filePaths.length > 0) {
+                await supabase.storage.from('attachments').remove(filePaths);
+            }
+        }
+
         const { error } = await supabase.from('projects').delete().match({ id: projectId });
         if (error) throw new Error(error.message);
         dispatch({ type: 'DELETE_PROJECT_SUCCESS', payload: projectId });
-    }, []),
+    }, [state.projects]),
 
     addTask: useCallback(async (task: Omit<Task, 'id'>) => {
       const taskWithUser = { ...task, user_id: state.session?.user.id };
@@ -312,11 +326,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'UPDATE_TASK_SUCCESS', payload: { projectId: task.project_id || GENERAL_TASKS_PROJECT_ID, task: task } });
     }, []),
     
+    // KORJATTU: Poistaa myös tehtävään liitetyt tiedostot
     deleteTask: useCallback(async (projectId: string, taskId: string) => {
+      const project = state.projects.find(p => p.id === projectId);
+      const taskToDelete = project?.tasks.find(t => t.id === taskId);
+
+      if(taskToDelete?.files && taskToDelete.files.length > 0) {
+          const filePaths = taskToDelete.files
+              .filter(f => f.type === 'upload' && f.url)
+              .map(f => f.url!);
+          if (filePaths.length > 0) {
+              await supabase.storage.from('attachments').remove(filePaths);
+          }
+      }
+
       const { error } = await supabase.from('tasks').delete().match({ id: taskId });
       if (error) throw new Error(error.message);
       dispatch({ type: 'DELETE_TASK_SUCCESS', payload: { projectId: projectId || GENERAL_TASKS_PROJECT_ID, taskId } });
-    }, []),
+    }, [state.projects]),
     
     updateTaskStatus: useCallback(async (projectId: string, taskId: string, newStatus: string) => {
         const { error } = await supabase.from('tasks').update({ column_id: newStatus }).match({ id: taskId });
@@ -382,11 +409,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'UPDATE_MULTIPLE_EVENTS_SUCCESS', payload: updatedEventList });
     }, [state.events]),
     
+    // KORJATTU: Poistaa myös tapahtumaan liitetyt tiedostot
     deleteEvent: useCallback(async (eventId: string) => {
+        const eventToDelete = state.events.find(e => e.id === eventId);
+        if(eventToDelete?.files && eventToDelete.files.length > 0) {
+            const filePaths = eventToDelete.files
+                .filter(f => f.type === 'upload' && f.url)
+                .map(f => f.url!);
+            if (filePaths.length > 0) {
+                await supabase.storage.from('attachments').remove(filePaths);
+            }
+        }
+
         const { error } = await supabase.from('events').delete().match({ id: eventId });
         if (error) throw new Error(error.message);
         dispatch({ type: 'DELETE_EVENT_SUCCESS', payload: eventId });
-    }, []),
+    }, [state.events]),
     
     addScheduleTemplate: useCallback(async (template: Omit<ScheduleTemplate, 'id'>) => {
         const templateWithUser = { ...template, user_id: state.session?.user.id };
@@ -425,7 +463,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       };
       const [projectsRes, templatesRes, eventsRes, tasksRes] = await Promise.all([
-          supabase.from('projects').select('*').order('order_index', { ascending: true }), // MUOKATTU
+          supabase.from('projects').select('*').order('order_index', { ascending: true }),
           supabase.from('schedule_templates').select('*'),
           supabase.from('events').select('*'),
           supabase.from('tasks').select('*')
