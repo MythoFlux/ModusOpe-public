@@ -1,8 +1,9 @@
 // src/components/Shared/AttachmentSection.tsx
 import React, { useState } from 'react';
-import { File, Upload, ExternalLink, Download, Trash2, FolderOpen } from 'lucide-react';
+import { File, Upload, ExternalLink, Download, Trash2, FolderOpen, Loader2 } from 'lucide-react'; // LISÄTTY: Loader2
 import GoogleDriveBrowser from '../GoogleDrive/GoogleDriveBrowser';
 import { FileAttachment } from '../../types';
+import { useAppServices } from '../../contexts/AppContext'; // LISÄTTY
 
 interface AttachmentSectionProps {
   files: FileAttachment[];
@@ -13,17 +14,35 @@ interface AttachmentSectionProps {
 export default function AttachmentSection({ files, onFilesChange, fileInputId }: AttachmentSectionProps) {
   const [googleDriveUrl, setGoogleDriveUrl] = useState('');
   const [showGoogleDriveBrowser, setShowGoogleDriveBrowser] = useState(false);
+  const [isUploading, setIsUploading] = useState(false); // LISÄTTY
+  const services = useAppServices(); // LISÄTTY
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // KORJATTU: Tiedostojen latauslogiikka
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = Array.from(event.target.files || []);
-    const newFiles = uploadedFiles.map(file => ({
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      name: file.name,
-      type: 'upload' as const,
-      size: file.size,
-      upload_date: new Date()
-    }));
-    onFilesChange([...files, ...newFiles]);
+    if (uploadedFiles.length === 0) return;
+
+    setIsUploading(true);
+    try {
+      const uploadPromises = uploadedFiles.map(async (file) => {
+        const publicUrl = await services.uploadFile(file);
+        return {
+          id: publicUrl, // Käytetään URL:ää ID:nä yksinkertaisuuden vuoksi
+          name: file.name,
+          type: 'upload' as const,
+          url: publicUrl,
+          size: file.size,
+          upload_date: new Date(),
+        };
+      });
+
+      const newFiles = await Promise.all(uploadPromises);
+      onFilesChange([...files, ...newFiles]);
+    } catch (error: any) {
+      alert(`Tiedoston lataus epäonnistui: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleGoogleDriveAdd = () => {
@@ -47,7 +66,7 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
       upload_date: new Date()
     };
     
-    onFilesChange([...files, newFile]);
+    onFilesChange([...files, ...newFile]);
     setGoogleDriveUrl('');
   };
 
@@ -84,24 +103,34 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
         <div>
           <h3 className="text-lg font-medium text-gray-900 mb-4">Liitetiedostot</h3>
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-            <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-600 mb-2">
-              Vedä tiedostoja tähän tai klikkaa valitaksesi
-            </p>
-            <input
-              type="file"
-              multiple
-              onChange={handleFileUpload}
-              className="hidden"
-              id={fileInputId}
-            />
-            <label
-              htmlFor={fileInputId}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 cursor-pointer transition-colors"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Valitse tiedostoja
-            </label>
+            {isUploading ? (
+              <div className="flex flex-col items-center justify-center">
+                <Loader2 className="w-8 h-8 text-gray-400 mx-auto mb-2 animate-spin" />
+                <p className="text-sm text-gray-600">Ladataan tiedostoja...</p>
+              </div>
+            ) : (
+              <>
+                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-600 mb-2">
+                  Vedä tiedostoja tähän tai klikkaa valitaksesi
+                </p>
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id={fileInputId}
+                  disabled={isUploading}
+                />
+                <label
+                  htmlFor={fileInputId}
+                  className={`inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 cursor-pointer transition-colors ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Valitse tiedostoja
+                </label>
+              </>
+            )}
           </div>
         </div>
 
@@ -160,20 +189,15 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
                     <div>
                       <div className="font-medium text-gray-900">{file.name}</div>
                       <div className="text-sm text-gray-500">
-                        {file.type === 'google-drive' ? 'Google Drive' : file.size ? formatFileSize(file.size) : 'Tiedosto'} • {file.upload_date.toLocaleDateString('fi-FI')}
+                        {file.type === 'google-drive' ? 'Google Drive' : file.size ? formatFileSize(file.size) : 'Tiedosto'} • {new Date(file.upload_date).toLocaleDateString('fi-FI')}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {file.type === 'google-drive' && file.url && (
-                      <button type="button" onClick={() => window.open(file.url, '_blank')} className="p-2 text-gray-500 hover:text-blue-600 transition-colors" title="Avaa Google Drivessa">
-                        <ExternalLink className="w-4 h-4" />
-                      </button>
-                    )}
-                    {file.type === 'upload' && (
-                      <button type="button" className="p-2 text-gray-500 hover:text-green-600 transition-colors" title="Lataa tiedosto">
-                        <Download className="w-4 h-4" />
-                      </button>
+                    {file.url && (
+                      <a href={file.url} target="_blank" rel="noopener noreferrer" className="p-2 text-gray-500 hover:text-blue-600 transition-colors" title={file.type === 'upload' ? "Lataa tiedosto" : "Avaa Google Drivessa"}>
+                        {file.type === 'upload' ? <Download className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
+                      </a>
                     )}
                     <button type="button" onClick={() => handleFileDelete(file.id)} className="p-2 text-gray-500 hover:text-red-600 transition-colors" title="Poista tiedosto">
                       <Trash2 className="w-4 h-4" />
