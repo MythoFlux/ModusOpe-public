@@ -26,6 +26,8 @@ export default function TaskModal() {
     project_id: '',
     subtasks: [] as Subtask[],
     column_id: 'todo',
+    show_description: false,
+    show_subtasks: false,
   });
   
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -41,6 +43,8 @@ export default function TaskModal() {
         project_id: selectedTask.project_id,
         subtasks: selectedTask.subtasks || [],
         column_id: selectedTask.column_id || 'todo',
+        show_description: selectedTask.show_description || false,
+        show_subtasks: selectedTask.show_subtasks || false,
       });
       setFiles(selectedTask.files || []);
     } else {
@@ -52,6 +56,8 @@ export default function TaskModal() {
         project_id: selectedTask?.project_id || '',
         subtasks: [],
         column_id: selectedTask?.column_id || 'todo',
+        show_description: false,
+        show_subtasks: false,
       });
       setFiles([]);
     }
@@ -81,9 +87,6 @@ export default function TaskModal() {
     }
     setIsLoading(true);
     
-    // --- KORJATTU KOHTA ---
-    // Jos projektia ei ole valittu (formData.project_id on tyhjä), asetetaan arvoksi null.
-    // Tämä on oikea tapa kertoa tietokannalle, että viiteavainta ei ole.
     const targetProjectId = formData.project_id || null;
 
     const commonTaskData = {
@@ -94,7 +97,9 @@ export default function TaskModal() {
       due_date: formData.due_date ? new Date(formData.due_date) : undefined,
       project_id: targetProjectId,
       subtasks: formData.subtasks,
-      files: files
+      files: files,
+      show_description: formData.show_description,
+      show_subtasks: formData.show_subtasks,
     };
 
     try {
@@ -287,6 +292,30 @@ export default function TaskModal() {
                   </button>
                 </div>
               </div>
+              
+              {/* --- UUDET VALINTARUUDUT ALKAA --- */}
+              <div className="space-y-2 pt-4 border-t border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-700">Kanban-näkymän asetukset</h4>
+                  <label className="flex items-center space-x-2">
+                      <input
+                          type="checkbox"
+                          checked={formData.show_description}
+                          onChange={e => setFormData(prev => ({ ...prev, show_description: e.target.checked }))}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm">Näytä kuvaus Kanban-kortilla</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                      <input
+                          type="checkbox"
+                          checked={formData.show_subtasks}
+                          onChange={e => setFormData(prev => ({ ...prev, show_subtasks: e.target.checked }))}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm">Näytä alitehtävät Kanban-kortilla</span>
+                  </label>
+              </div>
+              {/* --- UUDET VALINTARUUDUT PÄÄTTYY --- */}
             </form>
           ) : (
             <AttachmentSection 
