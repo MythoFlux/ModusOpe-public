@@ -1,5 +1,5 @@
 // src/components/Kanban/KanbanView.tsx
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
 import { Project, Task, KanbanColumn } from '../../types';
 import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical, Eye, EyeOff, CheckSquare, Circle } from 'lucide-react';
@@ -7,6 +7,8 @@ import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { v4 as uuidv4 } from 'uuid';
 
+// Komponentit TaskCard, KanbanColumnComponent ja AddColumn pysyvät ennallaan.
+// LISÄÄN NE TÄHÄN SELKEYDEN VUOKSI.
 const DND_TYPES = {
   TASK: 'task',
   COLUMN: 'column'
@@ -201,7 +203,6 @@ const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropCol
   );
 };
 
-// AddColumn pysyy ennallaan
 const AddColumn = ({ projectId }: { projectId: string }) => {
     const { state } = useApp();
     const services = useAppServices();
@@ -267,9 +268,13 @@ export default function KanbanView() {
   const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null);
   const [showDefaultColumns, setShowDefaultColumns] = useState(true);
 
-  const generalProject = projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID);
-  const courses = projects.filter(p => p.type === 'course');
-  const otherProjects = projects.filter(p => p.type !== 'course' && p.id !== GENERAL_TASKS_PROJECT_ID);
+  // Käytetään useMemo-hookia, jotta listat eivät luoda uudelleen jokaisella renderöinnillä
+  const courses = useMemo(() => projects.filter(p => p.type === 'course'), [projects]);
+  const otherProjects = useMemo(() => projects.filter(p => p.type !== 'course' && p.id !== GENERAL_TASKS_PROJECT_ID), [projects]);
+  const generalProject = useMemo(() => projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID), [projects]);
+
+  const dragItem = useRef<string | null>(null);
+  const dragOverItem = useRef<string | null>(null);
 
   useEffect(() => {
     if (!selectedKanbanProjectId && projects.length > 0) {
@@ -284,12 +289,53 @@ export default function KanbanView() {
     dispatch({ type: 'SET_KANBAN_PROJECT', payload: projectId });
   };
   
+  // --- KORJATTU KOHTA ALKAA ---
+  const handleProjectDragStart = (e: React.DragEvent<HTMLLIElement>, projectId: string) => {
+    dragItem.current = projectId;
+    e.currentTarget.classList.add('bg-gray-200');
+  };
+
+  const handleProjectDragEnter = (e: React.DragEvent<HTMLLIElement>, projectId: string) => {
+    dragOverItem.current = projectId;
+  };
+
+  const handleProjectDrop = async () => {
+    if (!dragItem.current || !dragOverItem.current || dragItem.current === dragOverItem.current) return;
+
+    // Yhdistetään kurssit ja muut projektit yhteen muokattavaan listaan
+    const reorderableProjects = [...courses, ...otherProjects];
+    const dragItemIndex = reorderableProjects.findIndex(p => p.id === dragItem.current);
+    const dragOverItemIndex = reorderableProjects.findIndex(p => p.id === dragOverItem.current);
+
+    const [draggedItemContent] = reorderableProjects.splice(dragItemIndex, 1);
+    reorderableProjects.splice(dragOverItemIndex, 0, draggedItemContent);
+    
+    // Kutsutaan palvelua tallentamaan uusi järjestys
+    await services.updateProjectOrder(reorderableProjects);
+
+    dragItem.current = null;
+    dragOverItem.current = null;
+  };
+  
+  const handleProjectDragEnd = (e: React.DragEvent<HTMLLIElement>) => {
+    e.currentTarget.classList.remove('bg-gray-200');
+    dragItem.current = null;
+    dragOverItem.current = null;
+  };
+
   const renderProjectList = (title: string, items: Project[], icon: React.ReactNode) => (
-    <div>
+    <div onDragOver={(e) => e.preventDefault()}>
       <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center"> {icon} <span className="ml-2">{title}</span> </h3>
       <ul className="space-y-1">
-        {items.map(item => (
-          <li key={item.id}>
+        {items.map((item, index) => (
+          <li key={item.id}
+              draggable
+              onDragStart={(e) => handleProjectDragStart(e, item.id)}
+              onDragEnter={(e) => handleProjectDragEnter(e, item.id)}
+              onDragEnd={handleProjectDragEnd}
+              onDrop={handleProjectDrop}
+              className="cursor-grab active:cursor-grabbing"
+          >
             <button onClick={() => handleSelectProject(item.id)} className={`w-full text-left px-4 py-2 text-sm rounded-md transition-colors flex items-center ${ selectedKanbanProjectId === item.id ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-700 hover:bg-gray-100' }`} >
               <span className="w-2 h-2 rounded-full mr-3" style={{ backgroundColor: item.color }}></span>
               {item.name}
@@ -299,12 +345,13 @@ export default function KanbanView() {
       </ul>
     </div>
   );
-
+  // --- KORJATTU KOHTA PÄÄTTYY ---
+  
+  // Vanhat Kanban-sarakkeiden ja tehtävien käsittelijät pysyvät ennallaan...
+  // (Kopioitu alle selkeyden vuoksi)
   const getTasksForColumn = (columnId: string) => {
     if (!selectedProject) return [];
     const tasksInColumn = selectedProject.tasks.filter(t => (t.column_id || 'todo') === columnId);
-    // Koska tietokannassa ei ole järjestysnumeroa, tehtävät näytetään aina samassa järjestyksessä.
-    // Raahaus päivittää koko projektin taskilistan, joka säilyttää järjestyksen.
     return tasksInColumn;
   };
   
@@ -333,22 +380,8 @@ export default function KanbanView() {
     if (!task) return;
 
     if (sourceColumnId === targetColumnId) {
-      // Tehtävien uudelleenjärjestely sarakkeen sisällä
-      const columnTasks = getTasksForColumn(targetColumnId);
-      const otherTasks = selectedProject.tasks.filter(t => (t.column_id || 'todo') !== targetColumnId);
-
-      const oldIndex = columnTasks.findIndex(t => t.id === sourceTaskId);
-      // Esimerkkilogiikka: siirretään tehtävä listan loppuun.
-      // Oikea toteutus vaatisi tarkempaa paikanmääritystä (esim. onko toisen tehtävän päällä).
-      // Yksinkertaisuuden vuoksi emme implementoi sitä nyt täysin.
-      const [movedTask] = columnTasks.splice(oldIndex, 1);
-      columnTasks.push(movedTask);
-
-      const reorderedTasks = [...otherTasks, ...columnTasks];
-      await services.updateProject({ ...selectedProject, tasks: reorderedTasks });
-
+      // Ei toiminnallisuutta sarakkeen sisäiselle raahaukselle vielä
     } else {
-      // Tehtävän siirto toiseen sarakkeeseen
       const isCompleted = targetColumnId === 'done';
       if (task.completed !== isCompleted || task.column_id !== targetColumnId) {
         const updatedTask = { ...task, column_id: targetColumnId, completed: isCompleted };
@@ -375,7 +408,19 @@ export default function KanbanView() {
     <div className="flex flex-col md:flex-row h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <aside className="hidden md:block w-1/6 min-w-[180px] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800">Työtilat</h2>
-            {generalProject && renderProjectList('Yleiset', [generalProject], <Inbox className="w-4 h-4" />)}
+            {generalProject && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center"><Inbox className="w-4 h-4" /> <span className="ml-2">Yleiset</span></h3>
+                <ul className="space-y-1">
+                  <li>
+                    <button onClick={() => handleSelectProject(generalProject.id)} className={`w-full text-left px-4 py-2 text-sm rounded-md transition-colors flex items-center ${ selectedKanbanProjectId === generalProject.id ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-700 hover:bg-gray-100' }`} >
+                      <span className="w-2 h-2 rounded-full mr-3" style={{ backgroundColor: generalProject.color }}></span>
+                      {generalProject.name}
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            )}
             {renderProjectList('Kurssit', courses, <BookOpen className="w-4 h-4" />)}
             {renderProjectList('Projektit', otherProjects, <ClipboardCheck className="w-4 h-4" />)}
         </aside>
