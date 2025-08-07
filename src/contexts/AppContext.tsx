@@ -278,25 +278,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, []),
     
     updateProjectOrder: useCallback(async (orderedProjects: Project[]) => {
-      // Luodaan lista päivityslupauksista, yksi jokaista projektia kohti.
-      const updatePromises = orderedProjects.map((project, index) =>
+      // 1. Luodaan uusi lista, jossa on päivitetyt `order_index`-arvot.
+      const projectsWithNewOrder = orderedProjects.map((project, index) => ({
+        ...project,
+        order_index: index,
+      }));
+
+      // 2. Luodaan lista päivityslupauksista tietokantaan.
+      const updatePromises = projectsWithNewOrder.map(p =>
         supabase
           .from('projects')
-          .update({ order_index: index }) // Päivitettävä tieto
-          .eq('id', project.id)           // WHERE-ehto, joka kohdistaa päivityksen
+          .update({ order_index: p.order_index })
+          .eq('id', p.id)
       );
     
-      // Suoritetaan kaikki päivitykset rinnakkain.
+      // 3. Suoritetaan kaikki päivitykset rinnakkain.
       const results = await Promise.all(updatePromises);
     
-      // Tarkistetaan, epäonnistuiko jokin päivityksistä.
+      // 4. Tarkistetaan virheet.
       const firstError = results.find(res => res.error);
       if (firstError) {
         throw firstError.error;
       }
     
-      // Jos kaikki onnistui, päivitetään sovelluksen tila.
-      dispatch({ type: 'UPDATE_PROJECTS_ORDER_SUCCESS', payload: orderedProjects });
+      // 5. Jos kaikki onnistui, lähetetään uusi, täydellinen ja järjestetty lista reducerille.
+      dispatch({ type: 'UPDATE_PROJECTS_ORDER_SUCCESS', payload: projectsWithNewOrder });
     }, []),
     
     deleteProject: useCallback(async (projectId: string) => {
