@@ -62,6 +62,8 @@ export interface Task {
   project_id: string;
   subtasks?: Subtask[];
   files?: FileAttachment[];
+  show_description?: boolean; // UUSI
+  show_subtasks?: boolean;    // UUSI
 }
 
 export interface ScheduleTemplate {
