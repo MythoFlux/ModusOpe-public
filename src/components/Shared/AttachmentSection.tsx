@@ -4,7 +4,14 @@ import { File, Upload, ExternalLink, Download, Trash2, FolderOpen, Loader2 } fro
 import GoogleDriveBrowser from '../GoogleDrive/GoogleDriveBrowser';
 import { FileAttachment } from '../../types';
 import { useAppServices } from '../../contexts/AppContext';
-import { supabase } from '../../supabaseClient'; // LISÄTTY
+import { supabase } from '../../supabaseClient';
+
+const isWebViewable = (fileName: string): boolean => {
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  if (!extension) return false;
+  const viewableExtensions = ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'txt'];
+  return viewableExtensions.includes(extension);
+};
 
 interface AttachmentSectionProps {
   files: FileAttachment[];
@@ -16,10 +23,9 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
   const [googleDriveUrl, setGoogleDriveUrl] = useState('');
   const [showGoogleDriveBrowser, setShowGoogleDriveBrowser] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [signedUrls, setSignedUrls] = useState<Map<string, string>>(new Map()); // UUSI
+  const [signedUrls, setSignedUrls] = useState<Map<string, string>>(new Map());
   const services = useAppServices();
 
-  // UUSI: Luo suojatut, väliaikaiset URL-osoitteet tiedostoille
   useEffect(() => {
     const generateSignedUrls = async () => {
       const uploadedFiles = files.filter(f => f.type === 'upload' && f.url);
@@ -31,7 +37,7 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
       const paths = uploadedFiles.map(f => f.url!);
       const { data, error } = await supabase.storage
         .from('attachments')
-        .createSignedUrls(paths, 3600); // Linkit ovat voimassa 1 tunnin (3600s)
+        .createSignedUrls(paths, 3600);
 
       if (error) {
         console.error("Error creating signed URLs:", error);
@@ -39,21 +45,21 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
       }
 
       const urlMap = new Map<string, string>();
-      data.forEach(item => {
-        if (item.signedUrl) {
-          // Etsitään alkuperäinen tiedostopolku signedUrl-osoitteesta
-          const originalPath = paths.find(p => item.path === p);
-          if (originalPath) {
-            urlMap.set(originalPath, item.signedUrl);
+      if (data) {
+        data.forEach(item => {
+          if (item.signedUrl) {
+            const originalPath = paths.find(p => item.path === p);
+            if (originalPath) {
+              urlMap.set(originalPath, item.signedUrl);
+            }
           }
-        }
-      });
+        });
+      }
       setSignedUrls(urlMap);
     };
 
     generateSignedUrls();
   }, [files]);
-
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = Array.from(event.target.files || []);
@@ -62,12 +68,12 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
     setIsUploading(true);
     try {
       const uploadPromises = uploadedFiles.map(async (file) => {
-        const filePath = await services.uploadFile(file); // Palauttaa nyt polun
+        const filePath = await services.uploadFile(file);
         return {
           id: filePath,
           name: file.name,
           type: 'upload' as const,
-          url: filePath, // Tallennetaan polku, ei julkista URL:ää
+          url: filePath,
           size: file.size,
           upload_date: new Date(),
         };
@@ -121,7 +127,6 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
     setShowGoogleDriveBrowser(false);
   };
 
-  // KORJATTU: Tiedoston poistologiikka
   const handleFileDelete = async (fileToDelete: FileAttachment) => {
     if (fileToDelete.type === 'upload' && fileToDelete.url) {
         try {
@@ -144,7 +149,6 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
   return (
     <>
       <div className="p-6 space-y-6">
-        {/* Tiedostojen latausosio */}
         <div>
           <h3 className="text-lg font-medium text-gray-900 mb-4">Liitetiedostot</h3>
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
@@ -178,8 +182,6 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
             )}
           </div>
         </div>
-
-        {/* Google Drive -osio */}
         <div>
           <h3 className="text-lg font-medium text-gray-900 mb-4">Google Drive</h3>
           <div className="mb-4">
@@ -221,14 +223,14 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
             </p>
           </div>
         </div>
-
-        {/* Tiedostolista */}
         {files.length > 0 && (
           <div>
             <h3 className="text-lg font-medium text-gray-900 mb-4">Liitetyt tiedostot</h3>
             <div className="space-y-2">
               {files.map((file) => {
                 const downloadUrl = file.type === 'upload' ? signedUrls.get(file.url!) : file.url;
+                const canViewInBrowser = file.name ? isWebViewable(file.name) : false;
+
                 return (
                   <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
                     <div className="flex items-center space-x-3 min-w-0">
@@ -242,11 +244,29 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
                     </div>
                     <div className="flex items-center space-x-2 flex-shrink-0">
                       {downloadUrl ? (
-                        <a href={downloadUrl} target="_blank" rel="noopener noreferrer" className="p-2 text-gray-500 hover:text-blue-600 transition-colors" title={file.type === 'upload' ? "Lataa tiedosto" : "Avaa Google Drivessa"}>
-                          {file.type === 'upload' ? <Download className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
+                        <a
+                          href={downloadUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-gray-500 hover:text-blue-600 transition-colors"
+                          title={
+                            file.type === 'google-drive'
+                              ? "Avaa Google Drivessa"
+                              : canViewInBrowser
+                              ? "Avaa tiedosto uudessa välilehdessä"
+                              : "Lataa tiedosto"
+                          }
+                        >
+                          {file.type === 'google-drive' || (file.type === 'upload' && canViewInBrowser) ? (
+                            <ExternalLink className="w-4 h-4" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
                         </a>
                       ) : file.type === 'upload' ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <div className="p-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                        </div>
                       ) : null}
                       <button type="button" onClick={() => handleFileDelete(file)} className="p-2 text-gray-500 hover:text-red-600 transition-colors" title="Poista tiedosto">
                         <Trash2 className="w-4 h-4" />
@@ -258,7 +278,6 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
             </div>
           </div>
         )}
-
         {files.length === 0 && (
           <div className="text-center py-8 text-gray-500">
             <File className="w-12 h-12 mx-auto mb-2 text-gray-300" />
@@ -266,7 +285,6 @@ export default function AttachmentSection({ files, onFilesChange, fileInputId }:
           </div>
         )}
       </div>
-
       {showGoogleDriveBrowser && (
         <GoogleDriveBrowser
           onFilesSelected={handleGoogleDriveFilesSelected}
