@@ -1,6 +1,7 @@
 // src/reducers/projectReducer.ts
 import { AppAction, AppState } from '../contexts/AppContext';
 import { KanbanColumn, Project, Subtask, Task } from '../types';
+import { GENERAL_TASKS_PROJECT_ID } from '../contexts/AppContext';
 
 const findProject = (state: AppState, projectId: string): Project | undefined => {
   return state.projects.find(p => p.id === projectId);
@@ -21,6 +22,21 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
         projects: state.projects.map(p =>
           p.id === action.payload.id ? action.payload : p
         ),
+      };
+    }
+    
+    // TÄMÄ ON UUSI LISÄYS
+    case 'UPDATE_PROJECTS_ORDER_SUCCESS': {
+      const orderedProjects = action.payload;
+      const generalProject = state.projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID);
+      
+      const newProjectList = generalProject 
+        ? [generalProject, ...orderedProjects] 
+        : orderedProjects;
+        
+      return {
+        ...state,
+        projects: newProjectList,
       };
     }
 
