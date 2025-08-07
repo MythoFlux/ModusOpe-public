@@ -33,7 +33,6 @@ export default function EventModal() {
     color: DEFAULT_COLOR
   });
 
-  // New state for update scope
   const [updateScope, setUpdateScope] = useState<UpdateScope>('single');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
@@ -56,7 +55,6 @@ export default function EventModal() {
         color: selectedEvent.color
       });
       setFiles(selectedEvent.files || []);
-      // Set default date range when modal opens
       setDateRange({
           start: eventDate.toISOString().split('T')[0],
           end: ''
@@ -191,154 +189,157 @@ export default function EventModal() {
             Tiedostot ({files.length})
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {activeTab === 'details' ? (
-            <form id="event-details-form" onSubmit={handleSubmit} className="p-6 space-y-4">
-              <FormInput
-                id="event-title"
-                label="Otsikko"
-                icon={<Type className="w-4 h-4 inline mr-2" />}
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Tapahtuman otsikko"
-                disabled={isDeadlineEvent}
-              />
-              <FormTextarea
-                id="event-more-info"
-                label="Lisätietoa (esim. linkit)"
-                icon={<Info className="w-4 h-4 inline mr-2" />}
-                value={formData.more_info}
-                onChange={(e) => setFormData({ ...formData, more_info: e.target.value })}
-                rows={2}
-                placeholder="Lisää linkkejä tai muuta tärkeää tietoa"
-                disabled={isDeadlineEvent}
-              />
-              <FormTextarea
-                id="event-description"
-                label="Kuvaus"
-                icon={<FileText className="w-4 h-4 inline mr-2" />}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                placeholder="Tapahtuman kuvaus"
-                disabled={isDeadlineEvent}
-              />
-              <FormInput
-                id="event-date"
-                label="Päivämäärä"
-                icon={<Calendar className="w-4 h-4 inline mr-2" />}
-                type="date"
-                required
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                disabled={isDeadlineEvent || updateScope !== 'single'}
-              />
-              <div className="grid grid-cols-2 gap-4">
+        
+        <form id="event-details-form" onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 overflow-y-auto">
+            {activeTab === 'details' ? (
+              <div className="p-6 space-y-4">
                 <FormInput
-                  id="start_time"
-                  label="Alkuaika"
-                  icon={<Clock className="w-4 h-4 inline mr-2" />}
-                  type="time"
-                  value={formData.start_time}
-                  onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                  disabled={isDeadlineEvent || updateScope !== 'single'}
+                  id="event-title"
+                  label="Otsikko"
+                  icon={<Type className="w-4 h-4 inline mr-2" />}
+                  type="text"
+                  required
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="Tapahtuman otsikko"
+                  disabled={isDeadlineEvent}
+                />
+                <FormTextarea
+                  id="event-more-info"
+                  label="Lisätietoa (esim. linkit)"
+                  icon={<Info className="w-4 h-4 inline mr-2" />}
+                  value={formData.more_info}
+                  onChange={(e) => setFormData({ ...formData, more_info: e.target.value })}
+                  rows={2}
+                  placeholder="Lisää linkkejä tai muuta tärkeää tietoa"
+                  disabled={isDeadlineEvent}
+                />
+                <FormTextarea
+                  id="event-description"
+                  label="Kuvaus"
+                  icon={<FileText className="w-4 h-4 inline mr-2" />}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={3}
+                  placeholder="Tapahtuman kuvaus"
+                  disabled={isDeadlineEvent}
                 />
                 <FormInput
-                  id="end_time"
-                  label="Loppuaika"
-                  type="time"
-                  value={formData.end_time}
-                  onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                  id="event-date"
+                  label="Päivämäärä"
+                  icon={<Calendar className="w-4 h-4 inline mr-2" />}
+                  type="date"
+                  required
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                   disabled={isDeadlineEvent || updateScope !== 'single'}
                 />
-              </div>
-              <FormSelect
-                id="event-type"
-                label="Tyyppi"
-                value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value as Event['type'] })}
-                disabled={isDeadlineEvent}
-              >
-                <option value="class">Tunti</option>
-                <option value="meeting">Kokous</option>
-                <option value="deadline">Määräaika</option>
-                <option value="assignment">Tehtävä</option>
-                <option value="personal">Henkilökohtainen</option>
-              </FormSelect>
-              <ColorSelector
-                label="Väri"
-                selectedColor={formData.color}
-                onChange={(color) => setFormData({ ...formData, color })}
-              />
-              <FormSelect
-                id="event-project"
-                label="Projekti (valinnainen)"
-                value={formData.project_id}
-                onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                disabled={isDeadlineEvent}
-              >
-                <option value="">Ei projektia</option>
-                {[...projects]
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map(project => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </FormSelect>
-
-              {selectedEvent?.type === 'class' && selectedEvent.project_id && (
-                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
-                    <div className="flex items-start">
-                        <div className="flex-shrink-0">
-                            <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                        </div>
-                        <div className="ml-3">
-                            <p className="text-sm font-medium text-yellow-800">
-                                Toistuvan tapahtuman muokkaus
-                            </p>
-                            <div className="mt-2 text-sm text-yellow-700 space-y-2">
-                                <label className="flex items-center space-x-2">
-                                    <input type="radio" name="updateScope" value="single" checked={updateScope === 'single'} onChange={() => setUpdateScope('single')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
-                                    <span>Vain tämä tapahtuma</span>
-                                </label>
-                                <label className="flex items-center space-x-2">
-                                    <input type="radio" name="updateScope" value="future" checked={updateScope === 'future'} onChange={() => setUpdateScope('future')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
-                                    <span>Tämä ja tulevat tapahtumat</span>
-                                </label>
-                                <label className="flex items-center space-x-2">
-                                    <input type="radio" name="updateScope" value="all" checked={updateScope === 'all'} onChange={() => setUpdateScope('all')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
-                                    <span>Kaikki sarjan tapahtumat</span>
-                                </label>
-                                <label className="flex items-center space-x-2">
-                                    <input type="radio" name="updateScope" value="range" checked={updateScope === 'range'} onChange={() => setUpdateScope('range')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
-                                    <span>Valitse aikaväli</span>
-                                </label>
-                                {updateScope === 'range' && (
-                                    <div className="pl-6 pt-2 grid grid-cols-2 gap-4">
-                                        <FormInput label="Alkaa" type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} />
-                                        <FormInput label="Päättyy" type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} />
-                                    </div>
-                                )}
-                                <p className="text-xs mt-1">
-                                    Huom: Päivämäärä ja kellonajat eivät muutu muissa tapahtumissa.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormInput
+                    id="start_time"
+                    label="Alkuaika"
+                    icon={<Clock className="w-4 h-4 inline mr-2" />}
+                    type="time"
+                    value={formData.start_time}
+                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                    disabled={isDeadlineEvent || updateScope !== 'single'}
+                  />
+                  <FormInput
+                    id="end_time"
+                    label="Loppuaika"
+                    type="time"
+                    value={formData.end_time}
+                    onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                    disabled={isDeadlineEvent || updateScope !== 'single'}
+                  />
                 </div>
-              )}
-            </form>
-          ) : (
-            <AttachmentSection
-              files={files}
-              onFilesChange={setFiles}
-              fileInputId="file-upload-event"
-            />
-          )}
-        </div>
+                <FormSelect
+                  id="event-type"
+                  label="Tyyppi"
+                  value={formData.type}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as Event['type'] })}
+                  disabled={isDeadlineEvent}
+                >
+                  <option value="class">Tunti</option>
+                  <option value="meeting">Kokous</option>
+                  <option value="deadline">Määräaika</option>
+                  <option value="assignment">Tehtävä</option>
+                  <option value="personal">Henkilökohtainen</option>
+                </FormSelect>
+                <ColorSelector
+                  label="Väri"
+                  selectedColor={formData.color}
+                  onChange={(color) => setFormData({ ...formData, color })}
+                />
+                <FormSelect
+                  id="event-project"
+                  label="Projekti (valinnainen)"
+                  value={formData.project_id}
+                  onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                  disabled={isDeadlineEvent}
+                >
+                  <option value="">Ei projektia</option>
+                  {[...projects]
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(project => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </FormSelect>
+
+                {selectedEvent?.type === 'class' && selectedEvent.project_id && (
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                      <div className="flex items-start">
+                          <div className="flex-shrink-0">
+                              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                          </div>
+                          <div className="ml-3">
+                              <p className="text-sm font-medium text-yellow-800">
+                                  Toistuvan tapahtuman muokkaus
+                              </p>
+                              <div className="mt-2 text-sm text-yellow-700 space-y-2">
+                                  <label className="flex items-center space-x-2">
+                                      <input type="radio" name="updateScope" value="single" checked={updateScope === 'single'} onChange={() => setUpdateScope('single')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
+                                      <span>Vain tämä tapahtuma</span>
+                                  </label>
+                                  <label className="flex items-center space-x-2">
+                                      <input type="radio" name="updateScope" value="future" checked={updateScope === 'future'} onChange={() => setUpdateScope('future')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
+                                      <span>Tämä ja tulevat tapahtumat</span>
+                                  </label>
+                                  <label className="flex items-center space-x-2">
+                                      <input type="radio" name="updateScope" value="all" checked={updateScope === 'all'} onChange={() => setUpdateScope('all')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
+                                      <span>Kaikki sarjan tapahtumat</span>
+                                  </label>
+                                  <label className="flex items-center space-x-2">
+                                      <input type="radio" name="updateScope" value="range" checked={updateScope === 'range'} onChange={() => setUpdateScope('range')} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"/>
+                                      <span>Valitse aikaväli</span>
+                                  </label>
+                                  {updateScope === 'range' && (
+                                      <div className="pl-6 pt-2 grid grid-cols-2 gap-4">
+                                          <FormInput label="Alkaa" type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} />
+                                          <FormInput label="Päättyy" type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} />
+                                      </div>
+                                  )}
+                                  <p className="text-xs mt-1">
+                                      Huom: Päivämäärä ja kellonajat eivät muutu muissa tapahtumissa.
+                                  </p>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <AttachmentSection
+                files={files}
+                onFilesChange={setFiles}
+                fileInputId="file-upload-event"
+              />
+            )}
+          </div>
+        </form>
         <div className="flex justify-between p-6 border-t border-gray-200 flex-shrink-0 bg-gray-50">
             {selectedEvent && (
               <button
