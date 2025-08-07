@@ -26,37 +26,21 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
     }
 
     case 'UPDATE_PROJECTS_ORDER_SUCCESS': {
-      const orderedProjects = action.payload; // Tämä on lista järjestellyistä projekteista
-      const generalProject = state.projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID);
-      
-      // Muodostetaan uusi projektilista säilyttäen "Yleiset tehtävät" ensimmäisenä
-      const newFullProjectList = state.projects.map(p => {
-        const orderedVersion = orderedProjects.find(op => op.id === p.id);
-        return orderedVersion ? orderedVersion : p;
-      }).sort((a, b) => {
-        if (a.id === GENERAL_TASKS_PROJECT_ID) return -1;
-        if (b.id === GENERAL_TASKS_PROJECT_ID) return 1;
-        return (a.order_index ?? 0) - (b.order_index ?? 0);
-      });
+      // Payload on nyt täydellinen, järjestetty lista siirreltävistä projekteista.
+      const orderedReorderableProjects = action.payload;
 
-      // Varmistetaan, että tilassa on oikea ja täydellinen lista
-      const finalProjects = [...state.projects];
-      orderedProjects.forEach(op => {
-        const index = finalProjects.findIndex(p => p.id === op.id);
-        if (index !== -1) {
-          finalProjects[index] = { ...finalProjects[index], ...op };
-        }
-      });
-      
-      finalProjects.sort((a, b) => {
-         if (a.id === GENERAL_TASKS_PROJECT_ID) return -1;
-         if (b.id === GENERAL_TASKS_PROJECT_ID) return 1;
-         return (a.order_index ?? 0) - (b.order_index ?? 0);
-      });
+      // Haetaan "Yleiset tehtävät" -projekti, joka ei ole siirrettävissä.
+      const generalProject = state.projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID);
+
+      // Luodaan täysin uusi projektilista yhdistämällä yleinen projekti ja uusi järjestys.
+      // Tämä takaa, että React huomaa muutoksen ja päivittää näkymän.
+      const newProjectsState = generalProject
+        ? [generalProject, ...orderedReorderableProjects]
+        : orderedReorderableProjects;
 
       return {
         ...state,
-        projects: finalProjects,
+        projects: newProjectsState,
       };
     }
 
@@ -65,7 +49,6 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
       return {
         ...state,
         projects: state.projects.filter(project => project.id !== projectId),
-        // Liittyvien tapahtumien poisto siirtyy eventReducerin puolelle
       };
     }
 
@@ -119,7 +102,6 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
         };
     }
     
-    // Alitehtävät ja sarakkeet voivat pysyä ennallaan, koska ne eivät tee API-kutsuja
     case 'ADD_SUBTASK': {
         const { projectId, taskId, subtask } = action.payload;
         return {
@@ -158,7 +140,6 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
 
     case 'ADD_COLUMN': {
         const { projectId, title } = action.payload;
-        // Huom: ID luodaan edelleen clientilla, koska sarakkeita ei tallenneta erikseen tietokantaan. Tämä on ok.
         const newColumn: KanbanColumn = { id: Date.now().toString(), title }; 
         return {
             ...state,
