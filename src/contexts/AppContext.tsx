@@ -286,7 +286,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         order_index: index,
       }));
 
-      const { error } = await supabase.from('projects').upsert(updates);
+      const { error } = await supabase.from('projects').update(updates);
       if (error) throw new Error(error.message);
       
       dispatch({ type: 'UPDATE_PROJECTS_ORDER_SUCCESS', payload: orderedProjects });
