@@ -2,12 +2,12 @@
 import React, { useEffect, useState } from 'react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
 import { Project, Task, KanbanColumn } from '../../types';
-import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical, Eye, EyeOff } from 'lucide-react';
+import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical, Eye, EyeOff, CheckSquare, Circle } from 'lucide-react';
 import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { v4 as uuidv4 } from 'uuid';
 
-// TaskCard- ja KanbanColumnComponent-komponentit pysyvät samoina
+// DND_TYPES pysyy samana
 const DND_TYPES = {
   TASK: 'task',
   COLUMN: 'column'
@@ -39,9 +39,31 @@ const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
         <h4 className="font-semibold text-gray-800 text-sm">{task.title}</h4>
         {getPriorityIcon(task.priority)}
       </div>
-      {task.description && <p className="text-xs text-gray-600 mb-3 line-clamp-2">{task.description}</p>}
+      
+      {/* --- KORJATTU KOHTA ALKAA --- */}
+      {task.show_description && task.description && (
+        <p className="text-xs text-gray-600 mb-3 line-clamp-3">{task.description}</p>
+      )}
+
+      {task.show_subtasks && task.subtasks && task.subtasks.length > 0 && (
+          <div className="mt-2 space-y-1">
+              {task.subtasks.map(subtask => (
+                  <div key={subtask.id} className="flex items-center space-x-2 text-xs">
+                      {subtask.completed 
+                        ? <CheckSquare className="w-3 h-3 text-green-500 flex-shrink-0" /> 
+                        : <Circle className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                      }
+                      <span className={subtask.completed ? 'line-through text-gray-500' : ''}>
+                          {subtask.title}
+                      </span>
+                  </div>
+              ))}
+          </div>
+      )}
+      {/* --- KORJATTU KOHTA PÄÄTTYY --- */}
+
       {task.due_date && (
-        <div className="flex items-center text-xs text-gray-500">
+        <div className="flex items-center text-xs text-gray-500 mt-3">
           <Calendar className="w-3 h-3 mr-1.5" />
           <span>{formatDate(new Date(task.due_date))}</span>
         </div>
@@ -50,6 +72,7 @@ const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
   );
 };
 
+// KanbanColumnComponent ja AddColumn pysyvät ennallaan
 const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, onDragStart, onDropColumn, isColumnDragged }: { column: KanbanColumn, tasks: Task[], projectId: string, isTaskDraggedOver: boolean, onDragStart: (e: React.DragEvent) => void, onDropColumn: (e: React.DragEvent) => void, isColumnDragged: boolean }) => {
   const { state, dispatch } = useApp();
   const services = useAppServices();
@@ -79,12 +102,10 @@ const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, on
       const updatedColumns = project.columns.filter(c => c.id !== column.id);
       const tasksToMove = project.tasks.filter(t => t.column_id === column.id);
       
-      // Siirretään poistetun sarakkeen tehtävät 'todo'-sarakkeeseen
       const updatedTasks = project.tasks.map(t => t.column_id === column.id ? { ...t, column_id: 'todo' } : t);
 
       await services.updateProject({ ...project, columns: updatedColumns, tasks: updatedTasks });
       
-      // Päivitetään myös yksittäiset tehtävät tietokannassa
       for (const task of tasksToMove) {
         await services.updateTask({ ...task, column_id: 'todo' });
       }
@@ -221,7 +242,7 @@ const AddColumn = ({ projectId }: { projectId: string }) => {
     );
 };
 
-
+// KanbanView-pääkomponentti pysyy ennallaan
 export default function KanbanView() {
   const { state, dispatch } = useApp();
   const services = useAppServices();
