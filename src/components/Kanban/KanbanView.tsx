@@ -1,5 +1,5 @@
 // src/components/Kanban/KanbanView.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
 import { Project, Task, KanbanColumn } from '../../types';
 import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical, Eye, EyeOff, CheckSquare, Circle } from 'lucide-react';
@@ -7,13 +7,14 @@ import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { v4 as uuidv4 } from 'uuid';
 
-// DND_TYPES pysyy samana
 const DND_TYPES = {
   TASK: 'task',
   COLUMN: 'column'
 };
 
-const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
+const TaskCard = ({ task, onDragStart }: { task: Task, onDragStart: (e: React.DragEvent) => void }) => {
+  const { dispatch } = useApp();
+  
   const getPriorityIcon = (priority: string) => {
     switch (priority) {
       case 'high': return <AlertCircle className="w-4 h-4 text-red-500" />;
@@ -24,15 +25,10 @@ const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
 
   return (
     <div
-      onClick={onClick}
+      onClick={() => dispatch({ type: 'TOGGLE_TASK_MODAL', payload: task })}
       draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('type', DND_TYPES.TASK);
-        e.dataTransfer.setData('taskId', task.id);
-        e.dataTransfer.setData('projectId', task.project_id);
-        e.currentTarget.classList.add('opacity-50');
-      }}
-      onDragEnd={(e) => e.currentTarget.classList.remove('opacity-50')}
+      onDragStart={onDragStart}
+      onDragEnd={(e) => e.currentTarget.classList.remove('opacity-50', 'shadow-2xl')}
       className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer active:cursor-grabbing"
     >
       <div className="flex justify-between items-start mb-2">
@@ -40,7 +36,6 @@ const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
         {getPriorityIcon(task.priority)}
       </div>
       
-      {/* --- KORJATTU KOHTA ALKAA --- */}
       {task.show_description && task.description && (
         <p className="text-xs text-gray-600 mb-3 line-clamp-3">{task.description}</p>
       )}
@@ -60,7 +55,6 @@ const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
               ))}
           </div>
       )}
-      {/* --- KORJATTU KOHTA PÄÄTTYY --- */}
 
       {task.due_date && (
         <div className="flex items-center text-xs text-gray-500 mt-3">
@@ -72,13 +66,13 @@ const TaskCard = ({ task, onClick }: { task: Task, onClick: () => void }) => {
   );
 };
 
-// KanbanColumnComponent ja AddColumn pysyvät ennallaan
-const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, onDragStart, onDropColumn, isColumnDragged }: { column: KanbanColumn, tasks: Task[], projectId: string, isTaskDraggedOver: boolean, onDragStart: (e: React.DragEvent) => void, onDropColumn: (e: React.DragEvent) => void, isColumnDragged: boolean }) => {
+const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropColumn, onDragStartColumn, isColumnDragged }: { column: KanbanColumn, tasks: Task[], projectId: string, onDropTask: (targetColumnId: string, sourceTaskId: string, sourceColumnId: string, sourceProjectId: string) => void, onDropColumn: (e: React.DragEvent) => void, onDragStartColumn: (e: React.DragEvent) => void, isColumnDragged: boolean }) => {
   const { state, dispatch } = useApp();
   const services = useAppServices();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(column.title);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isTaskDraggedOver, setIsTaskDraggedOver] = useState(false);
 
   const isDefaultColumn = ['todo', 'inProgress', 'done'].includes(column.id);
 
@@ -95,7 +89,7 @@ const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, on
   };
 
   const handleDelete = async () => {
-    if (confirm(`Haluatko varmasti poistaa säiliön "${column.title}"? Tämä poistaa myös kaikki sen sisältämät tehtävät.`)) {
+    if (confirm(`Haluatko varmasti poistaa säiliön "${column.title}"? Tämä siirtää kaikki sen sisältämät tehtävät 'Suunnitteilla'-säiliöön.`)) {
       const project = state.projects.find(p => p.id === projectId);
       if (!project) return;
 
@@ -120,15 +114,37 @@ const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, on
     dispatch({ type: 'TOGGLE_TASK_MODAL', payload: newTaskTemplate as Task });
   };
   
+  const handleTaskDragStart = (e: React.DragEvent, task: Task) => {
+    e.dataTransfer.setData('type', DND_TYPES.TASK);
+    e.dataTransfer.setData('taskId', task.id);
+    e.dataTransfer.setData('sourceColumnId', column.id);
+    e.dataTransfer.setData('sourceProjectId', projectId);
+    (e.currentTarget as HTMLElement).classList.add('opacity-50', 'shadow-2xl');
+  };
+
   return (
     <div 
         className={`p-3 flex flex-col w-72 flex-shrink-0 rounded-xl transition-colors duration-200 ${isTaskDraggedOver ? 'bg-blue-50' : 'bg-gray-100/60'} ${isColumnDragged ? 'opacity-50' : ''}`}
-        onDrop={onDropColumn}
+        onDragOver={(e) => { e.preventDefault(); setIsTaskDraggedOver(true); }}
+        onDragLeave={() => setIsTaskDraggedOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsTaskDraggedOver(false);
+          const type = e.dataTransfer.getData('type');
+          if (type === DND_TYPES.TASK) {
+            const taskId = e.dataTransfer.getData('taskId');
+            const sourceColumnId = e.dataTransfer.getData('sourceColumnId');
+            const sourceProjectId = e.dataTransfer.getData('sourceProjectId');
+            onDropTask(column.id, taskId, sourceColumnId, sourceProjectId);
+          } else {
+            onDropColumn(e);
+          }
+        }}
     >
       <div 
         className="flex justify-between items-center mb-2 px-1 cursor-grab active:cursor-grabbing noselect"
         draggable={!isDefaultColumn}
-        onDragStart={onDragStart}
+        onDragStart={onDragStartColumn}
       >
         <div className='flex items-center'>
             {!isDefaultColumn && <GripVertical className="w-5 h-5 text-gray-400 mr-1" />}
@@ -175,16 +191,17 @@ const KanbanColumnComponent = ({ column, tasks, projectId, isTaskDraggedOver, on
 
       <div className="flex-1 overflow-y-auto -mr-2 pr-2 min-h-[300px] space-y-3">
         {tasks.map(task => (
-          <TaskCard key={task.id} task={task} onClick={() => dispatch({ type: 'TOGGLE_TASK_MODAL', payload: task })} />
+          <TaskCard key={task.id} task={task} onDragStart={(e) => handleTaskDragStart(e, task)} />
         ))}
-        <div className={`flex items-center justify-center text-xs text-gray-400 p-4 border-2 border-dashed rounded-lg transition-colors ${tasks.length > 0 ? 'border-gray-300' : 'border-gray-300 h-full'} ${isTaskDraggedOver ? 'border-blue-400 bg-blue-100/50' : ''}`}>
-          Pudota tehtäviä tähän
+        <div className={`flex items-center justify-center text-xs text-gray-400 p-4 border-2 border-dashed rounded-lg transition-colors ${tasks.length > 0 ? 'border-transparent' : 'border-gray-300 h-full'} ${isTaskDraggedOver ? 'border-blue-400 bg-blue-100/50' : ''}`}>
+          {tasks.length === 0 && 'Pudota tehtäviä tähän'}
         </div>
       </div>
     </div>
   );
 };
 
+// AddColumn pysyy ennallaan
 const AddColumn = ({ projectId }: { projectId: string }) => {
     const { state } = useApp();
     const services = useAppServices();
@@ -242,12 +259,11 @@ const AddColumn = ({ projectId }: { projectId: string }) => {
     );
 };
 
-// KanbanView-pääkomponentti pysyy ennallaan
+
 export default function KanbanView() {
   const { state, dispatch } = useApp();
   const services = useAppServices();
   const { projects, selectedKanbanProjectId } = state;
-  const [draggedItem, setDraggedItem] = useState<{type: string, id: string} | null>(null);
   const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null);
   const [showDefaultColumns, setShowDefaultColumns] = useState(true);
 
@@ -286,51 +302,63 @@ export default function KanbanView() {
 
   const getTasksForColumn = (columnId: string) => {
     if (!selectedProject) return [];
-    if (columnId === 'todo') {
-      return selectedProject.tasks.filter(t => t.column_id === 'todo' || !t.column_id);
-    }
-    return selectedProject.tasks.filter(t => t.column_id === columnId);
+    const tasksInColumn = selectedProject.tasks.filter(t => (t.column_id || 'todo') === columnId);
+    // Koska tietokannassa ei ole järjestysnumeroa, tehtävät näytetään aina samassa järjestyksessä.
+    // Raahaus päivittää koko projektin taskilistan, joka säilyttää järjestyksen.
+    return tasksInColumn;
   };
   
-  const handleDragStart = (e: React.DragEvent, type: string, id: string, index?: number) => {
-      e.dataTransfer.setData('type', type);
-      e.dataTransfer.setData('id', id);
-      if(type === DND_TYPES.COLUMN && index !== undefined) {
-          setDraggedColumnIndex(index);
-      }
-      setDraggedItem({type, id});
+  const handleColumnDragStart = (e: React.DragEvent, index: number) => {
+      e.dataTransfer.setData('type', DND_TYPES.COLUMN);
+      e.dataTransfer.setData('sourceColumnIndex', String(index));
+      setDraggedColumnIndex(index);
   }
 
-  const handleDrop = async (e: React.DragEvent, targetColumnId: string, targetColumnIndex: number) => {
-    e.preventDefault();
-    const type = e.dataTransfer.getData('type');
+  const handleColumnDrop = async (e: React.DragEvent, targetIndex: number) => {
+    if (!selectedProject || draggedColumnIndex === null) return;
+    
+    const reorderedColumns = Array.from(selectedProject.columns);
+    const [removed] = reorderedColumns.splice(draggedColumnIndex, 1);
+    reorderedColumns.splice(targetIndex, 0, removed);
+    
+    await services.updateProject({ ...selectedProject, columns: reorderedColumns });
+    
+    setDraggedColumnIndex(null);
+  };
 
-    if (type === DND_TYPES.TASK) {
-      const taskId = e.dataTransfer.getData('taskId');
-      const projectId = e.dataTransfer.getData('projectId');
-      const sourceProject = projects.find(p => p.id === projectId);
-      const task = sourceProject?.tasks.find(t => t.id === taskId);
+  const handleTaskDrop = async (targetColumnId: string, sourceTaskId: string, sourceColumnId: string, sourceProjectId: string) => {
+    if (!selectedProject || sourceProjectId !== selectedProject.id) return;
+    
+    const task = selectedProject.tasks.find(t => t.id === sourceTaskId);
+    if (!task) return;
 
-      if (task) {
-        const isCompleted = targetColumnId === 'done';
-        if (task.completed !== isCompleted || task.column_id !== targetColumnId) {
-          const updatedTask = { ...task, column_id: targetColumnId, completed: isCompleted };
-          try {
-            await services.updateTask(updatedTask);
-          } catch(err: any) {
-              console.error("Failed to update task:", err);
-          }
+    if (sourceColumnId === targetColumnId) {
+      // Tehtävien uudelleenjärjestely sarakkeen sisällä
+      const columnTasks = getTasksForColumn(targetColumnId);
+      const otherTasks = selectedProject.tasks.filter(t => (t.column_id || 'todo') !== targetColumnId);
+
+      const oldIndex = columnTasks.findIndex(t => t.id === sourceTaskId);
+      // Esimerkkilogiikka: siirretään tehtävä listan loppuun.
+      // Oikea toteutus vaatisi tarkempaa paikanmääritystä (esim. onko toisen tehtävän päällä).
+      // Yksinkertaisuuden vuoksi emme implementoi sitä nyt täysin.
+      const [movedTask] = columnTasks.splice(oldIndex, 1);
+      columnTasks.push(movedTask);
+
+      const reorderedTasks = [...otherTasks, ...columnTasks];
+      await services.updateProject({ ...selectedProject, tasks: reorderedTasks });
+
+    } else {
+      // Tehtävän siirto toiseen sarakkeeseen
+      const isCompleted = targetColumnId === 'done';
+      if (task.completed !== isCompleted || task.column_id !== targetColumnId) {
+        const updatedTask = { ...task, column_id: targetColumnId, completed: isCompleted };
+        try {
+          await services.updateTask(updatedTask);
+        } catch(err: any) {
+            console.error("Failed to update task:", err);
         }
       }
-    } else if (type === DND_TYPES.COLUMN && selectedProject && draggedColumnIndex !== null) {
-        const reorderedColumns = Array.from(selectedProject.columns);
-        const [removed] = reorderedColumns.splice(draggedColumnIndex, 1);
-        reorderedColumns.splice(targetColumnIndex, 0, removed);
-        
-        await services.updateProject({ ...selectedProject, columns: reorderedColumns });
     }
-    setDraggedItem(null);
-    setDraggedColumnIndex(null);
   };
 
   const handleInfoButtonClick = () => {
@@ -405,19 +433,19 @@ export default function KanbanView() {
                     )}
                   </div>
                 </div>
-                <div className="flex-1 flex gap-6 overflow-x-auto">
+                <div className="flex-1 flex gap-6 overflow-x-auto" onDragEnd={() => setDraggedColumnIndex(null)}>
                   {selectedProject.columns
                     ?.filter(column => showDefaultColumns || !['todo', 'inProgress', 'done'].includes(column.id))
                     .map((column, index) => (
-                      <div key={column.id} onDragOver={(e) => { e.preventDefault(); if(draggedItem?.type === DND_TYPES.TASK) setDraggedItem({type: DND_TYPES.TASK, id: column.id})}} onDragLeave={() => setDraggedItem(null)} onDragEnd={() => {setDraggedItem(null); setDraggedColumnIndex(null)}}>
+                      <div key={column.id}>
                         <KanbanColumnComponent 
                           column={column} 
                           tasks={getTasksForColumn(column.id)} 
-                          projectId={selectedProject.id} 
-                          isTaskDraggedOver={draggedItem?.type === DND_TYPES.TASK && draggedItem.id === column.id} 
-                          isColumnDragged={draggedColumnIndex === index} 
-                          onDragStart={(e) => handleDragStart(e, DND_TYPES.COLUMN, column.id, index)} 
-                          onDropColumn={(e) => handleDrop(e, column.id, index)} 
+                          projectId={selectedProject.id}
+                          onDropTask={handleTaskDrop}
+                          onDropColumn={(e) => handleColumnDrop(e, index)}
+                          onDragStartColumn={(e) => handleColumnDragStart(e, index)}
+                          isColumnDragged={draggedColumnIndex === index}
                         />
                       </div>
                   ))}
