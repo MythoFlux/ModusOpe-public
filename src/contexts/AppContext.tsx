@@ -3,6 +3,7 @@ import React, { createContext, useContext, useReducer, ReactNode, useEffect, use
 import { Session } from '@supabase/supabase-js';
 import { Event, Project, Task, CalendarView, ScheduleTemplate, KanbanColumn, Subtask, AddProjectPayload } from '../types';
 import { supabase } from '../supabaseClient';
+import { v4 as uuidv4 } from 'uuid'; // LISÄTTY
 
 import { projectReducerLogic } from '../reducers/projectReducer';
 import { eventReducerLogic } from '../reducers/eventReducer';
@@ -197,6 +198,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
   const services = {
+    // KORJATTU: Lisätty tiedostonlatauspalvelu
+    uploadFile: useCallback(async (file: File): Promise<string> => {
+      if (!state.session?.user) throw new Error("User not authenticated");
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${state.session.user.id}/${uuidv4()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('attachments')
+        .upload(fileName, file);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from('attachments')
+        .getPublicUrl(fileName);
+
+      return data.publicUrl;
+    }, [state.session]),
     addProject: useCallback(async (projectPayload: AddProjectPayload) => {
         const { template_group_name, ...projectDataFromForm } = projectPayload;
         const { id, files, tasks, ...dbData } = projectDataFromForm;
