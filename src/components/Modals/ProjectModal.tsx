@@ -13,11 +13,11 @@ import ColorSelector from '../Forms/ColorSelector';
 
 export default function ProjectModal() {
   const { state, dispatch } = useApp();
-  const services = useAppServices(); // UUSI
+  const services = useAppServices();
   const { showProjectModal, selectedProjectId, projects } = state;
   const { getConfirmation } = useConfirmation();
   
-  const [isLoading, setIsLoading] = useState(false); // UUSI
+  const [isLoading, setIsLoading] = useState(false);
 
   const selectedProject = selectedProjectId
     ? projects.find(p => p.id === selectedProjectId)
@@ -36,7 +36,6 @@ export default function ProjectModal() {
     parent_course_id: ''
   });
 
-  // Tehtävien hallinta pysyy modaalin paikallisessa tilassa kunnes projekti tallennetaan
   const [tasks, setTasks] = useState<Task[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
   
@@ -83,9 +82,6 @@ export default function ProjectModal() {
     e.preventDefault();
     setIsLoading(true);
 
-    // HUOM: Tehtäviä ei tallenneta erikseen tässä, oletus on, että
-    // ne tallennetaan TaskModalin kautta. Jos haluat tallentaa tehtävät
-    // tässä, pitäisi luoda erillinen `updateTasksForProject`-servicefunktio.
     const projectData: any = {
       id: selectedProject?.id,
       name: formData.name,
@@ -95,7 +91,7 @@ export default function ProjectModal() {
       start_date: new Date(formData.start_date),
       end_date: formData.end_date ? new Date(formData.end_date) : undefined,
       parent_course_id: formData.parent_course_id || undefined,
-      tasks: selectedProject?.tasks || tasks, // Lähetetään vanhat tai päivitetyt tehtävät
+      tasks: selectedProject?.tasks || tasks,
       files: files,
       columns: selectedProject?.columns || []
     };
@@ -112,31 +108,6 @@ export default function ProjectModal() {
     } finally {
         setIsLoading(false);
     }
-  };
-
-  const handleAddTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    const taskData: Task = {
-      id: `temp-${Date.now()}`, // Väliaikainen ID
-      title: newTask.title,
-      description: newTask.description,
-      completed: false,
-      column_id: 'todo',
-      priority: newTask.priority,
-      due_date: newTask.due_date ? new Date(newTask.due_date) : undefined,
-      project_id: selectedProject?.id || 'temp-id'
-    };
-    setTasks([...tasks, taskData]);
-    setNewTask({ title: '', description: '', priority: 'medium', due_date: '' });
-    setShowAddTask(false);
-  };
-
-  const handleDeleteTask = (taskId: string) => {
-     setTasks(tasks.filter(t => t.id !== taskId));
-  };
-
-  const toggleTask = (taskToToggle: Task) => {
-     setTasks(tasks.map(t => t.id === taskToToggle.id ? {...t, completed: !t.completed} : t));
   };
 
   const handleDelete = async () => {
@@ -201,113 +172,79 @@ export default function ProjectModal() {
           </button>
         </div>
         
+        <form id="project-details-form" onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
           <div className="flex-1 overflow-y-auto">
               {activeTab === 'details' ? (
-                  <div>
-                      <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                           <FormInput
-                              id="project-name"
-                              label="Projektin nimi"
-                              icon={<BookOpen className="w-4 h-4 inline mr-2" />}
-                              type="text"
-                              required
-                              value={formData.name}
-                              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                              placeholder="Projektin nimi"
-                           />
-
-                <FormSelect
-                    id="project-course"
-                    label="Liitä kurssiin (valinnainen)"
-                    icon={<BookOpen className="w-4 h-4 inline mr-2" />}
-                    value={formData.parent_course_id}
-                    onChange={(e) => setFormData({ ...formData, parent_course_id: e.target.value })}
-                  >
-                    <option value="">Ei liitetty kurssiin</option>
-                    {[...courses]
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map(course => (
-                      <option key={course.id} value={course.id}>
-                        {course.name}
-                      </option>
-                    ))}
-                  </FormSelect>
-
-                <FormTextarea
-                    id="project-description"
-                    label="Muistiinpanot"
-                    icon={<FileText className="w-4 h-4 inline mr-2" />}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={10}
-                    placeholder="Kirjoita kuvaus tai lisää muistiinpanoja"
-                />
-                <div className="grid grid-cols-2 gap-4">
-                <FormSelect
-                  id="project-type"
-                  label="Tyyppi"
-                  value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as Project['type'] })}
-                >
-                  <option value="administrative">Hallinnollinen</option>
-                  <option value="personal">Henkilökohtainen</option>
-                </FormSelect>
-
-                <ColorSelector
-                  label="Väri"
-                  selectedColor={formData.color}
-                  onChange={(color) => setFormData({ ...formData, color })}
-                />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormInput
-                    id="start_date"
-                    label="Alkupäivä"
-                    icon={<Calendar className="w-4 h-4 inline mr-2" />}
-                    type="date"
-                    required
-                    value={formData.start_date}
-                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                  />
-                  <FormInput
-                    id="end_date"
-                    label="Loppupäivä (valinnainen)"
-                    type="date"
-                    value={formData.end_date}
-                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                  />
-                </div>
-                          <div className="flex justify-between pt-4">
-                              {selectedProject && selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
-                                  <button
-                                      type="button"
-                                      onClick={handleDelete}
-                                      disabled={isLoading}
-                                      className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                                  >
-                                      Poista projekti
-                                  </button>
-                              )}
-                              <div className="flex space-x-3 ml-auto">
-                                  <button
-                                      type="button"
-                                      onClick={() => dispatch({ type: 'CLOSE_MODALS' })}
-                                      className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                  >
-                                      Peruuta
-                                  </button>
-                                  <button
-                                      type="submit"
-                                      disabled={isLoading}
-                                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
-                                  >
-                                      {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                      {selectedProject ? 'Päivitä' : 'Luo'}
-                                  </button>
-                              </div>
-                          </div>
-                      </form>
-                      {/* Tehtäväosio pysyy ennallaan, koska se muokkaa vain paikallista tilaa */}
+                  <div className="p-6 space-y-4">
+                      <FormInput
+                          id="project-name"
+                          label="Projektin nimi"
+                          icon={<BookOpen className="w-4 h-4 inline mr-2" />}
+                          type="text"
+                          required
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          placeholder="Projektin nimi"
+                       />
+                      <FormSelect
+                          id="project-course"
+                          label="Liitä kurssiin (valinnainen)"
+                          icon={<BookOpen className="w-4 h-4 inline mr-2" />}
+                          value={formData.parent_course_id}
+                          onChange={(e) => setFormData({ ...formData, parent_course_id: e.target.value })}
+                        >
+                          <option value="">Ei liitetty kurssiin</option>
+                          {[...courses]
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(course => (
+                            <option key={course.id} value={course.id}>
+                              {course.name}
+                            </option>
+                          ))}
+                        </FormSelect>
+                      <FormTextarea
+                          id="project-description"
+                          label="Muistiinpanot"
+                          icon={<FileText className="w-4 h-4 inline mr-2" />}
+                          value={formData.description}
+                          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          rows={10}
+                          placeholder="Kirjoita kuvaus tai lisää muistiinpanoja"
+                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormSelect
+                          id="project-type"
+                          label="Tyyppi"
+                          value={formData.type}
+                          onChange={(e) => setFormData({ ...formData, type: e.target.value as Project['type'] })}
+                        >
+                          <option value="administrative">Hallinnollinen</option>
+                          <option value="personal">Henkilökohtainen</option>
+                        </FormSelect>
+                        <ColorSelector
+                          label="Väri"
+                          selectedColor={formData.color}
+                          onChange={(color) => setFormData({ ...formData, color })}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormInput
+                          id="start_date"
+                          label="Alkupäivä"
+                          icon={<Calendar className="w-4 h-4 inline mr-2" />}
+                          type="date"
+                          required
+                          value={formData.start_date}
+                          onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                        />
+                        <FormInput
+                          id="end_date"
+                          label="Loppupäivä (valinnainen)"
+                          type="date"
+                          value={formData.end_date}
+                          onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                        />
+                      </div>
                   </div>
               ) : (
                   <AttachmentSection 
@@ -317,7 +254,38 @@ export default function ProjectModal() {
                   />
               )}
           </div>
+        </form>
+        <div className="flex justify-between p-6 border-t border-gray-200 flex-shrink-0 bg-gray-50">
+            {selectedProject && selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
+                <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={isLoading}
+                    className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                    Poista projekti
+                </button>
+            )}
+            <div className="flex space-x-3 ml-auto">
+                <button
+                    type="button"
+                    onClick={() => dispatch({ type: 'CLOSE_MODALS' })}
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                    Peruuta
+                </button>
+                <button
+                    type="submit"
+                    form="project-details-form"
+                    disabled={isLoading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
+                >
+                    {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    {selectedProject ? 'Päivitä' : 'Luo'}
+                </button>
+            </div>
+        </div>
       </div>
-      </div>
+    </div>
   );
 }
