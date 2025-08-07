@@ -80,7 +80,6 @@ export default function TaskModal() {
     setFormData(prev => ({ ...prev, subtasks: prev.subtasks.filter(st => st.id !== subtaskId) }));
   };
 
-  // --- UUDET FUNKTIOT ALITEHTÄVIEN RAAHAUKSEEN ---
   const handleDragStart = (e: React.DragEvent<HTMLLIElement>, subtaskId: string) => {
     draggedSubtask.current = subtaskId;
     e.dataTransfer.effectAllowed = 'move';
@@ -109,7 +108,6 @@ export default function TaskModal() {
   const handleDragEnd = (e: React.DragEvent<HTMLLIElement>) => {
     (e.currentTarget as HTMLLIElement).classList.remove('opacity-50');
   };
-  // --- UUDET FUNKTIOT PÄÄTTYVÄT ---
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,7 +117,7 @@ export default function TaskModal() {
     }
     setIsLoading(true);
     
-    const targetProjectId = formData.project_id || null;
+    const targetProjectId = formData.project_id || GENERAL_TASKS_PROJECT_ID;
 
     const commonTaskData = {
       title: formData.title,
@@ -220,151 +218,150 @@ export default function TaskModal() {
             Tiedostot ({files.length})
           </button>
         </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {activeTab === 'details' ? (
-            <form id="task-form-details" onSubmit={handleSubmit} className="p-6 space-y-4">
-              <FormSelect
-                id="task-project"
-                label="Projekti (valinnainen)"
-                icon={<Bookmark className="w-4 h-4 inline mr-2" />}
-                value={formData.project_id}
-                onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-              >
-                <option value="">Ei projektia (Yleiset tehtävät)</option>
-                {[...projects]
-                  .filter(project => project.id !== GENERAL_TASKS_PROJECT_ID)
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map(project => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                ))}
-              </FormSelect>
-            
-              <FormInput
-                id="task-title"
-                label="Otsikko"
-                icon={<Type className="w-4 h-4 inline mr-2" />}
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Tehtävän otsikko"
-              />
-
-              <FormTextarea
-                id="task-description"
-                label="Kuvaus"
-                icon={<FileText className="w-4 h-4 inline mr-2" />}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                placeholder="Tehtävän kuvaus"
-              />
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormSelect
-                  id="task-priority"
-                  label="Prioriteetti"
-                  icon={<AlertCircle className="w-4 h-4 inline mr-2" />}
-                  value={formData.priority}
-                  onChange={(e) => setFormData({ ...formData, priority: e.target.value as Task['priority'] })}
-                >
-                  <option value="low">Matala</option>
-                  <option value="medium">Keskitaso</option>
-                  <option value="high">Korkea</option>
-                </FormSelect>
-                <FormInput
-                  id="task-duedate"
-                  label="Määräpäivä"
-                  icon={<Calendar className="w-4 h-4 inline mr-2" />}
-                  type="date"
-                  value={formData.due_date}
-                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                />
-              </div>
-              
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Alitehtävät</h4>
-                <ul className="space-y-2">
-                  {formData.subtasks.map(subtask => (
-                    <li key={subtask.id} 
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, subtask.id)}
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, subtask.id)}
-                        onDragEnd={handleDragEnd}
-                        className="flex items-center space-x-2 p-1 rounded-md hover:bg-gray-100 cursor-grab active:cursor-grabbing"
-                    >
-                      <GripVertical className="w-5 h-5 text-gray-400" />
-                      <input
-                        type="checkbox"
-                        checked={subtask.completed}
-                        onChange={e => handleSubtaskChange(subtask.id, e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                      />
-                      <span className={`flex-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
-                        {subtask.title}
-                      </span>
-                      <button type="button" onClick={() => handleDeleteSubtask(subtask.id)}>
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <div className="flex items-center space-x-2 mt-2">
-                  <input
-                    type="text"
-                    id="new-subtask-title"
-                    name="new-subtask-title"
-                    value={newSubtaskTitle}
-                    onChange={e => setNewSubtaskTitle(e.target.value)}
-                    placeholder="Uusi alitehtävä"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddSubtask}
-                    className="p-2 bg-blue-100 text-blue-600 rounded-lg"
+        
+        <form id="task-details-form" onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 overflow-y-auto">
+              {activeTab === 'details' ? (
+                <div className="p-6 space-y-4">
+                  <FormSelect
+                    id="task-project"
+                    label="Projekti"
+                    icon={<Bookmark className="w-4 h-4 inline mr-2" />}
+                    value={formData.project_id}
+                    onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
                   >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="space-y-2 pt-4 border-t border-gray-200">
-                  <h4 className="text-sm font-medium text-gray-700">Kanban-näkymän asetukset</h4>
-                  <label className="flex items-center space-x-2">
-                      <input
-                          type="checkbox"
-                          checked={formData.show_description}
-                          onChange={e => setFormData(prev => ({ ...prev, show_description: e.target.checked }))}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm">Näytä kuvaus Kanban-kortilla</span>
-                  </label>
-                  <label className="flex items-center space-x-2">
-                      <input
-                          type="checkbox"
-                          checked={formData.show_subtasks}
-                          onChange={e => setFormData(prev => ({ ...prev, show_subtasks: e.target.checked }))}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm">Näytä alitehtävät Kanban-kortilla</span>
-                  </label>
-              </div>
-            </form>
-          ) : (
-            <AttachmentSection 
-              files={files}
-              onFilesChange={setFiles}
-              fileInputId="file-upload-task"
-            />
-          )}
-        </div>
+                    {[...projects]
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(project => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                    ))}
+                  </FormSelect>
+                
+                  <FormInput
+                    id="task-title"
+                    label="Otsikko"
+                    icon={<Type className="w-4 h-4 inline mr-2" />}
+                    type="text"
+                    required
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder="Tehtävän otsikko"
+                  />
 
-        <div className="flex justify-between p-6 border-t border-gray-200 flex-shrink-0">
+                  <FormTextarea
+                    id="task-description"
+                    label="Kuvaus"
+                    icon={<FileText className="w-4 h-4 inline mr-2" />}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                    placeholder="Tehtävän kuvaus"
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormSelect
+                      id="task-priority"
+                      label="Prioriteetti"
+                      icon={<AlertCircle className="w-4 h-4 inline mr-2" />}
+                      value={formData.priority}
+                      onChange={(e) => setFormData({ ...formData, priority: e.target.value as Task['priority'] })}
+                    >
+                      <option value="low">Matala</option>
+                      <option value="medium">Keskitaso</option>
+                      <option value="high">Korkea</option>
+                    </FormSelect>
+                    <FormInput
+                      id="task-duedate"
+                      label="Määräpäivä"
+                      icon={<Calendar className="w-4 h-4 inline mr-2" />}
+                      type="date"
+                      value={formData.due_date}
+                      onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                    />
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Alitehtävät</h4>
+                    <ul className="space-y-2">
+                      {formData.subtasks.map(subtask => (
+                        <li key={subtask.id} 
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, subtask.id)}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, subtask.id)}
+                            onDragEnd={handleDragEnd}
+                            className="flex items-center space-x-2 p-1 rounded-md hover:bg-gray-100 cursor-grab active:cursor-grabbing"
+                        >
+                          <GripVertical className="w-5 h-5 text-gray-400" />
+                          <input
+                            type="checkbox"
+                            checked={subtask.completed}
+                            onChange={e => handleSubtaskChange(subtask.id, e.target.checked)}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className={`flex-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
+                            {subtask.title}
+                          </span>
+                          <button type="button" onClick={() => handleDeleteSubtask(subtask.id)}>
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="flex items-center space-x-2 mt-2">
+                      <input
+                        type="text"
+                        id="new-subtask-title"
+                        name="new-subtask-title"
+                        value={newSubtaskTitle}
+                        onChange={e => setNewSubtaskTitle(e.target.value)}
+                        placeholder="Uusi alitehtävä"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddSubtask}
+                        className="p-2 bg-blue-100 text-blue-600 rounded-lg"
+                      >
+                        <Plus className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 pt-4 border-t border-gray-200">
+                      <h4 className="text-sm font-medium text-gray-700">Kanban-näkymän asetukset</h4>
+                      <label className="flex items-center space-x-2">
+                          <input
+                              type="checkbox"
+                              checked={formData.show_description}
+                              onChange={e => setFormData(prev => ({ ...prev, show_description: e.target.checked }))}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm">Näytä kuvaus Kanban-kortilla</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                          <input
+                              type="checkbox"
+                              checked={formData.show_subtasks}
+                              onChange={e => setFormData(prev => ({ ...prev, show_subtasks: e.target.checked }))}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm">Näytä alitehtävät Kanban-kortilla</span>
+                      </label>
+                  </div>
+                </div>
+              ) : (
+                <AttachmentSection 
+                  files={files}
+                  onFilesChange={setFiles}
+                  fileInputId="file-upload-task"
+                />
+              )}
+            </div>
+        </form>
+        <div className="flex justify-between p-6 border-t border-gray-200 flex-shrink-0 bg-gray-50">
             {isEditing && (
                 <button
                     type="button"
@@ -385,7 +382,7 @@ export default function TaskModal() {
                 </button>
                 <button
                     type="submit"
-                    form="task-form-details"
+                    form="task-details-form"
                     disabled={isLoading}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
                 >
