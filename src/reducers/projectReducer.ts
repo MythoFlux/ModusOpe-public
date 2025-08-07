@@ -24,19 +24,39 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
         ),
       };
     }
-    
-    // TÄMÄ ON UUSI LISÄYS
+
     case 'UPDATE_PROJECTS_ORDER_SUCCESS': {
-      const orderedProjects = action.payload;
+      const orderedProjects = action.payload; // Tämä on lista järjestellyistä projekteista
       const generalProject = state.projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID);
       
-      const newProjectList = generalProject 
-        ? [generalProject, ...orderedProjects] 
-        : orderedProjects;
-        
+      // Muodostetaan uusi projektilista säilyttäen "Yleiset tehtävät" ensimmäisenä
+      const newFullProjectList = state.projects.map(p => {
+        const orderedVersion = orderedProjects.find(op => op.id === p.id);
+        return orderedVersion ? orderedVersion : p;
+      }).sort((a, b) => {
+        if (a.id === GENERAL_TASKS_PROJECT_ID) return -1;
+        if (b.id === GENERAL_TASKS_PROJECT_ID) return 1;
+        return (a.order_index ?? 0) - (b.order_index ?? 0);
+      });
+
+      // Varmistetaan, että tilassa on oikea ja täydellinen lista
+      const finalProjects = [...state.projects];
+      orderedProjects.forEach(op => {
+        const index = finalProjects.findIndex(p => p.id === op.id);
+        if (index !== -1) {
+          finalProjects[index] = { ...finalProjects[index], ...op };
+        }
+      });
+      
+      finalProjects.sort((a, b) => {
+         if (a.id === GENERAL_TASKS_PROJECT_ID) return -1;
+         if (b.id === GENERAL_TASKS_PROJECT_ID) return 1;
+         return (a.order_index ?? 0) - (b.order_index ?? 0);
+      });
+
       return {
         ...state,
-        projects: newProjectList,
+        projects: finalProjects,
       };
     }
 
