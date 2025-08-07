@@ -1,6 +1,6 @@
 // src/components/Modals/TaskModal.tsx
-import React, { useState, useEffect } from 'react';
-import { X, Type, FileText, Calendar, AlertCircle, Bookmark, Plus, Trash2, File, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Type, FileText, Calendar, AlertCircle, Bookmark, Plus, Trash2, File, Loader2, GripVertical } from 'lucide-react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
 import { useConfirmation } from '../../hooks/useConfirmation';
 import { Task, Subtask, FileAttachment } from '../../types';
@@ -16,6 +16,7 @@ export default function TaskModal() {
   const { showTaskModal, selectedTask, projects, session } = state;
   const { getConfirmation } = useConfirmation();
   const [isLoading, setIsLoading] = useState(false);
+  const draggedSubtask = useRef<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'details' | 'files'>('details');
   const [formData, setFormData] = useState({
@@ -78,6 +79,37 @@ export default function TaskModal() {
   const handleDeleteSubtask = (subtaskId: string) => {
     setFormData(prev => ({ ...prev, subtasks: prev.subtasks.filter(st => st.id !== subtaskId) }));
   };
+
+  // --- UUDET FUNKTIOT ALITEHTÄVIEN RAAHAUKSEEN ---
+  const handleDragStart = (e: React.DragEvent<HTMLLIElement>, subtaskId: string) => {
+    draggedSubtask.current = subtaskId;
+    e.dataTransfer.effectAllowed = 'move';
+    (e.currentTarget as HTMLLIElement).classList.add('opacity-50');
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLLIElement>) => {
+    e.preventDefault();
+  };
+  
+  const handleDrop = (e: React.DragEvent<HTMLLIElement>, targetSubtaskId: string) => {
+    e.preventDefault();
+    if (draggedSubtask.current === null || draggedSubtask.current === targetSubtaskId) return;
+
+    const currentSubtasks = [...formData.subtasks];
+    const draggedIndex = currentSubtasks.findIndex(st => st.id === draggedSubtask.current);
+    const targetIndex = currentSubtasks.findIndex(st => st.id === targetSubtaskId);
+    
+    const [draggedItem] = currentSubtasks.splice(draggedIndex, 1);
+    currentSubtasks.splice(targetIndex, 0, draggedItem);
+    
+    setFormData(prev => ({ ...prev, subtasks: currentSubtasks }));
+    draggedSubtask.current = null;
+  };
+  
+  const handleDragEnd = (e: React.DragEvent<HTMLLIElement>) => {
+    (e.currentTarget as HTMLLIElement).classList.remove('opacity-50');
+  };
+  // --- UUDET FUNKTIOT PÄÄTTYVÄT ---
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,9 +287,17 @@ export default function TaskModal() {
               
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">Alitehtävät</h4>
-                <div className="space-y-2">
+                <ul className="space-y-2">
                   {formData.subtasks.map(subtask => (
-                    <div key={subtask.id} className="flex items-center space-x-2">
+                    <li key={subtask.id} 
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, subtask.id)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, subtask.id)}
+                        onDragEnd={handleDragEnd}
+                        className="flex items-center space-x-2 p-1 rounded-md hover:bg-gray-100 cursor-grab active:cursor-grabbing"
+                    >
+                      <GripVertical className="w-5 h-5 text-gray-400" />
                       <input
                         type="checkbox"
                         checked={subtask.completed}
@@ -270,9 +310,9 @@ export default function TaskModal() {
                       <button type="button" onClick={() => handleDeleteSubtask(subtask.id)}>
                         <Trash2 className="w-4 h-4 text-red-500" />
                       </button>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
                 <div className="flex items-center space-x-2 mt-2">
                   <input
                     type="text"
@@ -293,7 +333,6 @@ export default function TaskModal() {
                 </div>
               </div>
               
-              {/* --- UUDET VALINTARUUDUT ALKAA --- */}
               <div className="space-y-2 pt-4 border-t border-gray-200">
                   <h4 className="text-sm font-medium text-gray-700">Kanban-näkymän asetukset</h4>
                   <label className="flex items-center space-x-2">
@@ -315,7 +354,6 @@ export default function TaskModal() {
                       <span className="text-sm">Näytä alitehtävät Kanban-kortilla</span>
                   </label>
               </div>
-              {/* --- UUDET VALINTARUUDUT PÄÄTTYY --- */}
             </form>
           ) : (
             <AttachmentSection 
