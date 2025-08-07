@@ -198,7 +198,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
   const services = {
-    // KORJATTU: Tiedostonlatauspalvelu palauttaa nyt polun, ei URL:ää
     uploadFile: useCallback(async (file: File): Promise<string> => {
       if (!state.session?.user) throw new Error("User not authenticated");
 
@@ -215,12 +214,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return filePath;
     }, [state.session]),
 
-    // UUSI: Palvelu tiedostojen poistamiseen Storagesta
     deleteFile: useCallback(async (filePath: string) => {
       const { error } = await supabase.storage.from('attachments').remove([filePath]);
       if (error) {
         console.error("Error deleting file from storage:", error);
-        // Ei heitetä virhettä eteenpäin, jotta tietokantamerkintä poistuu joka tapauksessa
       }
     }, []),
 
@@ -281,18 +278,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, []),
     
     updateProjectOrder: useCallback(async (orderedProjects: Project[]) => {
-      const updates = orderedProjects.map((project, index) => ({
-        id: project.id,
-        order_index: index,
-      }));
-
-      const { error } = await supabase.from('projects').update(updates);
-      if (error) throw new Error(error.message);
-      
+      // Luodaan lista päivityslupauksista, yksi jokaista projektia kohti.
+      const updatePromises = orderedProjects.map((project, index) =>
+        supabase
+          .from('projects')
+          .update({ order_index: index }) // Päivitettävä tieto
+          .eq('id', project.id)           // WHERE-ehto, joka kohdistaa päivityksen
+      );
+    
+      // Suoritetaan kaikki päivitykset rinnakkain.
+      const results = await Promise.all(updatePromises);
+    
+      // Tarkistetaan, epäonnistuiko jokin päivityksistä.
+      const firstError = results.find(res => res.error);
+      if (firstError) {
+        throw firstError.error;
+      }
+    
+      // Jos kaikki onnistui, päivitetään sovelluksen tila.
       dispatch({ type: 'UPDATE_PROJECTS_ORDER_SUCCESS', payload: orderedProjects });
     }, []),
     
-    // KORJATTU: Poistaa myös projektiin liitetyt tiedostot
     deleteProject: useCallback(async (projectId: string) => {
         const projectToDelete = state.projects.find(p => p.id === projectId);
         if(projectToDelete?.files && projectToDelete.files.length > 0) {
@@ -326,7 +332,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'UPDATE_TASK_SUCCESS', payload: { projectId: task.project_id || GENERAL_TASKS_PROJECT_ID, task: task } });
     }, []),
     
-    // KORJATTU: Poistaa myös tehtävään liitetyt tiedostot
     deleteTask: useCallback(async (projectId: string, taskId: string) => {
       const project = state.projects.find(p => p.id === projectId);
       const taskToDelete = project?.tasks.find(t => t.id === taskId);
@@ -409,7 +414,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'UPDATE_MULTIPLE_EVENTS_SUCCESS', payload: updatedEventList });
     }, [state.events]),
     
-    // KORJATTU: Poistaa myös tapahtumaan liitetyt tiedostot
     deleteEvent: useCallback(async (eventId: string) => {
         const eventToDelete = state.events.find(e => e.id === eventId);
         if(eventToDelete?.files && eventToDelete.files.length > 0) {
