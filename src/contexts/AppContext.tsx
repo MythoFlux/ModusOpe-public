@@ -53,6 +53,7 @@ const generalTasksProject: Project = {
     { id: 'inProgress', title: 'Työn alla' },
     { id: 'done', title: 'Valmis' },
   ],
+  order_index: -1, // Varmistetaan, että tämä on aina ensimmäinen
 };
 
 export interface ConfirmationModalState {
@@ -96,6 +97,7 @@ export type AppAction =
   | { type: 'DELETE_EVENT_SUCCESS'; payload: string }
   | { type: 'ADD_PROJECT_SUCCESS'; payload: Project }
   | { type: 'UPDATE_PROJECT_SUCCESS'; payload: Project }
+  | { type: 'UPDATE_PROJECTS_ORDER_SUCCESS'; payload: Project[] } // UUSI
   | { type: 'DELETE_PROJECT_SUCCESS'; payload: string }
   | { type: 'ADD_TASK_SUCCESS'; payload: { projectId: string; task: Task } }
   | { type: 'UPDATE_TASK_SUCCESS'; payload: { projectId: string; task: Task } }
@@ -195,7 +197,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
   const services = {
-    // PROJECTS
     addProject: useCallback(async (projectPayload: AddProjectPayload) => {
         const { template_group_name, ...projectDataFromForm } = projectPayload;
         const { id, files, tasks, ...dbData } = projectDataFromForm;
@@ -251,13 +252,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'UPDATE_PROJECT_SUCCESS', payload: project });
     }, []),
     
+    // --- UUSI FUNKTIO ALKAA ---
+    updateProjectOrder: useCallback(async (orderedProjects: Project[]) => {
+      const updates = orderedProjects.map((project, index) => ({
+        id: project.id,
+        order_index: index,
+      }));
+
+      const { error } = await supabase.from('projects').upsert(updates);
+      if (error) throw new Error(error.message);
+      
+      // Päivitetään paikallinen tila vastaamaan uutta järjestystä
+      dispatch({ type: 'UPDATE_PROJECTS_ORDER_SUCCESS', payload: orderedProjects });
+    }, []),
+    // --- UUSI FUNKTIO PÄÄTTYY ---
+    
     deleteProject: useCallback(async (projectId: string) => {
         const { error } = await supabase.from('projects').delete().match({ id: projectId });
         if (error) throw new Error(error.message);
         dispatch({ type: 'DELETE_PROJECT_SUCCESS', payload: projectId });
     }, []),
 
-    // TASKS
     addTask: useCallback(async (task: Omit<Task, 'id'>) => {
       const taskWithUser = { ...task, user_id: state.session?.user.id };
       const { data, error } = await supabase.from('tasks').insert([taskWithUser]).select().single();
@@ -287,7 +302,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'UPDATE_TASK_STATUS_SUCCESS', payload: { projectId: projectId || GENERAL_TASKS_PROJECT_ID, taskId, newStatus } });
     }, []),
     
-    // EVENTS
     addEvent: useCallback(async (event: Omit<Event, 'id'>) => {
         const eventWithUser = { ...event, user_id: state.session?.user.id };
         const { data, error } = await supabase.from('events').insert([eventWithUser]).select().single();
@@ -352,7 +366,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'DELETE_EVENT_SUCCESS', payload: eventId });
     }, []),
     
-    // SCHEDULE TEMPLATES
     addScheduleTemplate: useCallback(async (template: Omit<ScheduleTemplate, 'id'>) => {
         const templateWithUser = { ...template, user_id: state.session?.user.id };
         const { data, error } = await supabase.from('schedule_templates').insert([templateWithUser]).select().single();
@@ -390,7 +403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       };
       const [projectsRes, templatesRes, eventsRes, tasksRes] = await Promise.all([
-          supabase.from('projects').select('*'),
+          supabase.from('projects').select('*').order('order_index', { ascending: true }), // MUOKATTU
           supabase.from('schedule_templates').select('*'),
           supabase.from('events').select('*'),
           supabase.from('tasks').select('*')
