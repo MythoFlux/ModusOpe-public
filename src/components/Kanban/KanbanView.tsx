@@ -7,8 +7,6 @@ import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { v4 as uuidv4 } from 'uuid';
 
-// Komponentit TaskCard, KanbanColumnComponent ja AddColumn pysyvät ennallaan.
-// LISÄÄN NE TÄHÄN SELKEYDEN VUOKSI.
 const DND_TYPES = {
   TASK: 'task',
   COLUMN: 'column'
@@ -289,7 +287,6 @@ export default function KanbanView() {
     dispatch({ type: 'SET_KANBAN_PROJECT', payload: projectId });
   };
   
-  // --- KORJATTU KOHTA ALKAA ---
   const handleProjectDragStart = (e: React.DragEvent<HTMLLIElement>, projectId: string) => {
     dragItem.current = projectId;
     e.currentTarget.classList.add('bg-gray-200');
@@ -300,17 +297,23 @@ export default function KanbanView() {
   };
 
   const handleProjectDrop = async () => {
-    if (!dragItem.current || !dragOverItem.current || dragItem.current === dragOverItem.current) return;
+    if (!dragItem.current || !dragOverItem.current || dragItem.current === dragOverItem.current) {
+        return;
+    }
 
-    // Yhdistetään kurssit ja muut projektit yhteen muokattavaan listaan
-    const reorderableProjects = [...courses, ...otherProjects];
+    // Luodaan kopio järjesteltävistä projekteista suoraan päätilasta
+    const reorderableProjects = projects.filter(p => p.id !== GENERAL_TASKS_PROJECT_ID);
+
     const dragItemIndex = reorderableProjects.findIndex(p => p.id === dragItem.current);
     const dragOverItemIndex = reorderableProjects.findIndex(p => p.id === dragOverItem.current);
+    
+    if (dragItemIndex === -1 || dragOverItemIndex === -1) return;
 
+    // Järjestellään kopio
     const [draggedItemContent] = reorderableProjects.splice(dragItemIndex, 1);
     reorderableProjects.splice(dragOverItemIndex, 0, draggedItemContent);
     
-    // Kutsutaan palvelua tallentamaan uusi järjestys
+    // Annetaan järjestelty lista palvelulle, joka hoitaa indeksit ja tallennuksen
     await services.updateProjectOrder(reorderableProjects);
 
     dragItem.current = null;
@@ -345,10 +348,7 @@ export default function KanbanView() {
       </ul>
     </div>
   );
-  // --- KORJATTU KOHTA PÄÄTTYY ---
   
-  // Vanhat Kanban-sarakkeiden ja tehtävien käsittelijät pysyvät ennallaan...
-  // (Kopioitu alle selkeyden vuoksi)
   const getTasksForColumn = (columnId: string) => {
     if (!selectedProject) return [];
     const tasksInColumn = selectedProject.tasks.filter(t => (t.column_id || 'todo') === columnId);
