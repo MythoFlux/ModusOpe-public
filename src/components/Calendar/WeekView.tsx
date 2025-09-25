@@ -1,10 +1,12 @@
 // src/components/Calendar/WeekView.tsx
-import React, { useState, useRef, useLayoutEffect, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect, useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { formatDate, isToday, isSameDay, addDays, formatTimeString } from '../../utils/dateUtils';
 import { Event } from '../../types';
 import { Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
+import { useCurrentTime } from '../../hooks/useCurrentTime';
+import TimeIndicator from '../Shared/TimeIndicator';
 
 // Apufunktio tapahtumien asettelun laskemiseen
 const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[]) => {
@@ -108,17 +110,9 @@ export default function WeekView() {
   const { state, dispatch } = useApp();
   const { selectedDate, events } = state;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const currentTime = useCurrentTime();
   
   const [showWeekend, setShowWeekend] = useState(false);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000); // Päivittää joka minuutti
-
-    return () => clearInterval(timer);
-  }, []);
 
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
@@ -192,7 +186,7 @@ export default function WeekView() {
   };
 
   const timeSlots = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
-
+  
   const renderCurrentTimeIndicator = () => {
     const todayIndex = displayDates.findIndex(date => isToday(date));
     if (todayIndex === -1) return null;
@@ -201,10 +195,9 @@ export default function WeekView() {
     const gridColumnStart = todayIndex + 2; // +1 for time column, +1 for 1-based index
 
     return (
-        <div className="absolute left-0 right-0 z-20" style={{ top: `${topPosition}px`, gridColumn: `${gridColumnStart} / span 1`}}>
-            <div className="relative h-px bg-red-500">
-                <div className="absolute -left-1 -top-1 w-2.5 h-2.5 bg-red-500 rounded-full"></div>
-            </div>
+        // Tämä säiliö asettaa indikaattorin oikean päivän sarakkeeseen
+        <div style={{ gridColumn: `${gridColumnStart} / span 1`, position: 'relative' }}>
+             <TimeIndicator top={topPosition} currentTime={currentTime} />
         </div>
     );
   };
