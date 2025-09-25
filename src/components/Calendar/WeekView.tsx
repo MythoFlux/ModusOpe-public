@@ -1,5 +1,5 @@
 // src/components/Calendar/WeekView.tsx
-import React, { useState, useRef, useLayoutEffect, useMemo } from 'react';
+import React, { useState, useRef, useLayoutEffect, useMemo, useEffect } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { formatDate, isToday, isSameDay, addDays, formatTimeString } from '../../utils/dateUtils';
 import { Event } from '../../types';
@@ -108,14 +108,24 @@ export default function WeekView() {
   const { state, dispatch } = useApp();
   const { selectedDate, events } = state;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
   
   const [showWeekend, setShowWeekend] = useState(false);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Päivittää joka minuutti
+
+    return () => clearInterval(timer);
+  }, []);
+
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 8 * 48;
+      const hourToShow = isToday(new Date()) ? currentTime.getHours() : 8;
+      scrollContainerRef.current.scrollTop = Math.max(0, (hourToShow - 1) * 48);
     }
-  }, [state.selectedDate, state.currentView, showWeekend]);
+  }, [state.selectedDate, state.currentView, showWeekend, currentTime]);
 
   const getMondayOfWeek = (date: Date) => {
     const d = new Date(date);
@@ -183,6 +193,22 @@ export default function WeekView() {
 
   const timeSlots = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
 
+  const renderCurrentTimeIndicator = () => {
+    const todayIndex = displayDates.findIndex(date => isToday(date));
+    if (todayIndex === -1) return null;
+
+    const topPosition = (currentTime.getHours() * 48) + (currentTime.getMinutes() * 48 / 60);
+    const gridColumnStart = todayIndex + 2; // +1 for time column, +1 for 1-based index
+
+    return (
+        <div className="absolute left-0 right-0 z-20" style={{ top: `${topPosition}px`, gridColumn: `${gridColumnStart} / span 1`}}>
+            <div className="relative h-px bg-red-500">
+                <div className="absolute -left-1 -top-1 w-2.5 h-2.5 bg-red-500 rounded-full"></div>
+            </div>
+        </div>
+    );
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-full">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
@@ -236,21 +262,24 @@ export default function WeekView() {
         <div className="relative">
             <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
                 <div className="col-start-1">
-                    {timeSlots.map((time) => (
-                        <div key={time} className="h-12 text-xs text-gray-500 pr-2 text-right flex items-start">{time}</div>
+                    {timeSlots.map((time, i) => (
+                        <div key={time} className="h-12 text-xs text-gray-500 pr-2 text-right flex items-start">
+                             {i === 0 ? '' : time}
+                        </div>
                     ))}
                 </div>
                 <div className="col-start-2 col-span-full grid" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)` }}>
                     {displayDates.map((_, dateIndex) => (
                          <div key={dateIndex} className="border-l border-gray-200">
-                             {timeSlots.map((time) => (
-                                 <div key={time} className="h-12 border-b border-gray-100" />
+                             {timeSlots.map((time, i) => (
+                                 <div key={time} className={`h-12 ${i > 0 ? 'border-b border-gray-100' : ''}`} />
                              ))}
                          </div>
                     ))}
                 </div>
             </div>
             <div className="absolute top-0 left-0 w-full h-full grid" style={{ gridTemplateColumns: gridColumns }}>
+                {renderCurrentTimeIndicator()}
                 <div className="col-start-1"></div>
                  {displayDates.map((date, dateIndex) => {
                     const timedEvents = laidOutEventsByDay.get(date.toISOString().split('T')[0]) || [];
