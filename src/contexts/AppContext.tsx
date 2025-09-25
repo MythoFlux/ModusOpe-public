@@ -1,7 +1,7 @@
 // src/contexts/AppContext.tsx
 import React, { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { Event, Project, Task, CalendarView, ScheduleTemplate, KanbanColumn, Subtask, AddProjectPayload, FileAttachment } from '../types'; // LISÄTTY: FileAttachment
+import { Event, Project, Task, CalendarView, ScheduleTemplate, KanbanColumn, Subtask, AddProjectPayload, FileAttachment } from '../types';
 import { supabase } from '../supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -9,7 +9,7 @@ import { projectReducerLogic } from '../reducers/projectReducer';
 import { eventReducerLogic } from '../reducers/eventReducer';
 import { uiReducerLogic } from '../reducers/uiReducer';
 import { updateDeadlineEvents, generateEventsForCourse } from '../utils/eventUtils';
-import { DEFAULT_KANBAN_COLUMNS } from '../constants/kanbanConstants'; // MUUTOS: Tuotu vakiot
+import { DEFAULT_KANBAN_COLUMNS } from '../constants/kanbanConstants';
 
 function getInitialEvents(
   projects: Project[],
@@ -50,8 +50,8 @@ const generalTasksProject: Project = {
   color: '#6B7280',
   start_date: new Date(),
   tasks: [],
-  columns: DEFAULT_KANBAN_COLUMNS, // MUUTOS: Käytetään vakiota
-  order_index: -1, // Varmistetaan, että tämä on aina ensimmäinen
+  columns: DEFAULT_KANBAN_COLUMNS,
+  order_index: -1,
 };
 
 export interface ConfirmationModalState {
@@ -100,6 +100,7 @@ export type AppAction =
   | { type: 'ADD_TASK_SUCCESS'; payload: { projectId: string; task: Task } }
   | { type: 'UPDATE_TASK_SUCCESS'; payload: { projectId: string; task: Task } }
   | { type: 'DELETE_TASK_SUCCESS'; payload: { projectId: string; taskId: string } }
+  | { type: 'REORDER_TASKS_SUCCESS'; payload: { projectId: string; tasks: Task[] } } // LISÄTTY
   | { type: 'ADD_SUBTASK'; payload: { projectId: string; taskId: string; subtask: Subtask } }
   | { type: 'UPDATE_SUBTASK'; payload: { projectId: string; taskId: string; subtask: Subtask } }
   | { type: 'DELETE_SUBTASK'; payload: { projectId: string; taskId: string; subtaskId: string } }
@@ -222,7 +223,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { template_group_name, ...projectDataFromForm } = projectPayload;
         const { id, files, tasks, ...dbData } = projectDataFromForm;
         
-        // MUUTOS: Käytetään vakiota oletussarakkeille
         const dataToInsert = { ...dbData, columns: DEFAULT_KANBAN_COLUMNS, user_id: state.session?.user.id, files };
 
         const { data: newProjectData, error } = await supabase.from('projects').insert([dataToInsert]).select().single();
@@ -270,13 +270,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, []),
     
     updateProjectOrder: useCallback(async (orderedProjects: Project[]) => {
-      // 1. Luodaan uusi lista, jossa on päivitetyt `order_index`-arvot.
       const projectsWithNewOrder = orderedProjects.map((project, index) => ({
         ...project,
         order_index: index,
       }));
 
-      // 2. Luodaan lista päivityslupauksista tietokantaan.
       const updatePromises = projectsWithNewOrder.map(p =>
         supabase
           .from('projects')
@@ -284,16 +282,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           .eq('id', p.id)
       );
     
-      // 3. Suoritetaan kaikki päivitykset rinnakkain.
       const results = await Promise.all(updatePromises);
     
-      // 4. Tarkistetaan virheet.
       const firstError = results.find(res => res.error);
       if (firstError) {
         throw firstError.error;
       }
     
-      // 5. Jos kaikki onnistui, lähetetään uusi, täydellinen ja järjestetty lista reducerille.
       dispatch({ type: 'UPDATE_PROJECTS_ORDER_SUCCESS', payload: projectsWithNewOrder });
     }, []),
     
@@ -314,20 +309,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, [state.projects]),
 
     addTask: useCallback(async (task: Omit<Task, 'id'>) => {
-      const taskWithUser = { ...task, user_id: state.session?.user.id };
-      const { data, error } = await supabase.from('tasks').insert([taskWithUser]).select().single();
+      // Annetaan uudelle tehtävälle korkein järjestysnumero sen sarakkeessa
+      const targetProjectId = task.project_id || GENERAL_TASKS_PROJECT_ID;
+      const project = state.projects.find(p => p.id === targetProjectId);
+      const tasksInColumn = project?.tasks.filter(t => t.column_id === task.column_id) || [];
+      const maxOrderIndex = tasksInColumn.reduce((max, t) => Math.max(t.order_index || 0, max), 0);
+      
+      const taskWithUserAndOrder = { ...task, order_index: maxOrderIndex + 1, user_id: state.session?.user.id };
+      
+      const { data, error } = await supabase.from('tasks').insert([taskWithUserAndOrder]).select().single();
       if (error || !data) throw new Error(error.message);
+      
       const newTask = { 
         ...data, 
         due_date: data.due_date ? new Date(data.due_date) : undefined,
       };
+      
       dispatch({ type: 'ADD_TASK_SUCCESS', payload: { projectId: data.project_id || GENERAL_TASKS_PROJECT_ID, task: newTask as Task } });
-    }, [state.session]),
+    }, [state.session, state.projects]),
 
     updateTask: useCallback(async (task: Task) => {
       const { error } = await supabase.from('tasks').update(task).match({ id: task.id });
       if (error) throw new Error(error.message);
       dispatch({ type: 'UPDATE_TASK_SUCCESS', payload: { projectId: task.project_id || GENERAL_TASKS_PROJECT_ID, task: task } });
+    }, []),
+
+    // LISÄTTY UUSI FUNKTIO
+    updateTasksOrder: useCallback(async (tasksToUpdate: Pick<Task, 'id' | 'order_index'>[]) => {
+      const { error } = await supabase.from('tasks').upsert(tasksToUpdate);
+      if (error) {
+        console.error("Error updating tasks order:", error);
+        throw new Error(error.message);
+      }
     }, []),
     
     deleteTask: useCallback(async (projectId: string, taskId: string) => {
@@ -468,14 +481,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           supabase.from('projects').select('*').order('order_index', { ascending: true }),
           supabase.from('schedule_templates').select('*'),
           supabase.from('events').select('*'),
-          supabase.from('tasks').select('*')
+          // MUUTETTU: Järjestetään tehtävät heti haussa
+          supabase.from('tasks').select('*').order('order_index', { ascending: true })
       ]);
       if (projectsRes.error || templatesRes.error || eventsRes.error || tasksRes.error) {
         console.error('Error fetching data:', projectsRes.error || templatesRes.error || eventsRes.error || tasksRes.error);
         dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], manualEvents: [], tasks: [] } });
         return;
       }
-      // MUUTOS: Varmistetaan, että kaikilla projekteilla on sarakkeet
       const formattedProjects = (projectsRes.data || []).map((p: any) => ({ ...p, start_date: new Date(p.start_date), end_date: p.end_date ? new Date(p.end_date) : undefined, tasks: [], columns: p.columns && p.columns.length > 0 ? p.columns : DEFAULT_KANBAN_COLUMNS }));
       const formattedEvents = (eventsRes.data || []).map((e: any) => ({ ...e, date: new Date(e.date) }));
       const formattedTasks = (tasksRes.data || []).map((t: any) => ({ ...t, due_date: t.due_date ? new Date(t.due_date) : undefined, subtasks: t.subtasks || [], files: t.files || [] }));
