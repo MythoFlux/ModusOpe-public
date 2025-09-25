@@ -1,6 +1,6 @@
 // src/components/Modals/TaskModal.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Type, FileText, Calendar, AlertCircle, Bookmark, Plus, Trash2, File, Loader2, GripVertical } from 'lucide-react';
+import { X, Type, FileText, Calendar, AlertCircle, Bookmark, Plus, Trash2, File, Loader2, GripVertical, Pencil } from 'lucide-react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
 import { useConfirmation } from '../../hooks/useConfirmation';
 import { Task, Subtask, FileAttachment } from '../../types';
@@ -33,6 +33,9 @@ export default function TaskModal() {
   
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [files, setFiles] = useState<FileAttachment[]>([]);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskText, setEditingSubtaskText] = useState('');
+
 
   useEffect(() => {
     if (selectedTask && selectedTask.id) {
@@ -78,6 +81,23 @@ export default function TaskModal() {
   
   const handleDeleteSubtask = (subtaskId: string) => {
     setFormData(prev => ({ ...prev, subtasks: prev.subtasks.filter(st => st.id !== subtaskId) }));
+  };
+
+  const handleEditSubtask = (subtask: Subtask) => {
+    setEditingSubtaskId(subtask.id);
+    setEditingSubtaskText(subtask.title);
+  };
+
+  const handleSaveSubtaskEdit = () => {
+    if (!editingSubtaskId) return;
+    setFormData(prev => ({
+      ...prev,
+      subtasks: prev.subtasks.map(st =>
+        st.id === editingSubtaskId ? { ...st, title: editingSubtaskText } : st
+      )
+    }));
+    setEditingSubtaskId(null);
+    setEditingSubtaskText('');
   };
 
   const handleDragStart = (e: React.DragEvent<HTMLLIElement>, subtaskId: string) => {
@@ -292,21 +312,38 @@ export default function TaskModal() {
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, subtask.id)}
                             onDragEnd={handleDragEnd}
-                            className="flex items-center space-x-2 p-1 rounded-md hover:bg-gray-100 cursor-grab active:cursor-grabbing"
+                            className="flex items-center space-x-2 p-1 rounded-md hover:bg-gray-100 group"
                         >
-                          <GripVertical className="w-5 h-5 text-gray-400" />
+                          <GripVertical className="w-5 h-5 text-gray-400 cursor-grab active:cursor-grabbing" />
                           <input
                             type="checkbox"
                             checked={subtask.completed}
                             onChange={e => handleSubtaskChange(subtask.id, e.target.checked)}
                             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                           />
-                          <span className={`flex-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
-                            {subtask.title}
-                          </span>
-                          <button type="button" onClick={() => handleDeleteSubtask(subtask.id)}>
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </button>
+                          {editingSubtaskId === subtask.id ? (
+                            <input
+                              type="text"
+                              value={editingSubtaskText}
+                              onChange={(e) => setEditingSubtaskText(e.target.value)}
+                              onBlur={handleSaveSubtaskEdit}
+                              onKeyDown={(e) => e.key === 'Enter' && handleSaveSubtaskEdit()}
+                              autoFocus
+                              className="flex-1 px-2 py-1 border border-blue-400 rounded-md"
+                            />
+                          ) : (
+                            <span className={`flex-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
+                              {subtask.title}
+                            </span>
+                          )}
+                          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button type="button" onClick={() => handleEditSubtask(subtask)}>
+                                <Pencil className="w-4 h-4 text-gray-500 hover:text-blue-600" />
+                            </button>
+                            <button type="button" onClick={() => handleDeleteSubtask(subtask.id)}>
+                                <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-600" />
+                            </button>
+                          </div>
                         </li>
                       ))}
                     </ul>
