@@ -23,9 +23,14 @@ const TaskCard = ({ task, onDragStart }: { task: Task, onDragStart: (e: React.Dr
     }
   };
 
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    dispatch({ type: 'TOGGLE_TASK_MODAL', payload: task });
+  };
+
   return (
     <div
-      onClick={() => dispatch({ type: 'TOGGLE_TASK_MODAL', payload: task })}
+      onClick={handleEditClick}
       draggable
       onDragStart={onDragStart}
       onDragEnd={(e) => e.currentTarget.classList.remove('opacity-50', 'shadow-2xl')}
@@ -45,19 +50,22 @@ const TaskCard = ({ task, onDragStart }: { task: Task, onDragStart: (e: React.Dr
               {task.subtasks.map(subtask => (
                   <div 
                       key={subtask.id} 
-                      onClick={(e) => { 
-                          e.stopPropagation();
-                          dispatch({ type: 'TOGGLE_TASK_MODAL', payload: task });
-                      }}
-                      className="flex items-center space-x-2 text-xs cursor-pointer hover:bg-gray-100 p-1 -m-1 rounded transition-colors"
+                      className="flex items-center space-x-2 text-xs"
                   >
                       {subtask.completed 
                         ? <CheckSquare className="w-3 h-3 text-green-500 flex-shrink-0" /> 
                         : <Circle className="w-3 h-3 text-gray-400 flex-shrink-0" />
                       }
-                      <span className={subtask.completed ? 'line-through text-gray-500' : ''}>
+                      <span className={`flex-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
                           {subtask.title}
                       </span>
+                      <button
+                        onClick={handleEditClick}
+                        className="p-1 -mr-1 text-gray-400 hover:text-blue-500 rounded transition-colors"
+                        title="Muokkaa alitehtävää"
+                      >
+                        <Edit className="w-3 h-3" />
+                      </button>
                   </div>
               ))}
           </div>
