@@ -23,14 +23,14 @@ const TaskCard = ({ task, onDragStart }: { task: Task, onDragStart: (e: React.Dr
     }
   };
 
-  const handleEditClick = (e: React.MouseEvent) => {
+  const handleCardClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     dispatch({ type: 'TOGGLE_TASK_MODAL', payload: task });
   };
 
   return (
     <div
-      onClick={handleEditClick}
+      onClick={handleCardClick}
       draggable
       onDragStart={onDragStart}
       onDragEnd={(e) => e.currentTarget.classList.remove('opacity-50', 'shadow-2xl')}
@@ -59,13 +59,6 @@ const TaskCard = ({ task, onDragStart }: { task: Task, onDragStart: (e: React.Dr
                       <span className={`flex-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
                           {subtask.title}
                       </span>
-                      <button
-                        onClick={handleEditClick}
-                        className="p-1 -mr-1 text-gray-400 hover:text-blue-500 rounded transition-colors"
-                        title="Muokkaa alitehtävää"
-                      >
-                        <Edit className="w-3 h-3" />
-                      </button>
                   </div>
               ))}
           </div>
