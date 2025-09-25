@@ -1,7 +1,7 @@
 // src/components/Kanban/KanbanSidebarProjectList.tsx
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Project } from '../../types';
-import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 
@@ -42,7 +42,7 @@ const SortableProjectItem = ({ item, selectedKanbanProjectId, handleSelectProjec
       </button>
       <div
         onClick={() => handleSelectProject(item.id)}
-        className={`flex-1 text-left pr-4 py-2 text-sm rounded-md transition-colors flex items-center cursor-pointer ${
+        className={`flex-1 text-left pr-4 py-2 text-sm rounded-r-md transition-colors flex items-center cursor-pointer ${
           selectedKanbanProjectId === item.id
             ? 'bg-blue-100 text-blue-800 font-semibold'
             : 'text-gray-700 hover:bg-gray-100'
@@ -52,7 +52,7 @@ const SortableProjectItem = ({ item, selectedKanbanProjectId, handleSelectProjec
           className="w-2 h-2 rounded-full mr-3"
           style={{ backgroundColor: item.color }}
         ></span>
-        <span className="flex-1">{item.name}</span>
+        <span className="flex-1 truncate">{item.name}</span>
       </div>
     </li>
   );
@@ -73,7 +73,11 @@ export default function KanbanSidebarProjectList({
   selectedKanbanProjectId,
   handleSelectProject,
 }: KanbanSidebarProjectListProps) {
-  const itemIds = useMemo(() => items.map(item => item.id), [items]);
+  
+  // Älä renderöi mitään, jos lista on tyhjä
+  if (items.length === 0) {
+    return null;
+  }
 
   return (
     <div>
@@ -81,16 +85,15 @@ export default function KanbanSidebarProjectList({
         {icon} <span className="ml-2">{title}</span>
       </h3>
       <ul className="space-y-1 px-2">
-        <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
-          {items.map((item) => (
-            <SortableProjectItem
-              key={item.id}
-              item={item}
-              selectedKanbanProjectId={selectedKanbanProjectId}
-              handleSelectProject={handleSelectProject}
-            />
-          ))}
-        </SortableContext>
+        {/* SortableContext on nyt vanhempikomponentissa (KanbanView) */}
+        {items.map((item) => (
+          <SortableProjectItem
+            key={item.id}
+            item={item}
+            selectedKanbanProjectId={selectedKanbanProjectId}
+            handleSelectProject={handleSelectProject}
+          />
+        ))}
       </ul>
     </div>
   );
