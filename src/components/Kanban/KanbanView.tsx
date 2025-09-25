@@ -41,9 +41,16 @@ const TaskCard = ({ task, onDragStart }: { task: Task, onDragStart: (e: React.Dr
       )}
 
       {task.show_subtasks && task.subtasks && task.subtasks.length > 0 && (
-          <div className="mt-2 space-y-1">
+          <div className="mt-2 space-y-2">
               {task.subtasks.map(subtask => (
-                  <div key={subtask.id} className="flex items-center space-x-2 text-xs">
+                  <div 
+                      key={subtask.id} 
+                      onClick={(e) => { 
+                          e.stopPropagation();
+                          dispatch({ type: 'TOGGLE_TASK_MODAL', payload: task });
+                      }}
+                      className="flex items-center space-x-2 text-xs cursor-pointer hover:bg-gray-100 p-1 -m-1 rounded transition-colors"
+                  >
                       {subtask.completed 
                         ? <CheckSquare className="w-3 h-3 text-green-500 flex-shrink-0" /> 
                         : <Circle className="w-3 h-3 text-gray-400 flex-shrink-0" />
