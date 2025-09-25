@@ -2,6 +2,7 @@
 import { AppAction, AppState } from '../contexts/AppContext';
 import { KanbanColumn, Project, Subtask, Task } from '../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../contexts/AppContext';
+import { KANBAN_COLUMN_IDS } from '../constants/kanbanConstants'; // MUUTOS: Tuotu vakiot
 
 const findProject = (state: AppState, projectId: string): Project | undefined => {
   return state.projects.find(p => p.id === projectId);
@@ -167,7 +168,8 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
             ...state,
             projects: state.projects.map(p =>
                 p.id === projectId
-                    ? { ...p, columns: p.columns.filter(c => c.id !== columnId), tasks: p.tasks.map(t => t.column_id === columnId ? { ...t, column_id: 'todo' } : t) }
+                    // MUUTOS: Käytetään vakiota
+                    ? { ...p, columns: p.columns.filter(c => c.id !== columnId), tasks: p.tasks.map(t => t.column_id === columnId ? { ...t, column_id: KANBAN_COLUMN_IDS.TODO } : t) }
                     : p
             ),
         };
