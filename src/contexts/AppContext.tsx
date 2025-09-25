@@ -9,6 +9,7 @@ import { projectReducerLogic } from '../reducers/projectReducer';
 import { eventReducerLogic } from '../reducers/eventReducer';
 import { uiReducerLogic } from '../reducers/uiReducer';
 import { updateDeadlineEvents, generateEventsForCourse } from '../utils/eventUtils';
+import { DEFAULT_KANBAN_COLUMNS } from '../constants/kanbanConstants'; // MUUTOS: Tuotu vakiot
 
 function getInitialEvents(
   projects: Project[],
@@ -49,11 +50,7 @@ const generalTasksProject: Project = {
   color: '#6B7280',
   start_date: new Date(),
   tasks: [],
-  columns: [
-    { id: 'todo', title: 'Suunnitteilla' },
-    { id: 'inProgress', title: 'Työn alla' },
-    { id: 'done', title: 'Valmis' },
-  ],
+  columns: DEFAULT_KANBAN_COLUMNS, // MUUTOS: Käytetään vakiota
   order_index: -1, // Varmistetaan, että tämä on aina ensimmäinen
 };
 
@@ -225,13 +222,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { template_group_name, ...projectDataFromForm } = projectPayload;
         const { id, files, tasks, ...dbData } = projectDataFromForm;
         
-        const defaultColumns = [
-            { id: 'todo', title: 'Suunnitteilla' },
-            { id: 'inProgress', title: 'Työn alla' },
-            { id: 'done', title: 'Valmis' },
-        ];
-        
-        const dataToInsert = { ...dbData, columns: defaultColumns, user_id: state.session?.user.id, files };
+        // MUUTOS: Käytetään vakiota oletussarakkeille
+        const dataToInsert = { ...dbData, columns: DEFAULT_KANBAN_COLUMNS, user_id: state.session?.user.id, files };
 
         const { data: newProjectData, error } = await supabase.from('projects').insert([dataToInsert]).select().single();
         if (error || !newProjectData) throw new Error(error.message);
@@ -483,7 +475,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], manualEvents: [], tasks: [] } });
         return;
       }
-      const formattedProjects = (projectsRes.data || []).map((p: any) => ({ ...p, start_date: new Date(p.start_date), end_date: p.end_date ? new Date(p.end_date) : undefined, tasks: [], columns: p.columns && p.columns.length > 0 ? p.columns : [ { id: 'todo', title: 'Suunnitteilla' }, { id: 'inProgress', title: 'Työn alla' }, { id: 'done', title: 'Valmis' } ] }));
+      // MUUTOS: Varmistetaan, että kaikilla projekteilla on sarakkeet
+      const formattedProjects = (projectsRes.data || []).map((p: any) => ({ ...p, start_date: new Date(p.start_date), end_date: p.end_date ? new Date(p.end_date) : undefined, tasks: [], columns: p.columns && p.columns.length > 0 ? p.columns : DEFAULT_KANBAN_COLUMNS }));
       const formattedEvents = (eventsRes.data || []).map((e: any) => ({ ...e, date: new Date(e.date) }));
       const formattedTasks = (tasksRes.data || []).map((t: any) => ({ ...t, due_date: t.due_date ? new Date(t.due_date) : undefined, subtasks: t.subtasks || [], files: t.files || [] }));
       dispatch({ type: 'INITIALIZE_DATA', payload: { projects: formattedProjects, scheduleTemplates: templatesRes.data || [], manualEvents: formattedEvents, tasks: formattedTasks } });
