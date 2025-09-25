@@ -35,15 +35,24 @@ export default function TaskModal() {
   const [files, setFiles] = useState<FileAttachment[]>([]);
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
-  const editingTextareaRef = useRef<HTMLTextAreaElement>(null); // Ref for the textarea
+  const editingTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const newSubtaskTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Effect to adjust textarea height
+  // Effect to adjust editing textarea height
   useEffect(() => {
     if (editingTextareaRef.current) {
       editingTextareaRef.current.style.height = 'auto';
       editingTextareaRef.current.style.height = `${editingTextareaRef.current.scrollHeight}px`;
     }
   }, [editingSubtaskText]);
+
+  // Effect to adjust new subtask textarea height
+  useEffect(() => {
+    if (newSubtaskTextareaRef.current) {
+      newSubtaskTextareaRef.current.style.height = 'auto';
+      newSubtaskTextareaRef.current.style.height = `${newSubtaskTextareaRef.current.scrollHeight}px`;
+    }
+  }, [newSubtaskTitle]);
 
 
   useEffect(() => {
@@ -321,14 +330,14 @@ export default function TaskModal() {
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, subtask.id)}
                             onDragEnd={handleDragEnd}
-                            className="flex items-center space-x-2 p-1 rounded-md hover:bg-gray-100 group"
+                            className="flex items-start space-x-2 p-1 rounded-md hover:bg-gray-100 group"
                         >
-                          <GripVertical className="w-5 h-5 text-gray-400 cursor-grab active:cursor-grabbing" />
+                          <GripVertical className="w-5 h-5 text-gray-400 cursor-grab active:cursor-grabbing mt-1" />
                           <input
                             type="checkbox"
                             checked={subtask.completed}
                             onChange={e => handleSubtaskChange(subtask.id, e.target.checked)}
-                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 mt-1.5"
                           />
                           {editingSubtaskId === subtask.id ? (
                             <textarea
@@ -347,11 +356,11 @@ export default function TaskModal() {
                               rows={1}
                             />
                           ) : (
-                            <span className={`flex-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
+                            <span className={`flex-1 pt-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
                               {subtask.title}
                             </span>
                           )}
-                          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity pt-1">
                             <button type="button" onClick={() => handleEditSubtask(subtask)}>
                                 <Pencil className="w-4 h-4 text-gray-500 hover:text-blue-600" />
                             </button>
@@ -362,21 +371,22 @@ export default function TaskModal() {
                         </li>
                       ))}
                     </ul>
-                    <div className="flex items-center space-x-2 mt-2">
-                      <input
-                        type="text"
+                    <div className="flex items-start space-x-2 mt-2">
+                      <textarea
+                        ref={newSubtaskTextareaRef}
                         id="new-subtask-title"
                         name="new-subtask-title"
                         value={newSubtaskTitle}
                         onChange={e => setNewSubtaskTitle(e.target.value)}
                         placeholder="Uusi alitehtävä"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none overflow-hidden"
                         onKeyDown={(e) => {
-                           if (e.key === 'Enter') {
+                           if (e.key === 'Enter' && !e.shiftKey) {
                                 e.preventDefault();
                                 handleAddSubtask();
                            }
                         }}
+                        rows={1}
                       />
                       <button
                         type="button"
