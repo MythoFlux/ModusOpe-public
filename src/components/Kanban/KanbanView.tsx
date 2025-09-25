@@ -283,46 +283,47 @@ export default function KanbanView() {
     const { active, over } = event;
     if (!over || !selectedProject) return;
 
-    const activeId = active.id;
-    const overId = over.id;
+    const activeId = String(active.id);
+    const overId = String(over.id);
 
     if (activeId === overId) return;
 
-    const isProjectDrag = projects.some(p => p.id === activeId);
-    const isColumnDrag = selectedProject.columns.some(c => c.id === activeId);
-    const isTaskDrag = selectedProject.tasks.some(t => t.id === activeId);
-    
-    if (isProjectDrag) {
-      const reorderableProjects = projects.filter(p => p.id !== GENERAL_TASKS_PROJECT_ID);
-      const oldIndex = reorderableProjects.findIndex(p => p.id === activeId);
-      const newIndex = reorderableProjects.findIndex(p => p.id === overId);
-      const newOrder = arrayMove(reorderableProjects, oldIndex, newIndex);
-      await services.updateProjectOrder(newOrder);
+    // --- KORJATTU LOGIIKKA ALKAA ---
+
+    const activeIsColumn = selectedProject.columns.some(c => c.id === activeId);
+    if (activeIsColumn) {
+      const oldIndex = selectedProject.columns.findIndex(c => c.id === activeId);
+      const newIndex = selectedProject.columns.findIndex(c => c.id === overId);
+      if (oldIndex !== -1 && newIndex !== -1) {
+          const reorderedColumns = arrayMove(selectedProject.columns, oldIndex, newIndex);
+          await services.updateProject({ ...selectedProject, columns: reorderedColumns });
+      }
       return;
     }
 
-    if (isColumnDrag) {
-        const oldIndex = selectedProject.columns.findIndex(c => c.id === activeId);
-        const newIndex = selectedProject.columns.findIndex(c => c.id === overId);
-        const reorderedColumns = arrayMove(selectedProject.columns, oldIndex, newIndex);
-        await services.updateProject({ ...selectedProject, columns: reorderedColumns });
-        return;
+    const activeTask = selectedProject.tasks.find(t => t.id === activeId);
+    if (activeTask) {
+        const sourceColumnId = active.data.current?.sortable.containerId;
+        
+        let destinationColumnId = null;
+        const overIsAColumn = selectedProject.columns.some(c => c.id === overId);
+        
+        if (overIsAColumn) {
+            destinationColumnId = overId;
+        } else {
+            // Dropped over a task, get its column
+            destinationColumnId = over.data.current?.sortable.containerId;
+        }
+
+        // Move task if columns are different
+        if (sourceColumnId && destinationColumnId && sourceColumnId !== destinationColumnId) {
+            const isCompleted = destinationColumnId === 'done';
+            await services.updateTask({ ...activeTask, column_id: destinationColumnId, completed: isCompleted });
+        }
+        // Huom: Tehtävien järjestely sarakkeen sisällä vaatisi lisälogiikkaa
+        // tilanhallintaan ja tietokantaan, joten se on jätetty pois tästä korjauksesta.
     }
-
-    if (isTaskDrag) {
-      const task = selectedProject.tasks.find(t => t.id === activeId);
-      if (!task) return;
-
-      let targetColumnId = over.data.current?.sortable?.containerId || over.id.toString();
-      
-      const overColumn = selectedProject.columns.find(c => c.id === targetColumnId);
-      if(!overColumn) return;
-
-      if (task.column_id !== targetColumnId) {
-        const isCompleted = targetColumnId === 'done';
-        await services.updateTask({ ...task, column_id: targetColumnId, completed: isCompleted });
-      }
-    }
+    // --- KORJATTU LOGIIKKA PÄÄTTYY ---
   };
 
   return (
