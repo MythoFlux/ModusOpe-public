@@ -35,6 +35,15 @@ export default function TaskModal() {
   const [files, setFiles] = useState<FileAttachment[]>([]);
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
+  const editingTextareaRef = useRef<HTMLTextAreaElement>(null); // Ref for the textarea
+
+  // Effect to adjust textarea height
+  useEffect(() => {
+    if (editingTextareaRef.current) {
+      editingTextareaRef.current.style.height = 'auto';
+      editingTextareaRef.current.style.height = `${editingTextareaRef.current.scrollHeight}px`;
+    }
+  }, [editingSubtaskText]);
 
 
   useEffect(() => {
@@ -322,14 +331,20 @@ export default function TaskModal() {
                             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                           />
                           {editingSubtaskId === subtask.id ? (
-                            <input
-                              type="text"
+                            <textarea
+                              ref={editingTextareaRef}
                               value={editingSubtaskText}
                               onChange={(e) => setEditingSubtaskText(e.target.value)}
                               onBlur={handleSaveSubtaskEdit}
-                              onKeyDown={(e) => e.key === 'Enter' && handleSaveSubtaskEdit()}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handleSaveSubtaskEdit();
+                                }
+                              }}
                               autoFocus
-                              className="flex-1 px-2 py-1 border border-blue-400 rounded-md"
+                              className="flex-1 px-2 py-1 border border-blue-400 rounded-md resize-none overflow-hidden"
+                              rows={1}
                             />
                           ) : (
                             <span className={`flex-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
@@ -356,6 +371,12 @@ export default function TaskModal() {
                         onChange={e => setNewSubtaskTitle(e.target.value)}
                         placeholder="Uusi alitehtävä"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        onKeyDown={(e) => {
+                           if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddSubtask();
+                           }
+                        }}
                       />
                       <button
                         type="button"
