@@ -4,6 +4,7 @@ import { useApp, useAppServices } from '../../contexts/AppContext';
 import { CheckSquare, Circle, Calendar, AlertCircle, Plus } from 'lucide-react';
 import { formatDate } from '../../utils/dateUtils';
 import { Task } from '../../types';
+import { KANBAN_COLUMN_IDS } from '../../constants/kanbanConstants'; // MUUTOS: Tuotu vakiot
 
 export default function TaskList() {
   const { state, dispatch } = useApp();
@@ -33,8 +34,8 @@ export default function TaskList() {
     const task = project?.tasks.find(t => t.id === taskId);
     
     if (task) {
-      // KORJATTU: Päivitetään myös column_id. Jos valmis -> 'done', muuten 'todo'.
-      const newColumnId = completed ? 'done' : 'todo';
+      // MUUTOS: Käytetään vakioita
+      const newColumnId = completed ? KANBAN_COLUMN_IDS.DONE : KANBAN_COLUMN_IDS.TODO;
       services.updateTask({ ...task, completed, column_id: newColumnId }).catch((err: any) => {
         console.error("Failed to toggle task:", err);
         // Tässä voisi näyttää virheilmoituksen käyttäjälle
