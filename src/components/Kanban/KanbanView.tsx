@@ -82,6 +82,24 @@ const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropCol
   const [title, setTitle] = useState(column.title);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isTaskDraggedOver, setIsTaskDraggedOver] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // KORJATTU: Lisätty useEffect valikon sulkemiseksi
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
 
   // MUUTOS: Käytetään vakiota tarkistukseen
   const isDefaultColumn = DEFAULT_COLUMN_ID_ARRAY.includes(column.id);
@@ -174,7 +192,7 @@ const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropCol
             )}
         </div>
 
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-1 text-gray-500 hover:bg-gray-200 rounded">
             <MoreHorizontal className="w-4 h-4" />
           </button>
