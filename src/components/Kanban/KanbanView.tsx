@@ -6,6 +6,7 @@ import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizo
 import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { v4 as uuidv4 } from 'uuid';
+import { DEFAULT_COLUMN_ID_ARRAY } from '../../constants/kanbanConstants'; // MUUTOS: Tuotu vakiot
 
 const DND_TYPES = {
   TASK: 'task',
@@ -82,7 +83,8 @@ const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropCol
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isTaskDraggedOver, setIsTaskDraggedOver] = useState(false);
 
-  const isDefaultColumn = ['todo', 'inProgress', 'done'].includes(column.id);
+  // MUUTOS: Käytetään vakiota tarkistukseen
+  const isDefaultColumn = DEFAULT_COLUMN_ID_ARRAY.includes(column.id);
 
   const handleUpdate = async () => {
     if (title.trim()) {
@@ -488,7 +490,8 @@ export default function KanbanView() {
                 </div>
                 <div className="flex-1 flex gap-6 overflow-x-auto" onDragEnd={() => setDraggedColumnIndex(null)}>
                   {selectedProject.columns
-                    ?.filter(column => showDefaultColumns || !['todo', 'inProgress', 'done'].includes(column.id))
+                    // MUUTOS: Käytetään vakiota suodatukseen
+                    ?.filter(column => showDefaultColumns || !DEFAULT_COLUMN_ID_ARRAY.includes(column.id))
                     .map((column, index) => (
                       <div key={column.id}>
                         <KanbanColumnComponent 
