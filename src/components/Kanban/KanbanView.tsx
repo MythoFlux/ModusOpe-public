@@ -1,516 +1,434 @@
-// src/components/Kanban/KanbanView.tsx
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+// src/components/Modals/TaskModal.tsx
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Type, FileText, Calendar, AlertCircle, Bookmark, Plus, Trash2, File, Loader2, GripVertical, Pencil } from 'lucide-react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
-import { Project, Task, KanbanColumn } from '../../types';
-import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical, Eye, EyeOff, CheckSquare, Circle } from 'lucide-react';
-import { formatDate } from '../../utils/dateUtils';
+import { useConfirmation } from '../../hooks/useConfirmation';
+import { Task, Subtask, FileAttachment } from '../../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
-import { v4 as uuidv4 } from 'uuid';
+import AttachmentSection from '../Shared/AttachmentSection';
+import FormInput from '../Forms/FormInput';
+import FormTextarea from '../Forms/FormTextarea';
+import FormSelect from '../Forms/FormSelect';
 
-const DND_TYPES = {
-  TASK: 'task',
-  COLUMN: 'column'
-};
-
-const TaskCard = ({ task, onDragStart }: { task: Task, onDragStart: (e: React.DragEvent) => void }) => {
-  const { dispatch } = useApp();
-  
-  const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case 'high': return <AlertCircle className="w-4 h-4 text-red-500" />;
-      case 'medium': return <AlertCircle className="w-4 h-4 text-yellow-500" />;
-      default: return <AlertCircle className="w-4 h-4 text-green-500" />;
-    }
-  };
-
-  const handleCardClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    dispatch({ type: 'TOGGLE_TASK_MODAL', payload: task });
-  };
-
-  return (
-    <div
-      onClick={handleCardClick}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={(e) => e.currentTarget.classList.remove('opacity-50', 'shadow-2xl')}
-      className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer active:cursor-grabbing"
-    >
-      <div className="flex justify-between items-start mb-2">
-        <h4 className="font-semibold text-gray-800 text-sm">{task.title}</h4>
-        {getPriorityIcon(task.priority)}
-      </div>
-      
-      {task.show_description && task.description && (
-        <p className="text-xs text-gray-600 mb-3 line-clamp-3">{task.description}</p>
-      )}
-
-      {task.show_subtasks && task.subtasks && task.subtasks.length > 0 && (
-          <div className="mt-2 space-y-2">
-              {task.subtasks.map(subtask => (
-                  <div 
-                      key={subtask.id} 
-                      className="flex items-center space-x-2 text-xs"
-                  >
-                      {subtask.completed 
-                        ? <CheckSquare className="w-3 h-3 text-green-500 flex-shrink-0" /> 
-                        : <Circle className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                      }
-                      <span className={`flex-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
-                          {subtask.title}
-                      </span>
-                  </div>
-              ))}
-          </div>
-      )}
-
-      {task.due_date && (
-        <div className="flex items-center text-xs text-gray-500 mt-3">
-          <Calendar className="w-3 h-3 mr-1.5" />
-          <span>{formatDate(new Date(task.due_date))}</span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropColumn, onDragStartColumn, isColumnDragged }: { column: KanbanColumn, tasks: Task[], projectId: string, onDropTask: (targetColumnId: string, sourceTaskId: string, sourceColumnId: string, sourceProjectId: string) => void, onDropColumn: (e: React.DragEvent) => void, onDragStartColumn: (e: React.DragEvent) => void, isColumnDragged: boolean }) => {
+export default function TaskModal() {
   const { state, dispatch } = useApp();
   const services = useAppServices();
-  const [isEditing, setIsEditing] = useState(false);
-  const [title, setTitle] = useState(column.title);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isTaskDraggedOver, setIsTaskDraggedOver] = useState(false);
+  const { showTaskModal, selectedTask, projects, session } = state;
+  const { getConfirmation } = useConfirmation();
+  const [isLoading, setIsLoading] = useState(false);
+  const draggedSubtask = useRef<string | null>(null);
 
-  const isDefaultColumn = ['todo', 'inProgress', 'done'].includes(column.id);
-
-  const handleUpdate = async () => {
-    if (title.trim()) {
-      const project = state.projects.find(p => p.id === projectId);
-      if (!project) return;
-      
-      const updatedColumns = project.columns.map(c => c.id === column.id ? { ...c, title: title.trim() } : c);
-      await services.updateProject({ ...project, columns: updatedColumns });
-      
-      setIsEditing(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (confirm(`Haluatko varmasti poistaa säiliön "${column.title}"? Tämä siirtää kaikki sen sisältämät tehtävät 'Suunnitteilla'-säiliöön.`)) {
-      const project = state.projects.find(p => p.id === projectId);
-      if (!project) return;
-
-      const updatedColumns = project.columns.filter(c => c.id !== column.id);
-      const tasksToMove = project.tasks.filter(t => t.column_id === column.id);
-      
-      const updatedTasks = project.tasks.map(t => t.column_id === column.id ? { ...t, column_id: 'todo' } : t);
-
-      await services.updateProject({ ...project, columns: updatedColumns, tasks: updatedTasks });
-      
-      for (const task of tasksToMove) {
-        await services.updateTask({ ...task, column_id: 'todo' });
-      }
-    }
-  };
+  const [activeTab, setActiveTab] = useState<'details' | 'files'>('details');
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    priority: 'medium' as Task['priority'],
+    due_date: '',
+    project_id: '',
+    subtasks: [] as Subtask[],
+    column_id: 'todo',
+    show_description: false,
+    show_subtasks: false,
+  });
   
-  const handleAddTask = () => {
-    const newTaskTemplate: Partial<Task> = {
-      project_id: projectId,
-      column_id: column.id,
-    };
-    dispatch({ type: 'TOGGLE_TASK_MODAL', payload: newTaskTemplate as Task });
-  };
-  
-  const handleTaskDragStart = (e: React.DragEvent, task: Task) => {
-    e.dataTransfer.setData('type', DND_TYPES.TASK);
-    e.dataTransfer.setData('taskId', task.id);
-    e.dataTransfer.setData('sourceColumnId', column.id);
-    e.dataTransfer.setData('sourceProjectId', projectId);
-    (e.currentTarget as HTMLElement).classList.add('opacity-50', 'shadow-2xl');
-  };
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [files, setFiles] = useState<FileAttachment[]>([]);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskText, setEditingSubtaskText] = useState('');
 
-  return (
-    <div 
-        className={`p-3 flex flex-col w-72 flex-shrink-0 rounded-xl transition-colors duration-200 ${isTaskDraggedOver ? 'bg-blue-50' : 'bg-gray-100/60'} ${isColumnDragged ? 'opacity-50' : ''}`}
-        onDragOver={(e) => { e.preventDefault(); setIsTaskDraggedOver(true); }}
-        onDragLeave={() => setIsTaskDraggedOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsTaskDraggedOver(false);
-          const type = e.dataTransfer.getData('type');
-          if (type === DND_TYPES.TASK) {
-            const taskId = e.dataTransfer.getData('taskId');
-            const sourceColumnId = e.dataTransfer.getData('sourceColumnId');
-            const sourceProjectId = e.dataTransfer.getData('sourceProjectId');
-            onDropTask(column.id, taskId, sourceColumnId, sourceProjectId);
-          } else {
-            onDropColumn(e);
-          }
-        }}
-    >
-      <div 
-        className="flex justify-between items-center mb-2 px-1 cursor-grab active:cursor-grabbing noselect"
-        draggable={!isDefaultColumn}
-        onDragStart={onDragStartColumn}
-      >
-        <div className='flex items-center'>
-            {!isDefaultColumn && <GripVertical className="w-5 h-5 text-gray-400 mr-1" />}
-            {isEditing ? (
-              <input
-                id={`column-title-editor-${column.id}`}
-                name={`column-title-editor-${column.id}`}
-                autoFocus
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                onBlur={handleUpdate}
-                onKeyDown={(e) => e.key === 'Enter' && handleUpdate()}
-                className="font-semibold text-gray-800 bg-white border border-blue-400 rounded px-1 -ml-1 w-full"
-              />
-            ) : (
-              <h3 className="font-semibold text-gray-800">{column.title}</h3>
-            )}
-        </div>
-
-        <div className="relative">
-          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-1 text-gray-500 hover:bg-gray-200 rounded">
-            <MoreHorizontal className="w-4 h-4" />
-          </button>
-          {isMenuOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-              <ul className="py-1">
-                <li><button onClick={() => { setIsEditing(true); setIsMenuOpen(false); }} disabled={isDefaultColumn} className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"> {isDefaultColumn ? <Lock className="w-3 h-3 mr-2" /> : <Edit className="w-3 h-3 mr-2" />} Muokkaa </button> </li>
-                <li><button onClick={handleDelete} disabled={isDefaultColumn} className="w-full text-left flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"> {isDefaultColumn ? <Lock className="w-3 h-3 mr-2" /> : <Trash2 className="w-3 h-3 mr-2" />} Poista </button> </li>
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      <div className="mb-3">
-        <button
-          onClick={handleAddTask}
-          className="w-full flex items-center justify-center p-2 text-sm text-gray-600 bg-white hover:bg-gray-50 rounded-lg transition-colors border border-gray-300"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Lisää tehtävä
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto -mr-2 pr-2 min-h-[300px] space-y-3">
-        {tasks.map(task => (
-          <TaskCard key={task.id} task={task} onDragStart={(e) => handleTaskDragStart(e, task)} />
-        ))}
-        <div className={`flex items-center justify-center text-xs text-gray-400 p-4 border-2 border-dashed rounded-lg transition-colors ${tasks.length > 0 ? 'border-transparent' : 'border-gray-300 h-full'} ${isTaskDraggedOver ? 'border-blue-400 bg-blue-100/50' : ''}`}>
-          {tasks.length === 0 && 'Pudota tehtäviä tähän'}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const AddColumn = ({ projectId }: { projectId: string }) => {
-    const { state } = useApp();
-    const services = useAppServices();
-    const [isEditing, setIsEditing] = useState(false);
-    const [title, setTitle] = useState('');
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (title.trim()) {
-            const project = state.projects.find(p => p.id === projectId);
-            if (!project) {
-                alert("Projektia ei löytynyt!");
-                return;
-            }
-            const newColumn: KanbanColumn = { id: uuidv4(), title: title.trim() };
-            const updatedProject = { ...project, columns: [...project.columns, newColumn] };
-
-            try {
-                await services.updateProject(updatedProject);
-                setTitle('');
-                setIsEditing(false);
-            } catch(err) {
-                console.error(err);
-                alert("Säiliön luonti epäonnistui.")
-            }
-        }
-    };
-
-    if (!isEditing) {
-        return (
-            <div className="w-72 flex-shrink-0 p-3">
-              <button onClick={() => setIsEditing(true)} className="w-full h-full flex items-center justify-center p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-gray-100 hover:border-gray-400 transition-colors">
-                  <Plus className="w-4 h-4 mr-2" /> Lisää uusi säiliö
-              </button>
-            </div>
-        );
-    }
-
-    return (
-        <form onSubmit={handleSubmit} className="w-72 flex-shrink-0 p-3 bg-gray-100 rounded-lg">
-            <input
-              id="new-column-title"
-              name="new-column-title"
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Säiliön nimi..."
-              className="w-full p-2 border border-gray-300 rounded-md"
-            />
-            <div className="mt-2 space-x-2">
-                <button type="submit" className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">Lisää</button>
-                <button type="button" onClick={() => setIsEditing(false)} className="px-3 py-1 text-sm rounded hover:bg-gray-200">Peruuta</button>
-            </div>
-        </form>
-    );
-};
-
-
-export default function KanbanView() {
-  const { state, dispatch } = useApp();
-  const services = useAppServices();
-  const { projects, selectedKanbanProjectId } = state;
-  const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null);
-  const [showDefaultColumns, setShowDefaultColumns] = useState(true);
-
-  // Käytetään useMemo-hookia, jotta listat eivät luoda uudelleen jokaisella renderöinnillä
-  const courses = useMemo(() => projects.filter(p => p.type === 'course'), [projects]);
-  const otherProjects = useMemo(() => projects.filter(p => p.type !== 'course' && p.id !== GENERAL_TASKS_PROJECT_ID), [projects]);
-  const generalProject = useMemo(() => projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID), [projects]);
-
-  const dragItem = useRef<string | null>(null);
-  const dragOverItem = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!selectedKanbanProjectId && projects.length > 0) {
-      const defaultProject = generalProject ? generalProject.id : projects[0].id;
-      dispatch({ type: 'SET_KANBAN_PROJECT', payload: defaultProject });
+    if (selectedTask && selectedTask.id) {
+      setFormData({
+        title: selectedTask.title,
+        description: selectedTask.description || '',
+        priority: selectedTask.priority,
+        due_date: selectedTask.due_date ? new Date(selectedTask.due_date).toISOString().split('T')[0] : '',
+        project_id: selectedTask.project_id,
+        subtasks: selectedTask.subtasks || [],
+        column_id: selectedTask.column_id || 'todo',
+        show_description: selectedTask.show_description || false,
+        show_subtasks: selectedTask.show_subtasks || false,
+      });
+      setFiles(selectedTask.files || []);
+    } else {
+      setFormData({
+        title: '',
+        description: '',
+        priority: 'medium',
+        due_date: '',
+        project_id: selectedTask?.project_id || '',
+        subtasks: [],
+        column_id: selectedTask?.column_id || 'todo',
+        show_description: false,
+        show_subtasks: false,
+      });
+      setFiles([]);
     }
-  }, [projects, selectedKanbanProjectId, dispatch, generalProject]);
+    setActiveTab('details');
+  }, [selectedTask, showTaskModal]);
 
-  const selectedProject = projects.find(p => p.id === selectedKanbanProjectId);
+  const handleSubtaskChange = (subtaskId: string, completed: boolean) => {
+    setFormData(prev => ({ ...prev, subtasks: prev.subtasks.map(st => st.id === subtaskId ? { ...st, completed } : st) }));
+  };
 
-  const handleSelectProject = (projectId: string) => {
-    dispatch({ type: 'SET_KANBAN_PROJECT', payload: projectId });
+  const handleAddSubtask = () => {
+    if (newSubtaskTitle.trim() === '') return;
+    const newSubtask: Subtask = { id: `temp-${Date.now()}`, title: newSubtaskTitle, completed: false };
+    setFormData(prev => ({ ...prev, subtasks: [...prev.subtasks, newSubtask] }));
+    setNewSubtaskTitle('');
   };
   
-  const handleProjectDragStart = (e: React.DragEvent<HTMLLIElement>, projectId: string) => {
-    dragItem.current = projectId;
-    e.currentTarget.classList.add('bg-gray-200');
+  const handleDeleteSubtask = (subtaskId: string) => {
+    setFormData(prev => ({ ...prev, subtasks: prev.subtasks.filter(st => st.id !== subtaskId) }));
   };
 
-  const handleProjectDragEnter = (e: React.DragEvent<HTMLLIElement>, projectId: string) => {
-    dragOverItem.current = projectId;
+  const handleEditSubtask = (subtask: Subtask) => {
+    setEditingSubtaskId(subtask.id);
+    setEditingSubtaskText(subtask.title);
   };
 
-  const handleProjectDrop = async () => {
-    if (!dragItem.current || !dragOverItem.current || dragItem.current === dragOverItem.current) {
+  const handleSaveSubtaskEdit = () => {
+    if (!editingSubtaskId) return;
+    setFormData(prev => ({
+      ...prev,
+      subtasks: prev.subtasks.map(st =>
+        st.id === editingSubtaskId ? { ...st, title: editingSubtaskText } : st
+      )
+    }));
+    setEditingSubtaskId(null);
+    setEditingSubtaskText('');
+  };
+
+  const handleDragStart = (e: React.DragEvent<HTMLLIElement>, subtaskId: string) => {
+    draggedSubtask.current = subtaskId;
+    e.dataTransfer.effectAllowed = 'move';
+    (e.currentTarget as HTMLLIElement).classList.add('opacity-50');
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLLIElement>) => {
+    e.preventDefault();
+  };
+  
+  const handleDrop = (e: React.DragEvent<HTMLLIElement>, targetSubtaskId: string) => {
+    e.preventDefault();
+    if (draggedSubtask.current === null || draggedSubtask.current === targetSubtaskId) return;
+
+    const currentSubtasks = [...formData.subtasks];
+    const draggedIndex = currentSubtasks.findIndex(st => st.id === draggedSubtask.current);
+    const targetIndex = currentSubtasks.findIndex(st => st.id === targetSubtaskId);
+    
+    const [draggedItem] = currentSubtasks.splice(draggedIndex, 1);
+    currentSubtasks.splice(targetIndex, 0, draggedItem);
+    
+    setFormData(prev => ({ ...prev, subtasks: currentSubtasks }));
+    draggedSubtask.current = null;
+  };
+  
+  const handleDragEnd = (e: React.DragEvent<HTMLLIElement>) => {
+    (e.currentTarget as HTMLLIElement).classList.remove('opacity-50');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session?.user && !(selectedTask && selectedTask.id)) {
+        alert("Sinun täytyy olla kirjautunut luodaksesi tehtävän.");
         return;
     }
-
-    // Luodaan kopio järjesteltävistä projekteista suoraan päätilasta
-    const reorderableProjects = projects.filter(p => p.id !== GENERAL_TASKS_PROJECT_ID);
-
-    const dragItemIndex = reorderableProjects.findIndex(p => p.id === dragItem.current);
-    const dragOverItemIndex = reorderableProjects.findIndex(p => p.id === dragOverItem.current);
+    setIsLoading(true);
     
-    if (dragItemIndex === -1 || dragOverItemIndex === -1) return;
+    const targetProjectId = formData.project_id || GENERAL_TASKS_PROJECT_ID;
 
-    // Järjestellään kopio
-    const [draggedItemContent] = reorderableProjects.splice(dragItemIndex, 1);
-    reorderableProjects.splice(dragOverItemIndex, 0, draggedItemContent);
-    
-    // Annetaan järjestelty lista palvelulle, joka hoitaa indeksit ja tallennuksen
-    await services.updateProjectOrder(reorderableProjects);
+    const commonTaskData = {
+      title: formData.title,
+      description: formData.description,
+      column_id: formData.column_id,
+      priority: formData.priority,
+      due_date: formData.due_date ? new Date(formData.due_date) : undefined,
+      project_id: targetProjectId,
+      subtasks: formData.subtasks,
+      files: files,
+      show_description: formData.show_description,
+      show_subtasks: formData.show_subtasks,
+    };
 
-    dragItem.current = null;
-    dragOverItem.current = null;
+    try {
+        if (selectedTask && selectedTask.id) {
+            const taskToUpdate: Task = {
+                ...commonTaskData,
+                id: selectedTask.id,
+                completed: selectedTask.completed,
+            };
+            await services.updateTask(taskToUpdate);
+        } else {
+            const taskToAdd: Omit<Task, 'id'> = {
+                ...commonTaskData,
+                completed: false,
+            };
+            await services.addTask(taskToAdd);
+        }
+        dispatch({ type: 'CLOSE_MODALS' });
+    } catch (error: any) {
+        alert(`Tallennus epäonnistui: ${error.message}`);
+    } finally {
+        setIsLoading(false);
+    }
   };
   
-  const handleProjectDragEnd = (e: React.DragEvent<HTMLLIElement>) => {
-    e.currentTarget.classList.remove('bg-gray-200');
-    dragItem.current = null;
-    dragOverItem.current = null;
-  };
-
-  const renderProjectList = (title: string, items: Project[], icon: React.ReactNode) => (
-    <div onDragOver={(e) => e.preventDefault()}>
-      <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center"> {icon} <span className="ml-2">{title}</span> </h3>
-      <ul className="space-y-1">
-        {items.map((item, index) => (
-          <li key={item.id}
-              draggable
-              onDragStart={(e) => handleProjectDragStart(e, item.id)}
-              onDragEnter={(e) => handleProjectDragEnter(e, item.id)}
-              onDragEnd={handleProjectDragEnd}
-              onDrop={handleProjectDrop}
-              className="cursor-grab active:cursor-grabbing"
-          >
-            <button onClick={() => handleSelectProject(item.id)} className={`w-full text-left px-4 py-2 text-sm rounded-md transition-colors flex items-center ${ selectedKanbanProjectId === item.id ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-700 hover:bg-gray-100' }`} >
-              <span className="w-2 h-2 rounded-full mr-3" style={{ backgroundColor: item.color }}></span>
-              {item.name}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-  
-  const getTasksForColumn = (columnId: string) => {
-    if (!selectedProject) return [];
-    const tasksInColumn = selectedProject.tasks.filter(t => (t.column_id || 'todo') === columnId);
-    return tasksInColumn;
-  };
-  
-  const handleColumnDragStart = (e: React.DragEvent, index: number) => {
-      e.dataTransfer.setData('type', DND_TYPES.COLUMN);
-      e.dataTransfer.setData('sourceColumnIndex', String(index));
-      setDraggedColumnIndex(index);
-  }
-
-  const handleColumnDrop = async (e: React.DragEvent, targetIndex: number) => {
-    if (!selectedProject || draggedColumnIndex === null) return;
-    
-    const reorderedColumns = Array.from(selectedProject.columns);
-    const [removed] = reorderedColumns.splice(draggedColumnIndex, 1);
-    reorderedColumns.splice(targetIndex, 0, removed);
-    
-    await services.updateProject({ ...selectedProject, columns: reorderedColumns });
-    
-    setDraggedColumnIndex(null);
-  };
-
-  const handleTaskDrop = async (targetColumnId: string, sourceTaskId: string, sourceColumnId: string, sourceProjectId: string) => {
-    if (!selectedProject || sourceProjectId !== selectedProject.id) return;
-    
-    const task = selectedProject.tasks.find(t => t.id === sourceTaskId);
-    if (!task) return;
-
-    if (sourceColumnId === targetColumnId) {
-      // Ei toiminnallisuutta sarakkeen sisäiselle raahaukselle vielä
-    } else {
-      const isCompleted = targetColumnId === 'done';
-      if (task.completed !== isCompleted || task.column_id !== targetColumnId) {
-        const updatedTask = { ...task, column_id: targetColumnId, completed: isCompleted };
+  const handleDelete = async () => {
+    if (selectedTask) {
+      const confirmed = await getConfirmation({
+        title: 'Vahvista poisto',
+        message: `Haluatko varmasti poistaa tehtävän "${selectedTask.title}"? Toimintoa ei voi perua.`
+      });
+      if (confirmed) {
+        setIsLoading(true);
         try {
-          await services.updateTask(updatedTask);
-        } catch(err: any) {
-            console.error("Failed to update task:", err);
+            await services.deleteTask(selectedTask.project_id, selectedTask.id);
+            dispatch({ type: 'CLOSE_MODALS' });
+        } catch (error: any) {
+            alert(`Poisto epäonnistui: ${error.message}`);
+        } finally {
+            setIsLoading(false);
         }
       }
     }
   };
 
-  const handleInfoButtonClick = () => {
-    if (selectedProject && selectedProject.id !== GENERAL_TASKS_PROJECT_ID) {
-      if (selectedProject.type === 'course') {
-        dispatch({ type: 'TOGGLE_COURSE_MODAL', payload: { id: selectedProject.id } });
-      } else {
-        dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: selectedProject.id });
-      }
-    }
-  };
+  if (!showTaskModal) return null;
+
+  const isEditing = selectedTask && selectedTask.id;
 
   return (
-    <div className="flex flex-col md:flex-row h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <aside className="hidden md:block w-1/6 min-w-[180px] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
-            <h2 className="text-lg font-bold text-gray-800">Työtilat</h2>
-            {generalProject && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center"><Inbox className="w-4 h-4" /> <span className="ml-2">Yleiset</span></h3>
-                <ul className="space-y-1">
-                  <li>
-                    <button onClick={() => handleSelectProject(generalProject.id)} className={`w-full text-left px-4 py-2 text-sm rounded-md transition-colors flex items-center ${ selectedKanbanProjectId === generalProject.id ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-700 hover:bg-gray-100' }`} >
-                      <span className="w-2 h-2 rounded-full mr-3" style={{ backgroundColor: generalProject.color }}></span>
-                      {generalProject.name}
-                    </button>
-                  </li>
-                </ul>
-              </div>
-            )}
-            {renderProjectList('Kurssit', courses, <BookOpen className="w-4 h-4" />)}
-            {renderProjectList('Projektit', otherProjects, <ClipboardCheck className="w-4 h-4" />)}
-        </aside>
-
-        <main className="flex-1 p-4 md:p-6 flex flex-col min-w-0">
-            <div className="md:hidden mb-4">
-              <label htmlFor="kanban-project-select" className="block text-sm font-medium text-gray-700 mb-1">
-                Valitse työtila
-              </label>
-              <select
-                id="kanban-project-select"
-                value={selectedKanbanProjectId || ''}
-                onChange={(e) => handleSelectProject(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-              >
-                {generalProject && (
-                  <optgroup label="Yleiset">
-                    <option value={generalProject.id}>{generalProject.name}</option>
-                  </optgroup>
-                )}
-                {courses.length > 0 && (
-                  <optgroup label="Kurssit">
-                    {courses.map(course => (
-                      <option key={course.id} value={course.id}>{course.name}</option>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+          <h2 className="text-lg font-semibold text-gray-900">
+            {isEditing ? 'Muokkaa tehtävää' : 'Luo uusi tehtävä'}
+          </h2>
+          <button
+            onClick={() => dispatch({ type: 'CLOSE_MODALS' })}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="flex border-b border-gray-200 flex-shrink-0">
+          <button
+            onClick={() => setActiveTab('details')}
+            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'details'
+                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <Type className="w-4 h-4 inline mr-2" />
+            Tiedot & Alitehtävät
+          </button>
+          <button
+            onClick={() => setActiveTab('files')}
+            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'files'
+                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <File className="w-4 h-4 inline mr-2" />
+            Tiedostot ({files.length})
+          </button>
+        </div>
+        
+        <form id="task-details-form" onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 overflow-y-auto">
+              {activeTab === 'details' ? (
+                <div className="p-6 space-y-4">
+                  <FormSelect
+                    id="task-project"
+                    label="Projekti"
+                    icon={<Bookmark className="w-4 h-4 inline mr-2" />}
+                    value={formData.project_id}
+                    onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                  >
+                    {[...projects]
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(project => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
                     ))}
-                  </optgroup>
-                )}
-                {otherProjects.length > 0 && (
-                  <optgroup label="Projektit">
-                    {otherProjects.map(project => (
-                      <option key={project.id} value={project.id}>{project.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            </div>
+                  </FormSelect>
+                
+                  <FormInput
+                    id="task-title"
+                    label="Otsikko"
+                    icon={<Type className="w-4 h-4 inline mr-2" />}
+                    type="text"
+                    required
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder="Tehtävän otsikko"
+                  />
 
-            {selectedProject ? (
-              <>
-                <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-6 flex-shrink-0">
-                  <h1 className="text-2xl font-bold text-gray-900 truncate pr-4">{selectedProject.name}</h1>
-                  <div className="flex items-center space-x-2">
-                    <button 
-                      onClick={() => setShowDefaultColumns(s => !s)} 
-                      className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md"
-                      title={showDefaultColumns ? 'Piilota oletussäiliöt' : 'Näytä oletussäiliöt'}
+                  <FormTextarea
+                    id="task-description"
+                    label="Kuvaus"
+                    icon={<FileText className="w-4 h-4 inline mr-2" />}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                    placeholder="Tehtävän kuvaus"
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormSelect
+                      id="task-priority"
+                      label="Prioriteetti"
+                      icon={<AlertCircle className="w-4 h-4 inline mr-2" />}
+                      value={formData.priority}
+                      onChange={(e) => setFormData({ ...formData, priority: e.target.value as Task['priority'] })}
                     >
-                      {showDefaultColumns ? <EyeOff className="w-4 h-4 mr-0 md:mr-2" /> : <Eye className="w-4 h-4 mr-0 md:mr-2" />}
-                      <span className="hidden md:inline">{showDefaultColumns ? 'Piilota oletussäiliöt' : 'Näytä oletussäiliöt'}</span>
-                    </button>
-                    {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
-                      <button onClick={handleInfoButtonClick} className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md">
-                        <Info className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Muokkaa</span>
+                      <option value="low">Matala</option>
+                      <option value="medium">Keskitaso</option>
+                      <option value="high">Korkea</option>
+                    </FormSelect>
+                    <FormInput
+                      id="task-duedate"
+                      label="Määräpäivä"
+                      icon={<Calendar className="w-4 h-4 inline mr-2" />}
+                      type="date"
+                      value={formData.due_date}
+                      onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                    />
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Alitehtävät</h4>
+                    <ul className="space-y-2">
+                      {formData.subtasks.map(subtask => (
+                        <li key={subtask.id} 
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, subtask.id)}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, subtask.id)}
+                            onDragEnd={handleDragEnd}
+                            className="flex items-center space-x-2 p-1 rounded-md hover:bg-gray-100 group"
+                        >
+                          <GripVertical className="w-5 h-5 text-gray-400 cursor-grab active:cursor-grabbing" />
+                          <input
+                            type="checkbox"
+                            checked={subtask.completed}
+                            onChange={e => handleSubtaskChange(subtask.id, e.target.checked)}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          {editingSubtaskId === subtask.id ? (
+                            <input
+                              type="text"
+                              value={editingSubtaskText}
+                              onChange={(e) => setEditingSubtaskText(e.target.value)}
+                              onBlur={handleSaveSubtaskEdit}
+                              onKeyDown={(e) => e.key === 'Enter' && handleSaveSubtaskEdit()}
+                              autoFocus
+                              className="flex-1 px-2 py-1 border border-blue-400 rounded-md"
+                            />
+                          ) : (
+                            <span className={`flex-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
+                              {subtask.title}
+                            </span>
+                          )}
+                          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button type="button" onClick={() => handleEditSubtask(subtask)}>
+                                <Pencil className="w-4 h-4 text-gray-500 hover:text-blue-600" />
+                            </button>
+                            <button type="button" onClick={() => handleDeleteSubtask(subtask.id)}>
+                                <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-600" />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="flex items-center space-x-2 mt-2">
+                      <input
+                        type="text"
+                        id="new-subtask-title"
+                        name="new-subtask-title"
+                        value={newSubtaskTitle}
+                        onChange={e => setNewSubtaskTitle(e.target.value)}
+                        placeholder="Uusi alitehtävä"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddSubtask}
+                        className="p-2 bg-blue-100 text-blue-600 rounded-lg"
+                      >
+                        <Plus className="w-5 h-5" />
                       </button>
-                    )}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 pt-4 border-t border-gray-200">
+                      <h4 className="text-sm font-medium text-gray-700">Kanban-näkymän asetukset</h4>
+                      <label className="flex items-center space-x-2">
+                          <input
+                              type="checkbox"
+                              checked={formData.show_description}
+                              onChange={e => setFormData(prev => ({ ...prev, show_description: e.target.checked }))}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm">Näytä kuvaus Kanban-kortilla</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                          <input
+                              type="checkbox"
+                              checked={formData.show_subtasks}
+                              onChange={e => setFormData(prev => ({ ...prev, show_subtasks: e.target.checked }))}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm">Näytä alitehtävät Kanban-kortilla</span>
+                      </label>
                   </div>
                 </div>
-                <div className="flex-1 flex gap-6 overflow-x-auto" onDragEnd={() => setDraggedColumnIndex(null)}>
-                  {selectedProject.columns
-                    ?.filter(column => showDefaultColumns || !['todo', 'inProgress', 'done'].includes(column.id))
-                    .map((column, index) => (
-                      <div key={column.id}>
-                        <KanbanColumnComponent 
-                          column={column} 
-                          tasks={getTasksForColumn(column.id)} 
-                          projectId={selectedProject.id}
-                          onDropTask={handleTaskDrop}
-                          onDropColumn={(e) => handleColumnDrop(e, index)}
-                          onDragStartColumn={(e) => handleColumnDragStart(e, index)}
-                          isColumnDragged={draggedColumnIndex === index}
-                        />
-                      </div>
-                  ))}
-                  <AddColumn projectId={selectedProject.id} />
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-500">
-                <p>Valitse työtila yllä olevasta valikosta.</p>
-              </div>
+              ) : (
+                <AttachmentSection 
+                  files={files}
+                  onFilesChange={setFiles}
+                  fileInputId="file-upload-task"
+                />
+              )}
+            </div>
+        </form>
+        <div className="flex justify-between p-6 border-t border-gray-200 flex-shrink-0 bg-gray-50">
+            {isEditing && (
+                <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={isLoading}
+                    className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                    Poista tehtävä
+                </button>
             )}
-        </main>
+            <div className="flex space-x-3 ml-auto">
+                <button
+                    type="button"
+                    onClick={() => dispatch({ type: 'CLOSE_MODALS' })}
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                    Peruuta
+                </button>
+                <button
+                    type="submit"
+                    form="task-details-form"
+                    disabled={isLoading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
+                >
+                    {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    {isEditing ? 'Päivitä tehtävä' : 'Luo tehtävä'}
+                </button>
+            </div>
+        </div>
+      </div>
     </div>
   );
 }
