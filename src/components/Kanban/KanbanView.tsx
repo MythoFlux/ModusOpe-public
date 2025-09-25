@@ -19,8 +19,8 @@ const SortableTaskCard = ({ task }: { task: Task }) => {
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TaskCard task={task} />
+    <div ref={setNodeRef} style={style} {...attributes}>
+      <TaskCard task={task} dragHandleListeners={listeners} />
     </div>
   );
 };
@@ -45,7 +45,7 @@ const SortableKanbanColumn = ({ column, tasks, projectId }: { column: KanbanColu
 
 // --- Original Components (slightly modified) ---
 
-const TaskCard = ({ task }: { task: Task }) => {
+const TaskCard = ({ task, dragHandleListeners }: { task: Task, dragHandleListeners?: any }) => {
   const { dispatch } = useApp();
   
   const getPriorityIcon = (priority: string) => {
@@ -64,11 +64,16 @@ const TaskCard = ({ task }: { task: Task }) => {
   return (
     <div
       onClick={handleCardClick}
-      className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer active:cursor-grabbing"
+      className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer"
     >
       <div className="flex justify-between items-start mb-2">
-        <h4 className="font-semibold text-gray-800 text-sm">{task.title}</h4>
-        {getPriorityIcon(task.priority)}
+        <h4 className="font-semibold text-gray-800 text-sm flex-1">{task.title}</h4>
+        <div className="flex items-center space-x-2">
+            {getPriorityIcon(task.priority)}
+            <div {...dragHandleListeners} className="cursor-grab active:cursor-grabbing p-1">
+                <GripVertical className="w-4 h-4 text-gray-400" />
+            </div>
+        </div>
       </div>
       
       {task.show_description && task.description && (
@@ -283,12 +288,10 @@ export default function KanbanView() {
 
     if (activeId === overId) return;
 
-    // --- Item Type Identification ---
     const isProjectDrag = projects.some(p => p.id === activeId);
     const isColumnDrag = selectedProject.columns.some(c => c.id === activeId);
     const isTaskDrag = selectedProject.tasks.some(t => t.id === activeId);
     
-    // --- Project Reordering ---
     if (isProjectDrag) {
       const reorderableProjects = projects.filter(p => p.id !== GENERAL_TASKS_PROJECT_ID);
       const oldIndex = reorderableProjects.findIndex(p => p.id === activeId);
@@ -298,7 +301,6 @@ export default function KanbanView() {
       return;
     }
 
-    // --- Column Reordering ---
     if (isColumnDrag) {
         const oldIndex = selectedProject.columns.findIndex(c => c.id === activeId);
         const newIndex = selectedProject.columns.findIndex(c => c.id === overId);
@@ -307,27 +309,16 @@ export default function KanbanView() {
         return;
     }
 
-    // --- Task Reordering / Moving ---
     if (isTaskDrag) {
       const task = selectedProject.tasks.find(t => t.id === activeId);
       if (!task) return;
 
-      const sourceColumnId = task.column_id;
-      let targetColumnId = overId.toString();
-
-      // Check if dropping over another task
-      const overTask = selectedProject.tasks.find(t => t.id === overId);
-      if (overTask) {
-          targetColumnId = overTask.column_id;
-      }
+      let targetColumnId = over.data.current?.sortable?.containerId || over.id.toString();
       
-      // Check if dropping over a column
-      const overColumn = selectedProject.columns.find(c => c.id === overId);
-      if(overColumn) {
-          targetColumnId = overColumn.id;
-      }
+      const overColumn = selectedProject.columns.find(c => c.id === targetColumnId);
+      if(!overColumn) return;
 
-      if (sourceColumnId !== targetColumnId) {
+      if (task.column_id !== targetColumnId) {
         const isCompleted = targetColumnId === 'done';
         await services.updateTask({ ...task, column_id: targetColumnId, completed: isCompleted });
       }
@@ -337,12 +328,12 @@ export default function KanbanView() {
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <div className="flex flex-col md:flex-row h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <aside className="hidden md:block w-1/6 min-w-[180px] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
-              <h2 className="text-lg font-bold text-gray-800">Työtilat</h2>
+          <aside className="hidden md:block w-1/6 min-w-[220px] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
+              <h2 className="text-lg font-bold text-gray-800 px-2">Työtilat</h2>
               {generalProject && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center"><Inbox className="w-4 h-4" /> <span className="ml-2">Yleiset</span></h3>
-                  <ul className="space-y-1">
+                  <ul className="space-y-1 px-2">
                     <li>
                       <button onClick={() => handleSelectProject(generalProject.id)} className={`w-full text-left px-4 py-2 text-sm rounded-md transition-colors flex items-center ${ selectedKanbanProjectId === generalProject.id ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-700 hover:bg-gray-100' }`} >
                         <span className="w-2 h-2 rounded-full mr-3" style={{ backgroundColor: generalProject.color }}></span>
