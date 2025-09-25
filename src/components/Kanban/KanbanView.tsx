@@ -253,6 +253,12 @@ export default function KanbanView() {
   const otherProjects = useMemo(() => projects.filter(p => p.type !== 'course' && p.id !== GENERAL_TASKS_PROJECT_ID), [projects]);
   const generalProject = useMemo(() => projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID), [projects]);
 
+  // UUSI: Lista kaikista järjesteltävistä projekteista
+  const reorderableProjects = useMemo(() => 
+    projects.filter(p => p.id !== GENERAL_TASKS_PROJECT_ID), 
+    [projects]
+  );
+  
   useEffect(() => {
     if (!selectedKanbanProjectId && projects.length > 0) {
       const defaultProject = generalProject ? generalProject.id : projects[0].id;
@@ -315,6 +321,22 @@ export default function KanbanView() {
     const overId = String(over.id);
     if (activeId === overId) return;
 
+    // KORJATTU JA LAAJENNETTU LOGIIKKA
+    const activeIsProject = reorderableProjects.some(p => p.id === activeId);
+    const overIsProject = reorderableProjects.some(p => p.id === overId);
+
+    if (activeIsProject && overIsProject) {
+        const oldIndex = reorderableProjects.findIndex(p => p.id === activeId);
+        const newIndex = reorderableProjects.findIndex(p => p.id === overId);
+        
+        if (oldIndex !== -1 && newIndex !== -1) {
+            const newOrder = arrayMove(reorderableProjects, oldIndex, newIndex);
+            dispatch({ type: 'UPDATE_PROJECTS_ORDER_SUCCESS', payload: newOrder });
+            await services.updateProjectOrder(newOrder);
+        }
+        return;
+    }
+
     const activeIsColumn = selectedProject.columns.some(c => c.id === activeId);
     if (activeIsColumn) {
         const oldIndex = selectedProject.columns.findIndex(c => c.id === activeId);
@@ -338,16 +360,14 @@ export default function KanbanView() {
         
         if (!sourceColumnId || !destinationColumnId) return;
         
-        // Optimistically update the task's column if it changed
         if (sourceColumnId !== destinationColumnId) {
             const isCompleted = destinationColumnId === 'done';
             newTasks[oldIndex] = { ...newTasks[oldIndex], column_id: destinationColumnId, completed: isCompleted };
         }
-
-        // Find the correct newIndex if dropping on a column, not a task
-        if (!overIsAColumn) { // Dropped on a task
+        
+        if (newIndex !== -1) {
             newTasks = arrayMove(newTasks, oldIndex, newIndex);
-        } else { // Dropped on a column
+        } else {
             const tasksInDestColumn = newTasks.filter(t => t.column_id === destinationColumnId && t.id !== activeId);
             const lastTaskInColumn = tasksInDestColumn[tasksInDestColumn.length - 1];
             const newIndexAfterLast = lastTaskInColumn ? newTasks.findIndex(t => t.id === lastTaskInColumn.id) + 1 : oldIndex;
@@ -367,7 +387,6 @@ export default function KanbanView() {
             await services.updateTasksOrder(tasksToUpdateInDB);
         } catch (error) {
             console.error("Failed to save new task order:", error);
-            // Tässä voisi näyttää virheilmoituksen ja peruuttaa muutoksen
         }
     }
   };
@@ -399,20 +418,23 @@ export default function KanbanView() {
                   </ul>
                 </div>
               )}
-              <KanbanSidebarProjectList
-                  title="Kurssit"
-                  items={courses}
-                  icon={<BookOpen className="w-4 h-4" />}
-                  selectedKanbanProjectId={selectedKanbanProjectId}
-                  handleSelectProject={handleSelectProject}
-              />
-              <KanbanSidebarProjectList
-                  title="Projektit"
-                  items={otherProjects}
-                  icon={<ClipboardCheck className="w-4 h-4" />}
-                  selectedKanbanProjectId={selectedKanbanProjectId}
-                  handleSelectProject={handleSelectProject}
-              />
+              {/* LISÄTTY SortableContext-KÄÄRE */}
+              <SortableContext items={reorderableProjects.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                <KanbanSidebarProjectList
+                    title="Kurssit"
+                    items={courses}
+                    icon={<BookOpen className="w-4 h-4" />}
+                    selectedKanbanProjectId={selectedKanbanProjectId}
+                    handleSelectProject={handleSelectProject}
+                />
+                <KanbanSidebarProjectList
+                    title="Projektit"
+                    items={otherProjects}
+                    icon={<ClipboardCheck className="w-4 h-4" />}
+                    selectedKanbanProjectId={selectedKanbanProjectId}
+                    handleSelectProject={handleSelectProject}
+                />
+              </SortableContext>
           </aside>
 
           <main className="flex-1 p-4 md:p-6 flex flex-col min-w-0">
