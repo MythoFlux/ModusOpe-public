@@ -6,7 +6,8 @@ import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizo
 import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { v4 as uuidv4 } from 'uuid';
-import { DEFAULT_COLUMN_ID_ARRAY } from '../../constants/kanbanConstants'; // MUUTOS: Tuotu vakiot
+import { DEFAULT_COLUMN_ID_ARRAY } from '../../constants/kanbanConstants';
+import KanbanSidebarProjectList from './KanbanSidebarProjectList'; // UUSI IMPORT
 
 const DND_TYPES = {
   TASK: 'task',
@@ -84,7 +85,6 @@ const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropCol
   const [isTaskDraggedOver, setIsTaskDraggedOver] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // KORJATTU: Lisätty useEffect valikon sulkemiseksi
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -101,7 +101,6 @@ const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropCol
     };
   }, [isMenuOpen]);
 
-  // MUUTOS: Käytetään vakiota tarkistukseen
   const isDefaultColumn = DEFAULT_COLUMN_ID_ARRAY.includes(column.id);
 
   const handleUpdate = async () => {
@@ -294,7 +293,6 @@ export default function KanbanView() {
   const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null);
   const [showDefaultColumns, setShowDefaultColumns] = useState(true);
 
-  // Käytetään useMemo-hookia, jotta listat eivät luoda uudelleen jokaisella renderöinnillä
   const courses = useMemo(() => projects.filter(p => p.type === 'course'), [projects]);
   const otherProjects = useMemo(() => projects.filter(p => p.type !== 'course' && p.id !== GENERAL_TASKS_PROJECT_ID), [projects]);
   const generalProject = useMemo(() => projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID), [projects]);
@@ -329,19 +327,15 @@ export default function KanbanView() {
         return;
     }
 
-    // Luodaan kopio järjesteltävistä projekteista suoraan päätilasta
     const reorderableProjects = projects.filter(p => p.id !== GENERAL_TASKS_PROJECT_ID);
-
     const dragItemIndex = reorderableProjects.findIndex(p => p.id === dragItem.current);
     const dragOverItemIndex = reorderableProjects.findIndex(p => p.id === dragOverItem.current);
     
     if (dragItemIndex === -1 || dragOverItemIndex === -1) return;
 
-    // Järjestellään kopio
     const [draggedItemContent] = reorderableProjects.splice(dragItemIndex, 1);
     reorderableProjects.splice(dragOverItemIndex, 0, draggedItemContent);
     
-    // Annetaan järjestelty lista palvelulle, joka hoitaa indeksit ja tallennuksen
     await services.updateProjectOrder(reorderableProjects);
 
     dragItem.current = null;
@@ -353,34 +347,10 @@ export default function KanbanView() {
     dragItem.current = null;
     dragOverItem.current = null;
   };
-
-  const renderProjectList = (title: string, items: Project[], icon: React.ReactNode) => (
-    <div onDragOver={(e) => e.preventDefault()}>
-      <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center"> {icon} <span className="ml-2">{title}</span> </h3>
-      <ul className="space-y-1">
-        {items.map((item, index) => (
-          <li key={item.id}
-              draggable
-              onDragStart={(e) => handleProjectDragStart(e, item.id)}
-              onDragEnter={(e) => handleProjectDragEnter(e, item.id)}
-              onDragEnd={handleProjectDragEnd}
-              onDrop={handleProjectDrop}
-              className="cursor-grab active:cursor-grabbing"
-          >
-            <button onClick={() => handleSelectProject(item.id)} className={`w-full text-left px-4 py-2 text-sm rounded-md transition-colors flex items-center ${ selectedKanbanProjectId === item.id ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-700 hover:bg-gray-100' }`} >
-              <span className="w-2 h-2 rounded-full mr-3" style={{ backgroundColor: item.color }}></span>
-              {item.name}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
   
   const getTasksForColumn = (columnId: string) => {
     if (!selectedProject) return [];
-    const tasksInColumn = selectedProject.tasks.filter(t => (t.column_id || 'todo') === columnId);
-    return tasksInColumn;
+    return selectedProject.tasks.filter(t => (t.column_id || 'todo') === columnId);
   };
   
   const handleColumnDragStart = (e: React.DragEvent, index: number) => {
@@ -407,9 +377,7 @@ export default function KanbanView() {
     const task = selectedProject.tasks.find(t => t.id === sourceTaskId);
     if (!task) return;
 
-    if (sourceColumnId === targetColumnId) {
-      // Ei toiminnallisuutta sarakkeen sisäiselle raahaukselle vielä
-    } else {
+    if (sourceColumnId !== targetColumnId) {
       const isCompleted = targetColumnId === 'done';
       if (task.completed !== isCompleted || task.column_id !== targetColumnId) {
         const updatedTask = { ...task, column_id: targetColumnId, completed: isCompleted };
@@ -449,8 +417,28 @@ export default function KanbanView() {
                 </ul>
               </div>
             )}
-            {renderProjectList('Kurssit', courses, <BookOpen className="w-4 h-4" />)}
-            {renderProjectList('Projektit', otherProjects, <ClipboardCheck className="w-4 h-4" />)}
+            <KanbanSidebarProjectList
+                title="Kurssit"
+                items={courses}
+                icon={<BookOpen className="w-4 h-4" />}
+                selectedKanbanProjectId={selectedKanbanProjectId}
+                handleSelectProject={handleSelectProject}
+                handleProjectDragStart={handleProjectDragStart}
+                handleProjectDragEnter={handleProjectDragEnter}
+                handleProjectDragEnd={handleProjectDragEnd}
+                handleProjectDrop={handleProjectDrop}
+            />
+            <KanbanSidebarProjectList
+                title="Projektit"
+                items={otherProjects}
+                icon={<ClipboardCheck className="w-4 h-4" />}
+                selectedKanbanProjectId={selectedKanbanProjectId}
+                handleSelectProject={handleSelectProject}
+                handleProjectDragStart={handleProjectDragStart}
+                handleProjectDragEnter={handleProjectDragEnter}
+                handleProjectDragEnd={handleProjectDragEnd}
+                handleProjectDrop={handleProjectDrop}
+            />
         </aside>
 
         <main className="flex-1 p-4 md:p-6 flex flex-col min-w-0">
@@ -508,7 +496,6 @@ export default function KanbanView() {
                 </div>
                 <div className="flex-1 flex gap-6 overflow-x-auto" onDragEnd={() => setDraggedColumnIndex(null)}>
                   {selectedProject.columns
-                    // MUUTOS: Käytetään vakiota suodatukseen
                     ?.filter(column => showDefaultColumns || !DEFAULT_COLUMN_ID_ARRAY.includes(column.id))
                     .map((column, index) => (
                       <div key={column.id}>
