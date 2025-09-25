@@ -1,24 +1,17 @@
 // src/components/Calendar/DayView.tsx
-import React, { useRef, useLayoutEffect, useMemo, useState, useEffect } from 'react';
+import React, { useRef, useLayoutEffect, useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { formatDate, isSameDay, addDays, formatTimeString, isToday } from '../../utils/dateUtils'; 
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { Event } from '../../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
+import { useCurrentTime } from '../../hooks/useCurrentTime';
+import TimeIndicator from '../Shared/TimeIndicator';
 
 export default function DayView() {
   const { state, dispatch } = useApp();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000); // Päivittää joka minuutti
-
-    return () => clearInterval(timer);
-  }, []);
-
+  const currentTime = useCurrentTime();
 
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
@@ -52,11 +45,11 @@ export default function DayView() {
   const timedEvents = useMemo(() => dayEvents.filter(e => !!e.start_time), [dayEvents]);
 
   const handleEventClick = (event: Event) => {
-    if (event.type === 'deadline' && event.project_id) { // KORJATTU
-      if (event.project_id === GENERAL_TASKS_PROJECT_ID) { // KORJATTU
+    if (event.type === 'deadline' && event.project_id) {
+      if (event.project_id === GENERAL_TASKS_PROJECT_ID) {
           return;
       }
-      dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id }); // KORJATTU
+      dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id });
     } else {
       dispatch({ type: 'TOGGLE_EVENT_MODAL', payload: event });
     }
@@ -69,19 +62,8 @@ export default function DayView() {
   
   const renderCurrentTimeIndicator = () => {
     if (!isToday(selectedDate)) return null;
-
     const topPosition = (currentTime.getHours() * 48) + (currentTime.getMinutes() * 48 / 60);
-
-    return (
-        <div className="absolute left-0 right-0 z-20" style={{ top: `${topPosition}px` }}>
-            <div className="relative h-px bg-red-500">
-                <div className="absolute -left-1 -top-1 w-2.5 h-2.5 bg-red-500 rounded-full"></div>
-                <div className="absolute -top-2.5 left-1 text-xs text-red-500 font-medium bg-white pr-1">
-                    {formatTimeString(currentTime.toTimeString())}
-                </div>
-            </div>
-        </div>
-    );
+    return <TimeIndicator top={topPosition} currentTime={currentTime} showTimeLabel={true} />;
   };
 
   return (
