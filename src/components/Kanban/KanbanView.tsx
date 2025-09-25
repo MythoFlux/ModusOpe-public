@@ -7,14 +7,45 @@ import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { v4 as uuidv4 } from 'uuid';
 import { DEFAULT_COLUMN_ID_ARRAY } from '../../constants/kanbanConstants';
-import KanbanSidebarProjectList from './KanbanSidebarProjectList'; // UUSI IMPORT
+import KanbanSidebarProjectList from './KanbanSidebarProjectList';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, arrayMove, useSortable, verticalListSortingStrategy, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
-const DND_TYPES = {
-  TASK: 'task',
-  COLUMN: 'column'
+// --- Sortable Components ---
+
+const SortableTaskCard = ({ task }: { task: Task }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <TaskCard task={task} />
+    </div>
+  );
 };
 
-const TaskCard = ({ task, onDragStart }: { task: Task, onDragStart: (e: React.DragEvent) => void }) => {
+const SortableKanbanColumn = ({ column, tasks, projectId }: { column: KanbanColumn, tasks: Task[], projectId: string }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const taskIds = useMemo(() => tasks.map(t => t.id), [tasks]);
+  
+  return (
+    <div ref={setNodeRef} style={style} className="flex-shrink-0">
+      <KanbanColumnComponent column={column} tasks={tasks} projectId={projectId} dragHandleProps={{...attributes, ...listeners}}>
+        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+          {tasks.map(task => (
+            <SortableTaskCard key={task.id} task={task} />
+          ))}
+        </SortableContext>
+      </KanbanColumnComponent>
+    </div>
+  );
+};
+
+// --- Original Components (slightly modified) ---
+
+const TaskCard = ({ task }: { task: Task }) => {
   const { dispatch } = useApp();
   
   const getPriorityIcon = (priority: string) => {
@@ -33,9 +64,6 @@ const TaskCard = ({ task, onDragStart }: { task: Task, onDragStart: (e: React.Dr
   return (
     <div
       onClick={handleCardClick}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={(e) => e.currentTarget.classList.remove('opacity-50', 'shadow-2xl')}
       className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer active:cursor-grabbing"
     >
       <div className="flex justify-between items-start mb-2">
@@ -76,13 +104,12 @@ const TaskCard = ({ task, onDragStart }: { task: Task, onDragStart: (e: React.Dr
   );
 };
 
-const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropColumn, onDragStartColumn, isColumnDragged }: { column: KanbanColumn, tasks: Task[], projectId: string, onDropTask: (targetColumnId: string, sourceTaskId: string, sourceColumnId: string, sourceProjectId: string) => void, onDropColumn: (e: React.DragEvent) => void, onDragStartColumn: (e: React.DragEvent) => void, isColumnDragged: boolean }) => {
+const KanbanColumnComponent = ({ column, tasks, projectId, children, dragHandleProps }: { column: KanbanColumn, tasks: Task[], projectId: string, children: React.ReactNode, dragHandleProps: any }) => {
   const { state, dispatch } = useApp();
   const services = useAppServices();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(column.title);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isTaskDraggedOver, setIsTaskDraggedOver] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -91,26 +118,18 @@ const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropCol
         setIsMenuOpen(false);
       }
     };
-
-    if (isMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    if (isMenuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isMenuOpen]);
-
+  
   const isDefaultColumn = DEFAULT_COLUMN_ID_ARRAY.includes(column.id);
 
   const handleUpdate = async () => {
     if (title.trim()) {
       const project = state.projects.find(p => p.id === projectId);
       if (!project) return;
-      
       const updatedColumns = project.columns.map(c => c.id === column.id ? { ...c, title: title.trim() } : c);
       await services.updateProject({ ...project, columns: updatedColumns });
-      
       setIsEditing(false);
     }
   };
@@ -119,73 +138,25 @@ const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropCol
     if (confirm(`Haluatko varmasti poistaa säiliön "${column.title}"? Tämä siirtää kaikki sen sisältämät tehtävät 'Suunnitteilla'-säiliöön.`)) {
       const project = state.projects.find(p => p.id === projectId);
       if (!project) return;
-
       const updatedColumns = project.columns.filter(c => c.id !== column.id);
-      const tasksToMove = project.tasks.filter(t => t.column_id === column.id);
-      
       const updatedTasks = project.tasks.map(t => t.column_id === column.id ? { ...t, column_id: 'todo' } : t);
-
       await services.updateProject({ ...project, columns: updatedColumns, tasks: updatedTasks });
-      
-      for (const task of tasksToMove) {
-        await services.updateTask({ ...task, column_id: 'todo' });
-      }
     }
   };
   
   const handleAddTask = () => {
-    const newTaskTemplate: Partial<Task> = {
-      project_id: projectId,
-      column_id: column.id,
-    };
-    dispatch({ type: 'TOGGLE_TASK_MODAL', payload: newTaskTemplate as Task });
+    dispatch({ type: 'TOGGLE_TASK_MODAL', payload: { project_id: projectId, column_id: column.id } as Task });
   };
   
-  const handleTaskDragStart = (e: React.DragEvent, task: Task) => {
-    e.dataTransfer.setData('type', DND_TYPES.TASK);
-    e.dataTransfer.setData('taskId', task.id);
-    e.dataTransfer.setData('sourceColumnId', column.id);
-    e.dataTransfer.setData('sourceProjectId', projectId);
-    (e.currentTarget as HTMLElement).classList.add('opacity-50', 'shadow-2xl');
-  };
-
   return (
-    <div 
-        className={`p-3 flex flex-col w-72 flex-shrink-0 rounded-xl transition-colors duration-200 ${isTaskDraggedOver ? 'bg-blue-50' : 'bg-gray-100/60'} ${isColumnDragged ? 'opacity-50' : ''}`}
-        onDragOver={(e) => { e.preventDefault(); setIsTaskDraggedOver(true); }}
-        onDragLeave={() => setIsTaskDraggedOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsTaskDraggedOver(false);
-          const type = e.dataTransfer.getData('type');
-          if (type === DND_TYPES.TASK) {
-            const taskId = e.dataTransfer.getData('taskId');
-            const sourceColumnId = e.dataTransfer.getData('sourceColumnId');
-            const sourceProjectId = e.dataTransfer.getData('sourceProjectId');
-            onDropTask(column.id, taskId, sourceColumnId, sourceProjectId);
-          } else {
-            onDropColumn(e);
-          }
-        }}
-    >
+    <div className="p-3 flex flex-col w-72 flex-shrink-0 rounded-xl bg-gray-100/60 h-full">
       <div 
-        className="flex justify-between items-center mb-2 px-1 cursor-grab active:cursor-grabbing noselect"
-        draggable={!isDefaultColumn}
-        onDragStart={onDragStartColumn}
+        className="flex justify-between items-center mb-2 px-1 noselect"
       >
-        <div className='flex items-center'>
-            {!isDefaultColumn && <GripVertical className="w-5 h-5 text-gray-400 mr-1" />}
+        <div className='flex items-center' {...dragHandleProps}>
+            {!isDefaultColumn && <GripVertical className="w-5 h-5 text-gray-400 mr-1 cursor-grab active:cursor-grabbing" />}
             {isEditing ? (
-              <input
-                id={`column-title-editor-${column.id}`}
-                name={`column-title-editor-${column.id}`}
-                autoFocus
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                onBlur={handleUpdate}
-                onKeyDown={(e) => e.key === 'Enter' && handleUpdate()}
-                className="font-semibold text-gray-800 bg-white border border-blue-400 rounded px-1 -ml-1 w-full"
-              />
+              <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} onBlur={handleUpdate} onKeyDown={(e) => e.key === 'Enter' && handleUpdate()} className="font-semibold text-gray-800 bg-white border border-blue-400 rounded px-1 -ml-1 w-full" />
             ) : (
               <h3 className="font-semibold text-gray-800">{column.title}</h3>
             )}
@@ -207,21 +178,14 @@ const KanbanColumnComponent = ({ column, tasks, projectId, onDropTask, onDropCol
       </div>
       
       <div className="mb-3">
-        <button
-          onClick={handleAddTask}
-          className="w-full flex items-center justify-center p-2 text-sm text-gray-600 bg-white hover:bg-gray-50 rounded-lg transition-colors border border-gray-300"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Lisää tehtävä
+        <button onClick={handleAddTask} className="w-full flex items-center justify-center p-2 text-sm text-gray-600 bg-white hover:bg-gray-50 rounded-lg transition-colors border border-gray-300">
+          <Plus className="w-4 h-4 mr-2" /> Lisää tehtävä
         </button>
       </div>
-
       <div className="flex-1 overflow-y-auto -mr-2 pr-2 min-h-[300px] space-y-3">
-        {tasks.map(task => (
-          <TaskCard key={task.id} task={task} onDragStart={(e) => handleTaskDragStart(e, task)} />
-        ))}
-        <div className={`flex items-center justify-center text-xs text-gray-400 p-4 border-2 border-dashed rounded-lg transition-colors ${tasks.length > 0 ? 'border-transparent' : 'border-gray-300 h-full'} ${isTaskDraggedOver ? 'border-blue-400 bg-blue-100/50' : ''}`}>
-          {tasks.length === 0 && 'Pudota tehtäviä tähän'}
+        {children}
+        <div className={`flex items-center justify-center text-xs text-gray-400 p-4 border-2 border-dashed rounded-lg transition-colors ${tasks.length > 0 ? 'border-transparent' : 'border-gray-300 h-full'}`}>
+          {tasks.length === 0 && 'Ei tehtäviä'}
         </div>
       </div>
     </div>
@@ -238,21 +202,12 @@ const AddColumn = ({ projectId }: { projectId: string }) => {
         e.preventDefault();
         if (title.trim()) {
             const project = state.projects.find(p => p.id === projectId);
-            if (!project) {
-                alert("Projektia ei löytynyt!");
-                return;
-            }
+            if (!project) return;
             const newColumn: KanbanColumn = { id: uuidv4(), title: title.trim() };
             const updatedProject = { ...project, columns: [...project.columns, newColumn] };
-
-            try {
-                await services.updateProject(updatedProject);
-                setTitle('');
-                setIsEditing(false);
-            } catch(err) {
-                console.error(err);
-                alert("Säiliön luonti epäonnistui.")
-            }
+            await services.updateProject(updatedProject);
+            setTitle('');
+            setIsEditing(false);
         }
     };
 
@@ -268,15 +223,7 @@ const AddColumn = ({ projectId }: { projectId: string }) => {
 
     return (
         <form onSubmit={handleSubmit} className="w-72 flex-shrink-0 p-3 bg-gray-100 rounded-lg">
-            <input
-              id="new-column-title"
-              name="new-column-title"
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Säiliön nimi..."
-              className="w-full p-2 border border-gray-300 rounded-md"
-            />
+            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Säiliön nimi..." className="w-full p-2 border border-gray-300 rounded-md" />
             <div className="mt-2 space-x-2">
                 <button type="submit" className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">Lisää</button>
                 <button type="button" onClick={() => setIsEditing(false)} className="px-3 py-1 text-sm rounded hover:bg-gray-200">Peruuta</button>
@@ -285,20 +232,19 @@ const AddColumn = ({ projectId }: { projectId: string }) => {
     );
 };
 
+// --- Main View Component ---
 
 export default function KanbanView() {
   const { state, dispatch } = useApp();
   const services = useAppServices();
   const { projects, selectedKanbanProjectId } = state;
-  const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null);
   const [showDefaultColumns, setShowDefaultColumns] = useState(true);
 
+  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  
   const courses = useMemo(() => projects.filter(p => p.type === 'course'), [projects]);
   const otherProjects = useMemo(() => projects.filter(p => p.type !== 'course' && p.id !== GENERAL_TASKS_PROJECT_ID), [projects]);
   const generalProject = useMemo(() => projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID), [projects]);
-
-  const dragItem = useRef<string | null>(null);
-  const dragOverItem = useRef<string | null>(null);
 
   useEffect(() => {
     if (!selectedKanbanProjectId && projects.length > 0) {
@@ -308,44 +254,9 @@ export default function KanbanView() {
   }, [projects, selectedKanbanProjectId, dispatch, generalProject]);
 
   const selectedProject = projects.find(p => p.id === selectedKanbanProjectId);
-
+  
   const handleSelectProject = (projectId: string) => {
     dispatch({ type: 'SET_KANBAN_PROJECT', payload: projectId });
-  };
-  
-  const handleProjectDragStart = (e: React.DragEvent<HTMLLIElement>, projectId: string) => {
-    dragItem.current = projectId;
-    e.currentTarget.classList.add('bg-gray-200');
-  };
-
-  const handleProjectDragEnter = (e: React.DragEvent<HTMLLIElement>, projectId: string) => {
-    dragOverItem.current = projectId;
-  };
-
-  const handleProjectDrop = async () => {
-    if (!dragItem.current || !dragOverItem.current || dragItem.current === dragOverItem.current) {
-        return;
-    }
-
-    const reorderableProjects = projects.filter(p => p.id !== GENERAL_TASKS_PROJECT_ID);
-    const dragItemIndex = reorderableProjects.findIndex(p => p.id === dragItem.current);
-    const dragOverItemIndex = reorderableProjects.findIndex(p => p.id === dragOverItem.current);
-    
-    if (dragItemIndex === -1 || dragOverItemIndex === -1) return;
-
-    const [draggedItemContent] = reorderableProjects.splice(dragItemIndex, 1);
-    reorderableProjects.splice(dragOverItemIndex, 0, draggedItemContent);
-    
-    await services.updateProjectOrder(reorderableProjects);
-
-    dragItem.current = null;
-    dragOverItem.current = null;
-  };
-  
-  const handleProjectDragEnd = (e: React.DragEvent<HTMLLIElement>) => {
-    e.currentTarget.classList.remove('bg-gray-200');
-    dragItem.current = null;
-    dragOverItem.current = null;
   };
   
   const getTasksForColumn = (columnId: string) => {
@@ -353,43 +264,6 @@ export default function KanbanView() {
     return selectedProject.tasks.filter(t => (t.column_id || 'todo') === columnId);
   };
   
-  const handleColumnDragStart = (e: React.DragEvent, index: number) => {
-      e.dataTransfer.setData('type', DND_TYPES.COLUMN);
-      e.dataTransfer.setData('sourceColumnIndex', String(index));
-      setDraggedColumnIndex(index);
-  }
-
-  const handleColumnDrop = async (e: React.DragEvent, targetIndex: number) => {
-    if (!selectedProject || draggedColumnIndex === null) return;
-    
-    const reorderedColumns = Array.from(selectedProject.columns);
-    const [removed] = reorderedColumns.splice(draggedColumnIndex, 1);
-    reorderedColumns.splice(targetIndex, 0, removed);
-    
-    await services.updateProject({ ...selectedProject, columns: reorderedColumns });
-    
-    setDraggedColumnIndex(null);
-  };
-
-  const handleTaskDrop = async (targetColumnId: string, sourceTaskId: string, sourceColumnId: string, sourceProjectId: string) => {
-    if (!selectedProject || sourceProjectId !== selectedProject.id) return;
-    
-    const task = selectedProject.tasks.find(t => t.id === sourceTaskId);
-    if (!task) return;
-
-    if (sourceColumnId !== targetColumnId) {
-      const isCompleted = targetColumnId === 'done';
-      if (task.completed !== isCompleted || task.column_id !== targetColumnId) {
-        const updatedTask = { ...task, column_id: targetColumnId, completed: isCompleted };
-        try {
-          await services.updateTask(updatedTask);
-        } catch(err: any) {
-            console.error("Failed to update task:", err);
-        }
-      }
-    }
-  };
-
   const handleInfoButtonClick = () => {
     if (selectedProject && selectedProject.id !== GENERAL_TASKS_PROJECT_ID) {
       if (selectedProject.type === 'course') {
@@ -400,125 +274,149 @@ export default function KanbanView() {
     }
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || !selectedProject) return;
+
+    const activeId = active.id;
+    const overId = over.id;
+
+    if (activeId === overId) return;
+
+    // --- Item Type Identification ---
+    const isProjectDrag = projects.some(p => p.id === activeId);
+    const isColumnDrag = selectedProject.columns.some(c => c.id === activeId);
+    const isTaskDrag = selectedProject.tasks.some(t => t.id === activeId);
+    
+    // --- Project Reordering ---
+    if (isProjectDrag) {
+      const reorderableProjects = projects.filter(p => p.id !== GENERAL_TASKS_PROJECT_ID);
+      const oldIndex = reorderableProjects.findIndex(p => p.id === activeId);
+      const newIndex = reorderableProjects.findIndex(p => p.id === overId);
+      const newOrder = arrayMove(reorderableProjects, oldIndex, newIndex);
+      await services.updateProjectOrder(newOrder);
+      return;
+    }
+
+    // --- Column Reordering ---
+    if (isColumnDrag) {
+        const oldIndex = selectedProject.columns.findIndex(c => c.id === activeId);
+        const newIndex = selectedProject.columns.findIndex(c => c.id === overId);
+        const reorderedColumns = arrayMove(selectedProject.columns, oldIndex, newIndex);
+        await services.updateProject({ ...selectedProject, columns: reorderedColumns });
+        return;
+    }
+
+    // --- Task Reordering / Moving ---
+    if (isTaskDrag) {
+      const task = selectedProject.tasks.find(t => t.id === activeId);
+      if (!task) return;
+
+      const sourceColumnId = task.column_id;
+      let targetColumnId = overId.toString();
+
+      // Check if dropping over another task
+      const overTask = selectedProject.tasks.find(t => t.id === overId);
+      if (overTask) {
+          targetColumnId = overTask.column_id;
+      }
+      
+      // Check if dropping over a column
+      const overColumn = selectedProject.columns.find(c => c.id === overId);
+      if(overColumn) {
+          targetColumnId = overColumn.id;
+      }
+
+      if (sourceColumnId !== targetColumnId) {
+        const isCompleted = targetColumnId === 'done';
+        await services.updateTask({ ...task, column_id: targetColumnId, completed: isCompleted });
+      }
+    }
+  };
+
   return (
-    <div className="flex flex-col md:flex-row h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <aside className="hidden md:block w-1/6 min-w-[180px] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
-            <h2 className="text-lg font-bold text-gray-800">Työtilat</h2>
-            {generalProject && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center"><Inbox className="w-4 h-4" /> <span className="ml-2">Yleiset</span></h3>
-                <ul className="space-y-1">
-                  <li>
-                    <button onClick={() => handleSelectProject(generalProject.id)} className={`w-full text-left px-4 py-2 text-sm rounded-md transition-colors flex items-center ${ selectedKanbanProjectId === generalProject.id ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-700 hover:bg-gray-100' }`} >
-                      <span className="w-2 h-2 rounded-full mr-3" style={{ backgroundColor: generalProject.color }}></span>
-                      {generalProject.name}
-                    </button>
-                  </li>
-                </ul>
-              </div>
-            )}
-            <KanbanSidebarProjectList
-                title="Kurssit"
-                items={courses}
-                icon={<BookOpen className="w-4 h-4" />}
-                selectedKanbanProjectId={selectedKanbanProjectId}
-                handleSelectProject={handleSelectProject}
-                handleProjectDragStart={handleProjectDragStart}
-                handleProjectDragEnter={handleProjectDragEnter}
-                handleProjectDragEnd={handleProjectDragEnd}
-                handleProjectDrop={handleProjectDrop}
-            />
-            <KanbanSidebarProjectList
-                title="Projektit"
-                items={otherProjects}
-                icon={<ClipboardCheck className="w-4 h-4" />}
-                selectedKanbanProjectId={selectedKanbanProjectId}
-                handleSelectProject={handleSelectProject}
-                handleProjectDragStart={handleProjectDragStart}
-                handleProjectDragEnter={handleProjectDragEnter}
-                handleProjectDragEnd={handleProjectDragEnd}
-                handleProjectDrop={handleProjectDrop}
-            />
-        </aside>
-
-        <main className="flex-1 p-4 md:p-6 flex flex-col min-w-0">
-            <div className="md:hidden mb-4">
-              <label htmlFor="kanban-project-select" className="block text-sm font-medium text-gray-700 mb-1">
-                Valitse työtila
-              </label>
-              <select
-                id="kanban-project-select"
-                value={selectedKanbanProjectId || ''}
-                onChange={(e) => handleSelectProject(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-              >
-                {generalProject && (
-                  <optgroup label="Yleiset">
-                    <option value={generalProject.id}>{generalProject.name}</option>
-                  </optgroup>
-                )}
-                {courses.length > 0 && (
-                  <optgroup label="Kurssit">
-                    {courses.map(course => (
-                      <option key={course.id} value={course.id}>{course.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {otherProjects.length > 0 && (
-                  <optgroup label="Projektit">
-                    {otherProjects.map(project => (
-                      <option key={project.id} value={project.id}>{project.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            </div>
-
-            {selectedProject ? (
-              <>
-                <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-6 flex-shrink-0">
-                  <h1 className="text-2xl font-bold text-gray-900 truncate pr-4">{selectedProject.name}</h1>
-                  <div className="flex items-center space-x-2">
-                    <button 
-                      onClick={() => setShowDefaultColumns(s => !s)} 
-                      className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md"
-                      title={showDefaultColumns ? 'Piilota oletussäiliöt' : 'Näytä oletussäiliöt'}
-                    >
-                      {showDefaultColumns ? <EyeOff className="w-4 h-4 mr-0 md:mr-2" /> : <Eye className="w-4 h-4 mr-0 md:mr-2" />}
-                      <span className="hidden md:inline">{showDefaultColumns ? 'Piilota oletussäiliöt' : 'Näytä oletussäiliöt'}</span>
-                    </button>
-                    {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
-                      <button onClick={handleInfoButtonClick} className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md">
-                        <Info className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Muokkaa</span>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <div className="flex flex-col md:flex-row h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <aside className="hidden md:block w-1/6 min-w-[180px] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
+              <h2 className="text-lg font-bold text-gray-800">Työtilat</h2>
+              {generalProject && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase px-4 mt-6 mb-2 flex items-center"><Inbox className="w-4 h-4" /> <span className="ml-2">Yleiset</span></h3>
+                  <ul className="space-y-1">
+                    <li>
+                      <button onClick={() => handleSelectProject(generalProject.id)} className={`w-full text-left px-4 py-2 text-sm rounded-md transition-colors flex items-center ${ selectedKanbanProjectId === generalProject.id ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-700 hover:bg-gray-100' }`} >
+                        <span className="w-2 h-2 rounded-full mr-3" style={{ backgroundColor: generalProject.color }}></span>
+                        {generalProject.name}
                       </button>
-                    )}
-                  </div>
+                    </li>
+                  </ul>
                 </div>
-                <div className="flex-1 flex gap-6 overflow-x-auto" onDragEnd={() => setDraggedColumnIndex(null)}>
-                  {selectedProject.columns
-                    ?.filter(column => showDefaultColumns || !DEFAULT_COLUMN_ID_ARRAY.includes(column.id))
-                    .map((column, index) => (
-                      <div key={column.id}>
-                        <KanbanColumnComponent 
-                          column={column} 
-                          tasks={getTasksForColumn(column.id)} 
-                          projectId={selectedProject.id}
-                          onDropTask={handleTaskDrop}
-                          onDropColumn={(e) => handleColumnDrop(e, index)}
-                          onDragStartColumn={(e) => handleColumnDragStart(e, index)}
-                          isColumnDragged={draggedColumnIndex === index}
-                        />
-                      </div>
-                  ))}
-                  <AddColumn projectId={selectedProject.id} />
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-500">
-                <p>Valitse työtila yllä olevasta valikosta.</p>
+              )}
+              <KanbanSidebarProjectList
+                  title="Kurssit"
+                  items={courses}
+                  icon={<BookOpen className="w-4 h-4" />}
+                  selectedKanbanProjectId={selectedKanbanProjectId}
+                  handleSelectProject={handleSelectProject}
+              />
+              <KanbanSidebarProjectList
+                  title="Projektit"
+                  items={otherProjects}
+                  icon={<ClipboardCheck className="w-4 h-4" />}
+                  selectedKanbanProjectId={selectedKanbanProjectId}
+                  handleSelectProject={handleSelectProject}
+              />
+          </aside>
+
+          <main className="flex-1 p-4 md:p-6 flex flex-col min-w-0">
+              <div className="md:hidden mb-4">
+                <label htmlFor="kanban-project-select" className="block text-sm font-medium text-gray-700 mb-1">Valitse työtila</label>
+                <select id="kanban-project-select" value={selectedKanbanProjectId || ''} onChange={(e) => handleSelectProject(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
+                  {generalProject && <optgroup label="Yleiset"><option value={generalProject.id}>{generalProject.name}</option></optgroup>}
+                  {courses.length > 0 && <optgroup label="Kurssit">{courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
+                  {otherProjects.length > 0 && <optgroup label="Projektit">{otherProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>}
+                </select>
               </div>
-            )}
-        </main>
-    </div>
+
+              {selectedProject ? (
+                <>
+                  <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-6 flex-shrink-0">
+                    <h1 className="text-2xl font-bold text-gray-900 truncate pr-4">{selectedProject.name}</h1>
+                    <div className="flex items-center space-x-2">
+                      <button onClick={() => setShowDefaultColumns(s => !s)} className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md" title={showDefaultColumns ? 'Piilota oletussäiliöt' : 'Näytä oletussäiliöt'}>
+                        {showDefaultColumns ? <EyeOff className="w-4 h-4 mr-0 md:mr-2" /> : <Eye className="w-4 h-4 mr-0 md:mr-2" />}
+                        <span className="hidden md:inline">{showDefaultColumns ? 'Piilota' : 'Näytä'} oletukset</span>
+                      </button>
+                      {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
+                        <button onClick={handleInfoButtonClick} className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md">
+                          <Info className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Muokkaa</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-1 flex gap-6 overflow-x-auto">
+                    <SortableContext items={selectedProject.columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
+                      {selectedProject.columns
+                        .filter(column => showDefaultColumns || !DEFAULT_COLUMN_ID_ARRAY.includes(column.id))
+                        .map((column) => (
+                          <SortableKanbanColumn
+                            key={column.id}
+                            column={column}
+                            tasks={getTasksForColumn(column.id)}
+                            projectId={selectedProject.id}
+                          />
+                      ))}
+                    </SortableContext>
+                    <AddColumn projectId={selectedProject.id} />
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <p>Valitse työtila yllä olevasta valikosta.</p>
+                </div>
+              )}
+          </main>
+      </div>
+    </DndContext>
   );
 }
