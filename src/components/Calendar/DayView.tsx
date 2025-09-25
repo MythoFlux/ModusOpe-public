@@ -1,5 +1,5 @@
 // src/components/Calendar/DayView.tsx
-import React, { useRef, useLayoutEffect, useMemo } from 'react';
+import React, { useRef, useLayoutEffect, useMemo, useState, useEffect } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { formatDate, isSameDay, addDays, formatTimeString } from '../../utils/dateUtils'; 
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
@@ -9,12 +9,25 @@ import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 export default function DayView() {
   const { state, dispatch } = useApp();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Päivittää joka minuutti
+
+    return () => clearInterval(timer);
+  }, []);
+
 
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 8 * 48;
+      // Vieritetään näkymä oletuksena klo 8:aan, mutta jos nykyinen aika on näkyvissä,
+      // vieritetään siihen.
+      const hourToShow = isToday(selectedDate) ? currentTime.getHours() : 8;
+      scrollContainerRef.current.scrollTop = (hourToShow - 1) * 48;
     }
-  }, [state.selectedDate, state.currentView]);
+  }, [state.selectedDate, state.currentView, currentTime]);
 
   const { selectedDate, events } = state;
 
@@ -53,6 +66,23 @@ export default function DayView() {
     const hour = i.toString().padStart(2, '0');
     return `${hour}:00`;
   });
+  
+  const renderCurrentTimeIndicator = () => {
+    if (!isToday(selectedDate)) return null;
+
+    const topPosition = (currentTime.getHours() * 48) + (currentTime.getMinutes() * 48 / 60);
+
+    return (
+        <div className="absolute left-0 right-0 z-20" style={{ top: `${topPosition}px` }}>
+            <div className="relative h-px bg-red-500">
+                <div className="absolute -left-1 -top-1 w-2.5 h-2.5 bg-red-500 rounded-full"></div>
+                <div className="absolute -top-2.5 left-1 text-xs text-red-500 font-medium bg-white pr-1">
+                    {formatTimeString(currentTime.toTimeString())}
+                </div>
+            </div>
+        </div>
+    );
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-full">
@@ -120,6 +150,8 @@ export default function DayView() {
                 className="h-12 border-b border-gray-100"
               />
             ))}
+
+            {renderCurrentTimeIndicator()}
 
             {timedEvents.map((event) => {
               const eventDate = new Date(event.date);
