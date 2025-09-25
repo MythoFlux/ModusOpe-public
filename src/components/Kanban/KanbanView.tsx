@@ -8,7 +8,7 @@ import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { v4 as uuidv4 } from 'uuid';
 import { DEFAULT_COLUMN_ID_ARRAY } from '../../constants/kanbanConstants';
 import KanbanSidebarProjectList from './KanbanSidebarProjectList';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, arrayMove, useSortable, verticalListSortingStrategy, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -25,14 +25,14 @@ const SortableTaskCard = ({ task }: { task: Task }) => {
   );
 };
 
-const SortableKanbanColumn = ({ column, tasks, projectId }: { column: KanbanColumn, tasks: Task[], projectId: string }) => {
+const SortableKanbanColumn = ({ column, tasks, projectId, isOver }: { column: KanbanColumn, tasks: Task[], projectId: string, isOver: boolean }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   const taskIds = useMemo(() => tasks.map(t => t.id), [tasks]);
   
   return (
     <div ref={setNodeRef} style={style} className="flex-shrink-0">
-      <KanbanColumnComponent column={column} tasks={tasks} projectId={projectId} dragHandleProps={{...attributes, ...listeners}}>
+      <KanbanColumnComponent column={column} tasks={tasks} projectId={projectId} dragHandleProps={{...attributes, ...listeners}} isOver={isOver}>
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
           {tasks.map(task => (
             <SortableTaskCard key={task.id} task={task} />
@@ -109,7 +109,7 @@ const TaskCard = ({ task, dragHandleListeners }: { task: Task, dragHandleListene
   );
 };
 
-const KanbanColumnComponent = ({ column, tasks, projectId, children, dragHandleProps }: { column: KanbanColumn, tasks: Task[], projectId: string, children: React.ReactNode, dragHandleProps: any }) => {
+const KanbanColumnComponent = ({ column, tasks, projectId, children, dragHandleProps, isOver }: { column: KanbanColumn, tasks: Task[], projectId: string, children: React.ReactNode, dragHandleProps: any, isOver: boolean }) => {
   const { state, dispatch } = useApp();
   const services = useAppServices();
   const [isEditing, setIsEditing] = useState(false);
@@ -154,7 +154,7 @@ const KanbanColumnComponent = ({ column, tasks, projectId, children, dragHandleP
   };
   
   return (
-    <div className="p-3 flex flex-col w-72 flex-shrink-0 rounded-xl bg-gray-100/60 h-full">
+    <div className={`p-3 flex flex-col w-72 flex-shrink-0 rounded-xl h-full transition-colors ${isOver ? 'bg-blue-100' : 'bg-gray-100/60'}`}>
       <div 
         className="flex justify-between items-center mb-2 px-1 noselect"
       >
@@ -244,6 +244,8 @@ export default function KanbanView() {
   const services = useAppServices();
   const { projects, selectedKanbanProjectId } = state;
   const [showDefaultColumns, setShowDefaultColumns] = useState(true);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   
@@ -266,7 +268,10 @@ export default function KanbanView() {
   
   const getTasksForColumn = (columnId: string) => {
     if (!selectedProject) return [];
-    return selectedProject.tasks.filter(t => (t.column_id || 'todo') === columnId);
+    // Järjestetään tehtävät order_indexin mukaan
+    return selectedProject.tasks
+      .filter(t => (t.column_id || 'todo') === columnId)
+      .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
   };
   
   const handleInfoButtonClick = () => {
@@ -278,56 +283,106 @@ export default function KanbanView() {
       }
     }
   };
+  
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
+  };
+  
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (!over) {
+        setOverColumnId(null);
+        return;
+    }
+    const overId = String(over.id);
+    const isColumn = selectedProject?.columns.some(c => c.id === overId);
+    if (isColumn) {
+        setOverColumnId(overId);
+    } else {
+        const containerId = over.data.current?.sortable?.containerId;
+        if (containerId) {
+            setOverColumnId(String(containerId));
+        }
+    }
+  };
 
   const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveId(null);
+    setOverColumnId(null);
+
     const { active, over } = event;
     if (!over || !selectedProject) return;
-
     const activeId = String(active.id);
     const overId = String(over.id);
-
     if (activeId === overId) return;
 
-    // --- KORJATTU LOGIIKKA ALKAA ---
-
+    // Handle Column reordering
     const activeIsColumn = selectedProject.columns.some(c => c.id === activeId);
     if (activeIsColumn) {
-      const oldIndex = selectedProject.columns.findIndex(c => c.id === activeId);
-      const newIndex = selectedProject.columns.findIndex(c => c.id === overId);
-      if (oldIndex !== -1 && newIndex !== -1) {
-          const reorderedColumns = arrayMove(selectedProject.columns, oldIndex, newIndex);
-          await services.updateProject({ ...selectedProject, columns: reorderedColumns });
-      }
-      return;
+        const oldIndex = selectedProject.columns.findIndex(c => c.id === activeId);
+        const newIndex = selectedProject.columns.findIndex(c => c.id === overId);
+        if (oldIndex !== -1 && newIndex !== -1) {
+            const reorderedColumns = arrayMove(selectedProject.columns, oldIndex, newIndex);
+            await services.updateProject({ ...selectedProject, columns: reorderedColumns });
+        }
+        return;
     }
 
+    // Handle Task reordering
     const activeTask = selectedProject.tasks.find(t => t.id === activeId);
     if (activeTask) {
         const sourceColumnId = active.data.current?.sortable.containerId;
-        
-        let destinationColumnId = null;
-        const overIsAColumn = selectedProject.columns.some(c => c.id === overId);
-        
-        if (overIsAColumn) {
-            destinationColumnId = overId;
-        } else {
-            // Dropped over a task, get its column
-            destinationColumnId = over.data.current?.sortable.containerId;
-        }
+        const overIsColumn = selectedProject.columns.some(c => c.id === overId);
+        let destinationColumnId = overIsColumn ? overId : over.data.current?.sortable.containerId;
 
-        // Move task if columns are different
-        if (sourceColumnId && destinationColumnId && sourceColumnId !== destinationColumnId) {
+        if (!sourceColumnId || !destinationColumnId) return;
+
+        let newTasks = [...selectedProject.tasks];
+        
+        // Moving task to a different column
+        if (sourceColumnId !== destinationColumnId) {
             const isCompleted = destinationColumnId === 'done';
-            await services.updateTask({ ...activeTask, column_id: destinationColumnId, completed: isCompleted });
+            newTasks = newTasks.map(t => t.id === activeId ? { ...t, column_id: destinationColumnId, completed: isCompleted } : t);
         }
-        // Huom: Tehtävien järjestely sarakkeen sisällä vaatisi lisälogiikkaa
-        // tilanhallintaan ja tietokantaan, joten se on jätetty pois tästä korjauksesta.
+        
+        // Reordering tasks
+        const oldIndex = selectedProject.tasks.findIndex(t => t.id === activeId);
+        const overIsTask = selectedProject.tasks.some(t => t.id === overId);
+        const newIndex = overIsTask ? selectedProject.tasks.findIndex(t => t.id === overId) : -1;
+
+        if (newIndex !== -1) {
+            newTasks = arrayMove(newTasks, oldIndex, newIndex);
+        } else {
+             // Logic for dropping into an empty or different column area
+            const tasksInDestColumn = newTasks.filter(t => t.column_id === destinationColumnId);
+            const activeTaskInNewList = newTasks.find(t => t.id === activeId)!;
+            const otherTasks = newTasks.filter(t => t.id !== activeId);
+            
+            newTasks = [...otherTasks.slice(0, tasksInDestColumn.length), activeTaskInNewList, ...otherTasks.slice(tasksInDestColumn.length)];
+        }
+        
+        const tasksWithUpdatedOrder = newTasks.map((task, index) => ({ ...task, order_index: index }));
+
+        // Optimistic UI update
+        dispatch({ type: 'REORDER_TASKS_SUCCESS', payload: { projectId: selectedProject.id, tasks: tasksWithUpdatedOrder }});
+        
+        // Update backend
+        const tasksToUpdateInDB = tasksWithUpdatedOrder.map(({ id, order_index, column_id, completed }) => ({ id, order_index, column_id, completed }));
+        await services.updateTasksOrder(tasksToUpdateInDB);
     }
-    // --- KORJATTU LOGIIKKA PÄÄTTYY ---
   };
 
+  const isDraggingTask = activeId && selectedProject?.tasks.some(t => t.id === activeId);
+
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext 
+        sensors={sensors} 
+        collisionDetection={closestCenter} 
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => { setActiveId(null); setOverColumnId(null); }}
+    >
       <div className="flex flex-col md:flex-row h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <aside className="hidden md:block w-1/6 min-w-[220px] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
               <h2 className="text-lg font-bold text-gray-800 px-2">Työtilat</h2>
@@ -396,6 +451,7 @@ export default function KanbanView() {
                             column={column}
                             tasks={getTasksForColumn(column.id)}
                             projectId={selectedProject.id}
+                            isOver={isDraggingTask && overColumnId === column.id}
                           />
                       ))}
                     </SortableContext>
