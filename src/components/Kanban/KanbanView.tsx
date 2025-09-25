@@ -375,7 +375,7 @@ export default function KanbanView() {
                     <h1 className="text-2xl font-bold text-gray-900 truncate pr-4">{selectedProject.name}</h1>
                     <div className="flex items-center space-x-2">
                       <button onClick={() => setShowDefaultColumns(s => !s)} className="flex-shrink-0 flex items-center text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md" title={showDefaultColumns ? 'Piilota oletussäiliöt' : 'Näytä oletussäiliöt'}>
-                        {showDefaultColumns ? <EyeOff className="w-4 h-4 mr-0 md:mr-2" /> : <Eye className="w-4 h-4 mr-0 md:mr-2" />}
+                        {showDefaultColumns ? <Eye className="w-4 h-4 mr-0 md:mr-2" /> : <EyeOff className="w-4 h-4 mr-0 md:mr-2" />}
                         <span className="hidden md:inline">{showDefaultColumns ? 'Piilota' : 'Näytä'} oletukset</span>
                       </button>
                       {selectedProject.id !== GENERAL_TASKS_PROJECT_ID && (
