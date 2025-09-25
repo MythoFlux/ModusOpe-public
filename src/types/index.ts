@@ -43,7 +43,7 @@ export interface Project {
   columns: KanbanColumn[];
   files?: FileAttachment[];
   more_info?: string;
-  order_index?: number; // UUSI
+  order_index?: number; 
 }
 
 export interface Subtask {
@@ -65,6 +65,7 @@ export interface Task {
   files?: FileAttachment[];
   show_description?: boolean;
   show_subtasks?: boolean;
+  order_index?: number; // LISÄTTY TÄMÄ
 }
 
 export interface ScheduleTemplate {
