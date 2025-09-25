@@ -100,7 +100,7 @@ export type AppAction =
   | { type: 'ADD_TASK_SUCCESS'; payload: { projectId: string; task: Task } }
   | { type: 'UPDATE_TASK_SUCCESS'; payload: { projectId: string; task: Task } }
   | { type: 'DELETE_TASK_SUCCESS'; payload: { projectId: string; taskId: string } }
-  | { type: 'REORDER_TASKS_SUCCESS'; payload: { projectId: string; tasks: Task[] } } // LISÄTTY
+  | { type: 'REORDER_TASKS_SUCCESS'; payload: { projectId: string; tasks: Task[] } }
   | { type: 'ADD_SUBTASK'; payload: { projectId: string; taskId: string; subtask: Subtask } }
   | { type: 'UPDATE_SUBTASK'; payload: { projectId: string; taskId: string; subtask: Subtask } }
   | { type: 'DELETE_SUBTASK'; payload: { projectId: string; taskId: string; subtaskId: string } }
@@ -309,7 +309,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, [state.projects]),
 
     addTask: useCallback(async (task: Omit<Task, 'id'>) => {
-      // Annetaan uudelle tehtävälle korkein järjestysnumero sen sarakkeessa
       const targetProjectId = task.project_id || GENERAL_TASKS_PROJECT_ID;
       const project = state.projects.find(p => p.id === targetProjectId);
       const tasksInColumn = project?.tasks.filter(t => t.column_id === task.column_id) || [];
@@ -334,12 +333,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'UPDATE_TASK_SUCCESS', payload: { projectId: task.project_id || GENERAL_TASKS_PROJECT_ID, task: task } });
     }, []),
 
-    // LISÄTTY UUSI FUNKTIO
-    updateTasksOrder: useCallback(async (tasksToUpdate: Pick<Task, 'id' | 'order_index'>[]) => {
+    // KORJATTU TYYPPIMÄÄRITYS
+    updateTasksOrder: useCallback(async (tasksToUpdate: Partial<Task>[]) => {
       const { error } = await supabase.from('tasks').upsert(tasksToUpdate);
       if (error) {
         console.error("Error updating tasks order:", error);
-        throw new Error(error.message);
+        throw error;
       }
     }, []),
     
@@ -481,7 +480,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           supabase.from('projects').select('*').order('order_index', { ascending: true }),
           supabase.from('schedule_templates').select('*'),
           supabase.from('events').select('*'),
-          // MUUTETTU: Järjestetään tehtävät heti haussa
           supabase.from('tasks').select('*').order('order_index', { ascending: true })
       ]);
       if (projectsRes.error || templatesRes.error || eventsRes.error || tasksRes.error) {
