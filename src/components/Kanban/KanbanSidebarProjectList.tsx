@@ -1,5 +1,5 @@
 // src/components/Kanban/KanbanSidebarProjectList.tsx
-import React from 'react';
+import React, { useMemo } from 'react'; // KORJATTU: Lisätty useMemo tuontiin
 import { Project } from '../../types';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
