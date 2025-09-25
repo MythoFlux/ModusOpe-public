@@ -268,7 +268,6 @@ export default function KanbanView() {
   
   const getTasksForColumn = (columnId: string) => {
     if (!selectedProject) return [];
-    // Järjestetään tehtävät order_indexin mukaan
     return selectedProject.tasks
       .filter(t => (t.column_id || 'todo') === columnId)
       .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
@@ -295,8 +294,8 @@ export default function KanbanView() {
         return;
     }
     const overId = String(over.id);
-    const isColumn = selectedProject?.columns.some(c => c.id === overId);
-    if (isColumn) {
+    const isOverColumn = selectedProject?.columns.some(c => c.id === overId);
+    if (isOverColumn) {
         setOverColumnId(overId);
     } else {
         const containerId = over.data.current?.sortable?.containerId;
@@ -316,7 +315,6 @@ export default function KanbanView() {
     const overId = String(over.id);
     if (activeId === overId) return;
 
-    // Handle Column reordering
     const activeIsColumn = selectedProject.columns.some(c => c.id === activeId);
     if (activeIsColumn) {
         const oldIndex = selectedProject.columns.findIndex(c => c.id === activeId);
@@ -328,47 +326,49 @@ export default function KanbanView() {
         return;
     }
 
-    // Handle Task reordering
     const activeTask = selectedProject.tasks.find(t => t.id === activeId);
     if (activeTask) {
-        const sourceColumnId = active.data.current?.sortable.containerId;
-        const overIsColumn = selectedProject.columns.some(c => c.id === overId);
-        let destinationColumnId = overIsColumn ? overId : over.data.current?.sortable.containerId;
-
-        if (!sourceColumnId || !destinationColumnId) return;
-
         let newTasks = [...selectedProject.tasks];
+        const oldIndex = newTasks.findIndex(t => t.id === activeId);
+        let newIndex = newTasks.findIndex(t => t.id === overId);
+
+        const sourceColumnId = active.data.current?.sortable.containerId;
+        const overIsAColumn = selectedProject.columns.some(c => c.id === overId);
+        const destinationColumnId = overIsAColumn ? overId : over.data.current?.sortable.containerId;
         
-        // Moving task to a different column
+        if (!sourceColumnId || !destinationColumnId) return;
+        
+        // Optimistically update the task's column if it changed
         if (sourceColumnId !== destinationColumnId) {
             const isCompleted = destinationColumnId === 'done';
-            newTasks = newTasks.map(t => t.id === activeId ? { ...t, column_id: destinationColumnId, completed: isCompleted } : t);
+            newTasks[oldIndex] = { ...newTasks[oldIndex], column_id: destinationColumnId, completed: isCompleted };
         }
-        
-        // Reordering tasks
-        const oldIndex = selectedProject.tasks.findIndex(t => t.id === activeId);
-        const overIsTask = selectedProject.tasks.some(t => t.id === overId);
-        const newIndex = overIsTask ? selectedProject.tasks.findIndex(t => t.id === overId) : -1;
 
-        if (newIndex !== -1) {
+        // Find the correct newIndex if dropping on a column, not a task
+        if (!overIsAColumn) { // Dropped on a task
             newTasks = arrayMove(newTasks, oldIndex, newIndex);
-        } else {
-             // Logic for dropping into an empty or different column area
-            const tasksInDestColumn = newTasks.filter(t => t.column_id === destinationColumnId);
-            const activeTaskInNewList = newTasks.find(t => t.id === activeId)!;
-            const otherTasks = newTasks.filter(t => t.id !== activeId);
-            
-            newTasks = [...otherTasks.slice(0, tasksInDestColumn.length), activeTaskInNewList, ...otherTasks.slice(tasksInDestColumn.length)];
+        } else { // Dropped on a column
+            const tasksInDestColumn = newTasks.filter(t => t.column_id === destinationColumnId && t.id !== activeId);
+            const lastTaskInColumn = tasksInDestColumn[tasksInDestColumn.length - 1];
+            const newIndexAfterLast = lastTaskInColumn ? newTasks.findIndex(t => t.id === lastTaskInColumn.id) + 1 : oldIndex;
+            newTasks = arrayMove(newTasks, oldIndex, newIndexAfterLast);
         }
         
         const tasksWithUpdatedOrder = newTasks.map((task, index) => ({ ...task, order_index: index }));
 
-        // Optimistic UI update
         dispatch({ type: 'REORDER_TASKS_SUCCESS', payload: { projectId: selectedProject.id, tasks: tasksWithUpdatedOrder }});
         
-        // Update backend
-        const tasksToUpdateInDB = tasksWithUpdatedOrder.map(({ id, order_index, column_id, completed }) => ({ id, order_index, column_id, completed }));
-        await services.updateTasksOrder(tasksToUpdateInDB);
+        try {
+            const tasksToUpdateInDB = tasksWithUpdatedOrder.map(
+              ({ id, title, description, completed, column_id, priority, due_date, project_id, subtasks, files, show_description, show_subtasks, order_index }) => ({
+                id, title, description, completed, column_id, priority, due_date, project_id, subtasks, files, show_description, show_subtasks, order_index
+              })
+            );
+            await services.updateTasksOrder(tasksToUpdateInDB);
+        } catch (error) {
+            console.error("Failed to save new task order:", error);
+            // Tässä voisi näyttää virheilmoituksen ja peruuttaa muutoksen
+        }
     }
   };
 
