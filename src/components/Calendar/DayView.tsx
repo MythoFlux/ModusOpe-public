@@ -1,7 +1,7 @@
 // src/components/Calendar/DayView.tsx
 import React, { useRef, useLayoutEffect, useMemo, useState, useEffect } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import { formatDate, isSameDay, addDays, formatTimeString } from '../../utils/dateUtils'; 
+import { formatDate, isSameDay, addDays, formatTimeString, isToday } from '../../utils/dateUtils'; 
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { Event } from '../../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
