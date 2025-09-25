@@ -2,7 +2,7 @@
 import { AppAction, AppState } from '../contexts/AppContext';
 import { KanbanColumn, Project, Subtask, Task } from '../types';
 import { GENERAL_TASKS_PROJECT_ID } from '../contexts/AppContext';
-import { KANBAN_COLUMN_IDS } from '../constants/kanbanConstants'; // MUUTOS: Tuotu vakiot
+import { KANBAN_COLUMN_IDS } from '../constants/kanbanConstants';
 
 const findProject = (state: AppState, projectId: string): Project | undefined => {
   return state.projects.find(p => p.id === projectId);
@@ -27,14 +27,8 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
     }
 
     case 'UPDATE_PROJECTS_ORDER_SUCCESS': {
-      // Payload on nyt täydellinen, järjestetty lista siirreltävistä projekteista.
       const orderedReorderableProjects = action.payload;
-
-      // Haetaan "Yleiset tehtävät" -projekti, joka ei ole siirrettävissä.
       const generalProject = state.projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID);
-
-      // Luodaan täysin uusi projektilista yhdistämällä yleinen projekti ja uusi järjestys.
-      // Tämä takaa, että React huomaa muutoksen ja päivittää näkymän.
       const newProjectsState = generalProject
         ? [generalProject, ...orderedReorderableProjects]
         : orderedReorderableProjects;
@@ -85,6 +79,17 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
             : p
         ),
       };
+    }
+
+    // LISÄTTY TÄMÄ OSUUS
+    case 'REORDER_TASKS_SUCCESS': {
+        const { projectId, tasks } = action.payload;
+        return {
+            ...state,
+            projects: state.projects.map(p => 
+                p.id === projectId ? { ...p, tasks: tasks } : p
+            ),
+        };
     }
 
     case 'UPDATE_TASK_STATUS_SUCCESS': {
@@ -168,7 +173,6 @@ export function projectReducerLogic(state: AppState, action: AppAction): AppStat
             ...state,
             projects: state.projects.map(p =>
                 p.id === projectId
-                    // MUUTOS: Käytetään vakiota
                     ? { ...p, columns: p.columns.filter(c => c.id !== columnId), tasks: p.tasks.map(t => t.column_id === columnId ? { ...t, column_id: KANBAN_COLUMN_IDS.TODO } : t) }
                     : p
             ),
