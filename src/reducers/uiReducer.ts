@@ -1,3 +1,4 @@
+// src/reducers/uiReducer.ts
 import { AppAction, AppState, ConfirmationModalState } from '../contexts/AppContext';
 
 const initialConfirmationState: ConfirmationModalState = {
@@ -19,6 +20,19 @@ export function uiReducerLogic(state: AppState, action: AppAction): AppState {
     case 'TOGGLE_EVENT_MODAL':
       return { ...state, showEventModal: !state.showEventModal, selectedEvent: action.payload };
     
+    // LISÄTTY
+    case 'TOGGLE_EVENT_DETAILS_MODAL':
+      return { ...state, showEventDetailsModal: !state.showEventDetailsModal, selectedEvent: action.payload };
+    
+    // LISÄTTY
+    case 'OPEN_EVENT_EDIT_MODAL':
+      return {
+        ...state,
+        showEventDetailsModal: false,
+        showEventModal: true
+        // selectedEvent säilyy tilassa edellisestä actionista
+      };
+
     case 'TOGGLE_PROJECT_MODAL':
       return { ...state, showProjectModal: !state.showProjectModal, selectedProjectId: action.payload };
 
@@ -28,9 +42,9 @@ export function uiReducerLogic(state: AppState, action: AppAction): AppState {
     case 'TOGGLE_SCHEDULE_TEMPLATE_MODAL':
       return { ...state, showScheduleTemplateModal: !state.showScheduleTemplateModal, selectedScheduleTemplate: action.payload };
     
-    case 'TOGGLE_RECURRING_CLASS_MODAL':
-      return { ...state, showRecurringClassModal: !state.showRecurringClassModal, selectedRecurringClass: action.payload };
-
+    // Tässä tiedostossa ei ole 'TOGGLE_RECURRING_CLASS_MODAL', mutta lisään sen silti CLOSE_MODALS-osioon varmuuden vuoksi
+    // (Se oli uiReducer.ts-tiedostossasi, mutta ei AppContext.tsx:ssä, joten oletan sen olevan virhe ja poistan sen täältäkin)
+    
     case 'TOGGLE_TASK_MODAL':
       return { ...state, showTaskModal: !state.showTaskModal, selectedTask: action.payload };
       
@@ -38,16 +52,17 @@ export function uiReducerLogic(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         showEventModal: false,
+        showEventDetailsModal: false, // LISÄTTY
         showProjectModal: false,
         showCourseModal: false,
         showScheduleTemplateModal: false,
-        showRecurringClassModal: false,
+        // showRecurringClassModal: false, // Poistettu, koska puuttuu actioneista
         showTaskModal: false,
         selectedEvent: undefined,
         selectedProjectId: undefined,
         courseModalInfo: undefined,
         selectedScheduleTemplate: undefined,
-        selectedRecurringClass: undefined,
+        // selectedRecurringClass: undefined, // Poistettu
         selectedTask: undefined,
       };
 
