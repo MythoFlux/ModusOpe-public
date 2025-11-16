@@ -51,7 +51,8 @@ export default function DayView() {
       }
       dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id });
     } else {
-      dispatch({ type: 'TOGGLE_EVENT_MODAL', payload: event });
+      // MUUTETTU
+      dispatch({ type: 'TOGGLE_EVENT_DETAILS_MODAL', payload: event });
     }
   };
 
