@@ -8,6 +8,7 @@ import ProjectList from './components/Projects/ProjectList';
 import CourseList from './components/Courses/CourseList';
 import TaskList from './components/Tasks/TaskList';
 import EventModal from './components/Modals/EventModal';
+import EventDetailsModal from './components/Modals/EventDetailsModal'; // LISÄTTY
 import ProjectModal from './components/Modals/ProjectModal';
 import CourseModal from './components/Modals/CourseModal';
 import ScheduleTemplateModal from './components/Modals/ScheduleTemplateModal';
@@ -106,6 +107,7 @@ function AppContent() {
         </button>
       </div>
 
+      <EventDetailsModal /> {/* LISÄTTY */}
       <EventModal />
       <ProjectModal />
       <CourseModal />
