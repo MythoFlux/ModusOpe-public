@@ -71,6 +71,7 @@ export interface AppState {
   currentView: CalendarView;
   selectedDate: Date;
   showEventModal: boolean;
+  showEventDetailsModal: boolean; // LISÄTTY
   showProjectModal: boolean;
   showCourseModal: boolean;
   showScheduleTemplateModal: boolean;
@@ -110,6 +111,8 @@ export type AppAction =
   | { type: 'SET_VIEW'; payload: CalendarView }
   | { type: 'SET_SELECTED_DATE'; payload: Date }
   | { type: 'TOGGLE_EVENT_MODAL'; payload?: Event }
+  | { type: 'TOGGLE_EVENT_DETAILS_MODAL'; payload?: Event } // LISÄTTY
+  | { type: 'OPEN_EVENT_EDIT_MODAL' } // LISÄTTY
   | { type: 'TOGGLE_PROJECT_MODAL'; payload?: string }
   | { type: 'TOGGLE_COURSE_MODAL'; payload?: { id?: string } }
   | { type: 'TOGGLE_SCHEDULE_TEMPLATE_MODAL'; payload?: ScheduleTemplate }
@@ -143,6 +146,7 @@ const initialState: AppState = {
   currentView: 'month',
   selectedDate: new Date(),
   showEventModal: false,
+  showEventDetailsModal: false, // LISÄTTY
   showProjectModal: false,
   showCourseModal: false,
   showScheduleTemplateModal: false,
@@ -221,7 +225,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     addProject: useCallback(async (projectPayload: AddProjectPayload) => {
         const { template_group_name, ...projectDataFromForm } = projectPayload;
-        const { id, files, tasks, ...dbData } = projectDataFromForm;
+        
+        // Varmistetaan, että files on olemassa, vaikka se olisi tyhjä
+        const projectDataWithFiles = { ...projectDataFromForm, files: projectDataFromForm.files || [] };
+        
+        const { id, files, tasks, ...dbData } = projectDataWithFiles;
         
         const dataToInsert = { ...dbData, columns: DEFAULT_KANBAN_COLUMNS, user_id: state.session?.user.id, files };
 
@@ -229,7 +237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (error || !newProjectData) throw new Error(error.message);
 
         const finalProject: Project = {
-          ...(projectDataFromForm as Project),
+          ...(projectDataWithFiles as Project),
           ...newProjectData,
           start_date: new Date(newProjectData.start_date),
           end_date: newProjectData.end_date ? new Date(newProjectData.end_date) : undefined,
@@ -264,7 +272,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     updateProject: useCallback(async (project: Project) => {
         const { tasks, ...dbData } = project;
-        const { data, error } = await supabase.from('projects').update(dbData).match({ id: project.id }).select().single();
+        // Varmistetaan, että files-kenttä on mukana, vaikka se olisi tyhjä
+        const dbDataWithFiles = { ...dbData, files: dbData.files || [] };
+        
+        const { data, error } = await supabase.from('projects').update(dbDataWithFiles).match({ id: project.id }).select().single();
         if (error || !data) throw new Error(error.message);
         dispatch({ type: 'UPDATE_PROJECT_SUCCESS', payload: project });
     }, []),
@@ -314,7 +325,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const tasksInColumn = project?.tasks.filter(t => t.column_id === task.column_id) || [];
       const maxOrderIndex = tasksInColumn.reduce((max, t) => Math.max(t.order_index || 0, max), 0);
       
-      const taskWithUserAndOrder = { ...task, order_index: maxOrderIndex + 1, user_id: state.session?.user.id };
+      const taskWithUserAndOrder = { ...task, files: task.files || [], order_index: maxOrderIndex + 1, user_id: state.session?.user.id };
       
       const { data, error } = await supabase.from('tasks').insert([taskWithUserAndOrder]).select().single();
       if (error || !data) throw new Error(error.message);
@@ -328,12 +339,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, [state.session, state.projects]),
 
     updateTask: useCallback(async (task: Task) => {
-      const { error } = await supabase.from('tasks').update(task).match({ id: task.id });
+      const taskWithFiles = { ...task, files: task.files || [] };
+      const { error } = await supabase.from('tasks').update(taskWithFiles).match({ id: task.id });
       if (error) throw new Error(error.message);
       dispatch({ type: 'UPDATE_TASK_SUCCESS', payload: { projectId: task.project_id || GENERAL_TASKS_PROJECT_ID, task: task } });
     }, []),
 
-    // KORJATTU TYYPPIMÄÄRITYS
     updateTasksOrder: useCallback(async (tasksToUpdate: Partial<Task>[]) => {
       const { error } = await supabase.from('tasks').upsert(tasksToUpdate);
       if (error) {
@@ -367,7 +378,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, []),
     
     addEvent: useCallback(async (event: Omit<Event, 'id'>) => {
-        const eventWithUser = { ...event, user_id: state.session?.user.id };
+        const eventWithUser = { ...event, files: event.files || [], user_id: state.session?.user.id };
         const { data, error } = await supabase.from('events').insert([eventWithUser]).select().single();
         if (error || !data) throw new Error(error.message);
         const newEvent = { ...data, date: new Date(data.date) };
@@ -379,7 +390,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (scope === 'single' || !event.project_id || event.type !== 'class' || !event.group_name) {
             const { group_name, ...eventToUpdate } = event;
-            const { error } = await supabase.from('events').update(eventToUpdate).match({ id: event.id });
+            const eventWithFiles = { ...eventToUpdate, files: event.files || [] };
+            
+            const { error } = await supabase.from('events').update(eventWithFiles).match({ id: event.id });
             if (error) throw new Error(error.message);
             dispatch({ type: 'UPDATE_EVENT_SUCCESS', payload: event });
             return;
@@ -390,7 +403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             description: event.description,
             more_info: event.more_info,
             color: event.color,
-            files: event.files,
+            files: event.files || [],
         };
 
         let query = supabase.from('events').update(updatedFields)
@@ -487,8 +500,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], manualEvents: [], tasks: [] } });
         return;
       }
-      const formattedProjects = (projectsRes.data || []).map((p: any) => ({ ...p, start_date: new Date(p.start_date), end_date: p.end_date ? new Date(p.end_date) : undefined, tasks: [], columns: p.columns && p.columns.length > 0 ? p.columns : DEFAULT_KANBAN_COLUMNS }));
-      const formattedEvents = (eventsRes.data || []).map((e: any) => ({ ...e, date: new Date(e.date) }));
+      const formattedProjects = (projectsRes.data || []).map((p: any) => ({ ...p, start_date: new Date(p.start_date), end_date: p.end_date ? new Date(p.end_date) : undefined, tasks: [], columns: p.columns && p.columns.length > 0 ? p.columns : DEFAULT_KANBAN_COLUMNS, files: p.files || [] }));
+      const formattedEvents = (eventsRes.data || []).map((e: any) => ({ ...e, date: new Date(e.date), files: e.files || [] }));
       const formattedTasks = (tasksRes.data || []).map((t: any) => ({ ...t, due_date: t.due_date ? new Date(t.due_date) : undefined, subtasks: t.subtasks || [], files: t.files || [] }));
       dispatch({ type: 'INITIALIZE_DATA', payload: { projects: formattedProjects, scheduleTemplates: templatesRes.data || [], manualEvents: formattedEvents, tasks: formattedTasks } });
     };
