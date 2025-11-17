@@ -11,7 +11,6 @@ import TimeIndicator from '../Shared/TimeIndicator';
 const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille
 
 // KORJATTU: Tämä funktio käyttää nyt splitiä regexin sijaan, kuten DayView.
-// Tämä on varmempi tapa lukea "HH:MM" suoraan merkkijonon alusta.
 const getMinutesFromTimeString = (timeString: string | undefined | null): number | null => {
   if (!timeString || typeof timeString !== 'string') return null;
   
@@ -35,7 +34,6 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
       const dayKey = date.toISOString().split('T')[0];
       
       const timedEvents = (eventsByDay.get(dayKey) || [])
-        // Näytetään vain jos start_time löytyy merkkijonona (koska luotamme siihen nyt)
         .filter(e => !!e.start_time)
         .sort((a, b) => {
            const minA = getMinutesFromTimeString(a.start_time) || 0;
@@ -50,11 +48,8 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
 
       const eventsWithMinutes = timedEvents.map(event => {
         const startMinutes = getMinutesFromTimeString(event.start_time) || 0;
-
-        // Lasketaan loppuaika samalla logiikalla
         let endMinutes = getMinutesFromTimeString(event.end_time);
         
-        // Jos loppuaikaa ei ole tai se on väärin, oletetaan 60min kesto
         if (endMinutes === null || endMinutes <= startMinutes) {
             endMinutes = startMinutes + 60;
         }
@@ -62,7 +57,6 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
         return { ...event, startMinutes, endMinutes };
       });
 
-      // Ryhmitellään päällekkäiset tapahtumat sarakkeisiin
       const clusters: (typeof eventsWithMinutes)[] = [];
       if (eventsWithMinutes.length > 0) {
         let currentCluster = [eventsWithMinutes[0]];
@@ -128,6 +122,7 @@ export default function WeekView() {
   const { state, dispatch } = useApp();
   const { selectedDate, events } = state;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const currentTime = useCurrentTime();
   
   const [showWeekend, setShowWeekend] = useState(false);
@@ -182,6 +177,55 @@ export default function WeekView() {
     } else {
       dispatch({ type: 'TOGGLE_EVENT_DETAILS_MODAL', payload: event });
     }
+  };
+
+  // KÄYTETTÄVYYS: Käsittelijä tyhjän kohdan klikkaukselle
+  const handleGridClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!gridRef.current) return;
+
+    const rect = gridRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const scrollTop = scrollContainerRef.current?.scrollTop || 0;
+    
+    // Vähennetään aikasarake (60px) leveydestä
+    const gridWidth = rect.width - 60;
+    const columnWidth = gridWidth / displayDates.length;
+    
+    // Lasketaan sarake (päivä)
+    const columnIndex = Math.floor((x - 60) / columnWidth);
+    
+    // Jos klikkaus on aikasarakkeessa (vasen reuna), ei tehdä mitään
+    if (columnIndex < 0 || columnIndex >= displayDates.length) return;
+
+    // Lasketaan aika Y-koordinaatista
+    // Y on suhteessa viewportiin, joten lisätään scrollaus
+    // Kuitenkin tässä klikkaus tulee suhteessa `relative` containeriin, 
+    // joten meidän ei tarvitse huolehtia scrollTopista, jos kuuntelija on oikeassa divissä.
+    // Tarkistetaan mihin elementtiin kuuntelija on kiinnitetty.
+    // Tässä tapauksessa kuuntelija on scrollattavan alueen sisällä olevassa divissä.
+    
+    const clickedHour = Math.floor(y / HOUR_HEIGHT);
+    // Pyöristetään minuutit 00 tai 30
+    const clickedMinutes = Math.floor((y % HOUR_HEIGHT) / (HOUR_HEIGHT / 2)) * 30;
+
+    const clickedDate = displayDates[columnIndex];
+    
+    const startTimeString = `${clickedHour.toString().padStart(2, '0')}:${clickedMinutes.toString().padStart(2, '0')}`;
+    
+    // Lasketaan loppuaika (oletus 1h)
+    const endHour = clickedHour + 1;
+    const endTimeString = `${endHour.toString().padStart(2, '0')}:${clickedMinutes.toString().padStart(2, '0')}`;
+
+    // Luodaan "tyhjä" tapahtuma pohjaksi modaalille
+    const newEventTemplate = {
+        date: clickedDate,
+        start_time: startTimeString,
+        end_time: endTimeString,
+        type: 'class' // oletustyyppi
+    } as any; // Käytetään any tässä vain ohittamaan tiukat tyyppitarkistukset modaalin avauksessa
+
+    dispatch({ type: 'TOGGLE_EVENT_MODAL', payload: newEventTemplate });
   };
 
   const navigateWeek = (direction: 'prev' | 'next') => {
@@ -269,7 +313,7 @@ export default function WeekView() {
             </div>
         </div>
 
-        <div className="relative min-h-full">
+        <div className="relative min-h-full" ref={gridRef} onClick={handleGridClick}>
             <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
                 <div className="col-start-1 bg-gray-50 border-r border-gray-200">
                     {timeSlots.map((time, i) => (
@@ -280,9 +324,10 @@ export default function WeekView() {
                 </div>
                 <div className="col-start-2 col-span-full grid relative" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)` }}>
                     {displayDates.map((_, dateIndex) => (
-                         <div key={dateIndex} className="border-r border-gray-100 last:border-r-0">
+                         <div key={dateIndex} className="border-r border-gray-100 last:border-r-0 cursor-pointer hover:bg-gray-50/30 transition-colors">
+                             {/* KORJAUS: Poistettu paksumpi viiva i === 12 kohdalta */}
                              {timeSlots.map((time, i) => (
-                                 <div key={time} className={`border-b border-gray-100 ${i === 12 ? 'border-b-2 border-gray-200' : ''}`} style={{ height: `${HOUR_HEIGHT}px` }} />
+                                 <div key={time} className="border-b border-gray-100" style={{ height: `${HOUR_HEIGHT}px` }} />
                              ))}
                          </div>
                     ))}
@@ -297,7 +342,6 @@ export default function WeekView() {
                     return (
                         <div key={dateIndex} className="relative h-full pointer-events-auto">
                              {timedEvents.map((event) => {
-                                // Muotoillaan aika näyttöön samasta lähteestä kuin layout
                                 const displayTime = () => {
                                    if (event.start_time) {
                                       return `${formatTimeString(event.start_time)}${event.end_time ? ` - ${formatTimeString(event.end_time)}` : ''}`;
@@ -319,8 +363,7 @@ export default function WeekView() {
                                             borderLeft: `3px solid ${event.color}`,
                                             color: '#1f2937'
                                         }}
-                                        // Debug-tieto hoverissa:
-                                        title={`${event.title} (Raakadata: ${event.start_time})`}
+                                        title={`${event.title} (${displayTime()})`}
                                     >
                                         <span className="font-semibold mr-1">{event.title}</span>
                                         <span className="opacity-75 text-[10px]">{displayTime()}</span>
