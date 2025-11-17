@@ -10,17 +10,19 @@ import TimeIndicator from '../Shared/TimeIndicator';
 
 const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille
 
-// TÄRKEÄ: Tämä funktio laskee minuutit vain ja ainoastaan "HH:MM" merkkijonosta.
-// Se estää aikavyöhykevirheet ja Date-objektin sekoilut.
+// KORJATTU: Tämä funktio käyttää nyt splitiä regexin sijaan, kuten DayView.
+// Tämä on varmempi tapa lukea "HH:MM" suoraan merkkijonon alusta.
 const getMinutesFromTimeString = (timeString: string | undefined | null): number | null => {
   if (!timeString || typeof timeString !== 'string') return null;
   
-  // Etsitään ensimmäinen "numerot:numerot" esiintymä (esim. "08:10")
-  const match = timeString.match(/(\d{1,2}):(\d{2})/);
-  if (match) {
-    const hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    return hours * 60 + minutes;
+  const parts = timeString.split(':');
+  if (parts.length >= 2) {
+    const hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1], 10);
+    
+    if (!isNaN(hours) && !isNaN(minutes)) {
+      return hours * 60 + minutes;
+    }
   }
   return null;
 };
@@ -47,7 +49,6 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
       }
 
       const eventsWithMinutes = timedEvents.map(event => {
-        // Käytetään pakotettua string-parsintaa
         const startMinutes = getMinutesFromTimeString(event.start_time) || 0;
 
         // Lasketaan loppuaika samalla logiikalla
