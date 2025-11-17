@@ -1,12 +1,29 @@
 // src/components/Calendar/WeekView.tsx
 import React, { useState, useRef, useLayoutEffect, useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import { formatDate, isToday, isSameDay, addDays, formatTimeString } from '../../utils/dateUtils';
+import { isSameDay, addDays, formatTimeString, isToday } from '../../utils/dateUtils';
 import { Event } from '../../types';
 import { Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { useCurrentTime } from '../../hooks/useCurrentTime';
 import TimeIndicator from '../Shared/TimeIndicator';
+
+const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille (vastaa h-12 Tailwindissä)
+
+// Apufunktio minuuttien laskemiseen varmemmin
+const getMinutesFromEvent = (event: Event): number => {
+  // 1. Yritä käyttää start_time -merkkijonoa (esim "08:10" tai "08:10:00")
+  if (event.start_time && typeof event.start_time === 'string' && event.start_time.includes(':')) {
+    const [hours, minutes] = event.start_time.split(':').map(Number);
+    if (!isNaN(hours) && !isNaN(minutes)) {
+      return hours * 60 + minutes;
+    }
+  }
+  
+  // 2. Fallback: Käytä Date-objektin aikaa, jos merkkijono puuttuu tai on rikki
+  const eventDate = new Date(event.date);
+  return eventDate.getHours() * 60 + eventDate.getMinutes();
+};
 
 // Apufunktio tapahtumien asettelun laskemiseen
 const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[]) => {
@@ -16,11 +33,11 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
     displayDates.forEach(date => {
       const dayKey = date.toISOString().split('T')[0];
       const timedEvents = (eventsByDay.get(dayKey) || [])
-        .filter(e => !!e.start_time)
+        .filter(e => !!e.start_time || new Date(e.date).getHours() !== 0) // Näytä jos start_time on tai Date-objektissa on aika
         .sort((a, b) => {
-          const aStartTime = a.start_time || '00:00';
-          const bStartTime = b.start_time || '00:00';
-          return aStartTime.localeCompare(bStartTime);
+          const minA = getMinutesFromEvent(a);
+          const minB = getMinutesFromEvent(b);
+          return minA - minB;
         });
 
       if (timedEvents.length === 0) {
@@ -30,34 +47,30 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
 
       // Muunnetaan tapahtumat minuuteiksi päivän alusta
       const eventsWithMinutes = timedEvents.map(event => {
-        // KORJAUS: Lasketaan minuutit AINA start_time-merkkijonosta
-        let startMinutes = 0;
-        if (event.start_time) {
-            const [hours, minutes] = event.start_time.split(':').map(Number);
-            startMinutes = hours * 60 + minutes;
-        } else {
-            // Fallback vain jos start_time puuttuu kokonaan
-            const eventDate = new Date(event.date);
-            startMinutes = eventDate.getHours() * 60 + eventDate.getMinutes();
-        }
+        const startMinutes = getMinutesFromEvent(event);
 
         let endMinutes;
-        if (event.end_time) {
+        if (event.end_time && event.end_time.includes(':')) {
           const [endHour, endMinute] = event.end_time.split(':').map(Number);
           endMinutes = endHour * 60 + endMinute;
         } else {
           endMinutes = startMinutes + 60; // Oletuskesto 60 min
         }
+        
+        // Varmistetaan, että loppuaika on alkuaikaa myöhemmin
+        if (endMinutes <= startMinutes) endMinutes = startMinutes + 30;
+
         return { ...event, startMinutes, endMinutes };
       });
 
-      // Ryhmitellään päällekkäiset tapahtumat
+      // Ryhmitellään päällekkäiset tapahtumat (Cluster logic)
       const clusters: (typeof eventsWithMinutes)[] = [];
       if (eventsWithMinutes.length > 0) {
         let currentCluster = [eventsWithMinutes[0]];
         for (let i = 1; i < eventsWithMinutes.length; i++) {
           const event = eventsWithMinutes[i];
           const lastEventInCluster = currentCluster[currentCluster.length - 1];
+          // Jos tapahtuma alkaa ennen kuin edellinen loppuu (pieni puskuri visuaalisuuden vuoksi)
           if (event.startMinutes < lastEventInCluster.endMinutes) {
             currentCluster.push(event);
           } else {
@@ -90,17 +103,16 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
         const totalColumns = columns.length;
         columns.forEach((column, colIndex) => {
           column.forEach(event => {
-            const hourRowHeight = 48; // Yhden tunnin rivin korkeus px
-            const top = (event.startMinutes / 60) * hourRowHeight;
-            const height = ((event.endMinutes - event.startMinutes) / 60) * hourRowHeight;
+            const top = (event.startMinutes / 60) * HOUR_HEIGHT;
+            const height = ((event.endMinutes - event.startMinutes) / 60) * HOUR_HEIGHT;
 
             dayLayoutEvents.push({
               ...event,
               layout: {
                 top,
-                height: Math.max(height, 20),
-                width: `calc(${100 / totalColumns}% - 4px)`,
-                left: `calc(${(colIndex / totalColumns) * 100}% + 2px)`,
+                height: Math.max(height, 24), // Minimikorkeus jotta teksti mahtuu
+                width: `calc(${100 / totalColumns}% - 2px)`,
+                left: `calc(${(colIndex / totalColumns) * 100}% + 1px)`,
               }
             });
           });
@@ -123,12 +135,15 @@ export default function WeekView() {
   
   const [showWeekend, setShowWeekend] = useState(false);
 
+  // Scrollaa automaattisesti nykyhetkeen tai klo 08:00
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
-      const hourToShow = isToday(new Date()) ? currentTime.getHours() : 8;
-      scrollContainerRef.current.scrollTop = Math.max(0, (hourToShow - 1) * 48);
+      const currentHour = currentTime.getHours();
+      // Jos kello on yöllä (00-06), näytä aamu (08:00). Muuten näytä nykyhetki miinus 1 tunti.
+      const hourToShow = (currentHour > 6 && isToday(selectedDate)) ? currentHour - 1 : 7;
+      scrollContainerRef.current.scrollTop = Math.max(0, hourToShow * HOUR_HEIGHT);
     }
-  }, [state.selectedDate, state.currentView, showWeekend, currentTime]);
+  }, [state.selectedDate, state.currentView, showWeekend]); // Poistettu currentTime riippuvuudesta ettei se hypi jatkuvasti
 
   const getMondayOfWeek = (date: Date) => {
     const d = new Date(date);
@@ -200,11 +215,12 @@ export default function WeekView() {
     const todayIndex = displayDates.findIndex(date => isToday(date));
     if (todayIndex === -1) return null;
 
-    const topPosition = (currentTime.getHours() * 48) + (currentTime.getMinutes() * 48 / 60);
-    const gridColumnStart = todayIndex + 2;
+    // Lasketaan sijainti tarkasti minuuttien mukaan
+    const topPosition = (currentTime.getHours() * HOUR_HEIGHT) + (currentTime.getMinutes() * HOUR_HEIGHT / 60);
+    const gridColumnStart = todayIndex + 2; // +1 grid-linjalle, +1 koska aikasarake on eka
 
     return (
-        <div style={{ gridColumn: `${gridColumnStart} / span 1`, position: 'relative' }}>
+        <div style={{ gridColumn: `${gridColumnStart} / span 1`, position: 'relative', height: 0, zIndex: 50 }}>
              <TimeIndicator top={topPosition} currentTime={currentTime} />
         </div>
     );
@@ -212,44 +228,47 @@ export default function WeekView() {
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-full">
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+      <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0 bg-white z-30 rounded-t-lg">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <button onClick={() => navigateWeek('prev')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors"><ChevronLeft className="w-5 h-5" /></button>
-            <h3 className="text-lg font-semibold text-gray-900 min-w-[280px] text-center">{getWeekRange()}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 min-w-[250px] text-center hidden sm:block">{getWeekRange()}</h3>
             <button onClick={() => navigateWeek('next')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors"><ChevronRight className="w-5 h-5" /></button>
           </div>
-          <button onClick={goToThisWeek} className="px-4 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors">Tämä viikko</button>
+          <button onClick={goToThisWeek} className="px-4 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors font-medium">Tämä viikko</button>
         </div>
-        <button onClick={() => setShowWeekend(!showWeekend)} className="flex items-center space-x-2 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-          {showWeekend ? (<><EyeOff className="w-4 h-4" /><span>Piilota viikonloppu</span></>) : (<><Eye className="w-4 h-4" /><span>Näytä viikonloppu</span></>)}
+        <button onClick={() => setShowWeekend(!showWeekend)} className="flex items-center space-x-2 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-gray-700">
+          {showWeekend ? (<><EyeOff className="w-4 h-4" /><span className="hidden sm:inline">Piilota vkl</span></>) : (<><Eye className="w-4 h-4" /><span className="hidden sm:inline">Näytä vkl</span></>)}
         </button>
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
-        <div className="sticky top-0 bg-white z-20">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative">
+        {/* Header row */}
+        <div className="sticky top-0 bg-white z-20 shadow-sm">
             <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: gridColumns }}>
-              <div className="py-4 px-2 text-center"></div>
+              <div className="py-4 px-2 text-center bg-gray-50 border-r border-gray-100"></div>
               {displayDates.map((date, index) => (
-                <div key={`header-${index}`} className="py-2 px-2 text-center border-l border-gray-200">
-                  <div className="text-sm font-medium text-gray-600">{displayDays[index]}</div>
-                  <div className={`text-lg font-semibold mt-1 ${isToday(date) ? 'bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mx-auto' : 'text-gray-900'}`}>{date.getDate()}.</div>
+                <div key={`header-${index}`} className={`py-2 px-2 text-center border-r border-gray-100 last:border-r-0 ${isToday(date) ? 'bg-blue-50' : 'bg-white'}`}>
+                  <div className={`text-sm font-medium ${isToday(date) ? 'text-blue-600' : 'text-gray-600'}`}>{displayDays[index]}</div>
+                  <div className={`text-lg font-semibold mt-1 inline-flex items-center justify-center w-8 h-8 rounded-full ${isToday(date) ? 'bg-blue-600 text-white' : 'text-gray-900'}`}>{date.getDate()}</div>
                 </div>
               ))}
             </div>
 
-            <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: gridColumns }}>
-                <div className="py-1 px-2 text-xs text-gray-500 text-right flex items-center justify-end">koko pv</div>
+            {/* All-day events row */}
+            <div className="grid border-b border-gray-200 bg-white" style={{ gridTemplateColumns: gridColumns }}>
+                <div className="py-2 px-2 text-xs font-medium text-gray-400 text-right flex items-center justify-end bg-gray-50 border-r border-gray-100">koko pv</div>
                 {displayDates.map((date, index) => {
                     const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
                     return (
-                        <div key={`allday-${index}`} className="p-1 border-l border-gray-200 min-h-[30px] space-y-1">
+                        <div key={`allday-${index}`} className="p-1 border-r border-gray-100 min-h-[32px] space-y-1">
                             {allDayEvents.map(event => (
                                 <div
                                     key={event.id}
                                     onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                    className="text-xs p-1 rounded truncate cursor-pointer hover:opacity-80 transition-opacity"
-                                    style={{ backgroundColor: event.color + '20', color: event.color, borderLeft: `3px solid ${event.color}` }}
+                                    className="text-xs px-2 py-1 rounded border-l-4 cursor-pointer hover:opacity-80 transition-shadow shadow-sm truncate font-medium"
+                                    style={{ backgroundColor: event.color + '20', color: event.color, borderColor: event.color }}
+                                    title={event.title}
                                 >
                                     {event.title}
                                 </div>
@@ -260,50 +279,63 @@ export default function WeekView() {
             </div>
         </div>
 
-        <div className="relative">
+        {/* Scrollable Grid */}
+        <div className="relative min-h-full">
+            {/* Grid Lines */}
             <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
-                <div className="col-start-1">
+                <div className="col-start-1 bg-gray-50 border-r border-gray-200">
                     {timeSlots.map((time, i) => (
-                        <div key={time} className="h-12 text-xs text-gray-500 pr-2 text-right flex items-start">
-                             {i === 0 ? '' : time}
+                        <div key={time} className="h-12 text-xs font-medium text-gray-400 pr-2 text-right flex items-start pt-1 relative" style={{ height: `${HOUR_HEIGHT}px` }}>
+                             <span className="-mt-2">{i === 0 ? '' : time}</span>
                         </div>
                     ))}
                 </div>
-                <div className="col-start-2 col-span-full grid" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)` }}>
+                <div className="col-start-2 col-span-full grid relative" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)` }}>
+                    {/* Background Grid Lines */}
                     {displayDates.map((_, dateIndex) => (
-                         <div key={dateIndex} className="border-l border-gray-200">
+                         <div key={dateIndex} className="border-r border-gray-100 last:border-r-0">
                              {timeSlots.map((time, i) => (
-                                 <div key={time} className={`h-12 ${i > 0 ? 'border-b border-gray-100' : ''}`} />
+                                 <div key={time} className={`border-b border-gray-100 ${i === 12 ? 'border-b-2 border-gray-200' : ''}`} style={{ height: `${HOUR_HEIGHT}px` }} />
                              ))}
                          </div>
                     ))}
                 </div>
             </div>
-            <div className="absolute top-0 left-0 w-full h-full grid" style={{ gridTemplateColumns: gridColumns }}>
+            
+            {/* Events Overlay */}
+            <div className="absolute top-0 left-0 w-full h-full grid pointer-events-none" style={{ gridTemplateColumns: gridColumns }}>
                 {renderCurrentTimeIndicator()}
-                <div className="col-start-1"></div>
+                <div className="col-start-1"></div> {/* Empty spacer for time column */}
                  {displayDates.map((date, dateIndex) => {
                     const timedEvents = laidOutEventsByDay.get(date.toISOString().split('T')[0]) || [];
                     return (
-                        <div key={dateIndex} className="relative">
+                        <div key={dateIndex} className="relative h-full pointer-events-auto">
                              {timedEvents.map((event) => {
                                 return (
                                     <div
                                         key={event.id}
                                         onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                        className="absolute rounded p-1 cursor-pointer hover:opacity-80 transition-opacity text-xs z-10"
+                                        className="absolute rounded px-2 py-1 cursor-pointer hover:opacity-90 transition-all text-xs z-10 border-l-4 shadow-sm hover:shadow-md flex flex-col overflow-hidden"
                                         style={{
                                             top: `${event.layout.top}px`,
                                             height: `${event.layout.height}px`,
                                             left: event.layout.left,
                                             width: event.layout.width,
-                                            backgroundColor: event.color + '20',
-                                            borderLeft: `3px solid ${event.color}`,
-                                            minHeight: '20px'
+                                            backgroundColor: event.color + '15', // Hieman vaaleampi tausta
+                                            borderColor: event.color,
+                                            color: '#1f2937'
                                         }}
                                     >
-                                        <div className="font-medium text-gray-900 truncate">{event.title}</div>
-                                        {event.start_time && (<div className="text-gray-600 text-xs">{formatTimeString(event.start_time)}{event.end_time && ` - ${formatTimeString(event.end_time)}`}</div>)}
+                                        <div className="font-semibold truncate leading-tight">{event.title}</div>
+                                        {event.start_time && (
+                                          <div className="text-[10px] opacity-75 mt-0.5 font-medium truncate">
+                                            {formatTimeString(event.start_time)}
+                                            {event.end_time && ` - ${formatTimeString(event.end_time)}`}
+                                          </div>
+                                        )}
+                                        {event.description && event.layout.height > 40 && (
+                                          <div className="text-[10px] text-gray-500 mt-1 line-clamp-2 leading-tight">{event.description}</div>
+                                        )}
                                     </div>
                                 );
                             })}
