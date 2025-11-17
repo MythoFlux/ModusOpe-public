@@ -15,12 +15,17 @@ export interface FileAttachment {
 }
 
 export interface Event {
-  id:string;
+  id: string;
   title: string;
   description?: string;
   date: Date;
-  start_time?: string;
-  end_time?: string;
+  start_time?: string; // Vanha kenttä (pidetään yhteensopivuuden vuoksi)
+  end_time?: string;   // Vanha kenttä (pidetään yhteensopivuuden vuoksi)
+  
+  // Uudet kentät aikavyöhyketuella
+  start_at?: Date | string; 
+  end_at?: Date | string;
+  
   type: 'class' | 'meeting' | 'deadline' | 'personal' | 'assignment';
   color: string;
   project_id?: string | null; // Sallitaan null
@@ -65,7 +70,7 @@ export interface Task {
   files?: FileAttachment[];
   show_description?: boolean;
   show_subtasks?: boolean;
-  order_index?: number; // LISÄTTY TÄMÄ
+  order_index?: number;
 }
 
 export interface ScheduleTemplate {
