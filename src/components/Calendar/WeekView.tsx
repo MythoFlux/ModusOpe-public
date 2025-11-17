@@ -8,24 +8,29 @@ import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { useCurrentTime } from '../../hooks/useCurrentTime';
 import TimeIndicator from '../Shared/TimeIndicator';
 
-const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille (vastaa h-12 Tailwindissä)
+const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille
 
-// Apufunktio minuuttien laskemiseen varmemmin
+// 1. PARANNETTU AJAN LASKENTA
+// Tämä funktio varmistaa, että "08:10" tulkitaan aina oikein, eikä sekoa päivämääräobjektin aikavyöhykkeisiin
 const getMinutesFromEvent = (event: Event): number => {
-  // 1. Yritä käyttää start_time -merkkijonoa (esim "08:10" tai "08:10:00")
-  if (event.start_time && typeof event.start_time === 'string' && event.start_time.includes(':')) {
-    const [hours, minutes] = event.start_time.split(':').map(Number);
-    if (!isNaN(hours) && !isNaN(minutes)) {
-      return hours * 60 + minutes;
+  if (event.start_time && typeof event.start_time === 'string') {
+    // Varmistetaan, että otetaan vain kellonaikaosa, jos mukana on pvm (esim. ISO-string)
+    const timePart = event.start_time.includes('T') ? event.start_time.split('T')[1] : event.start_time;
+    
+    if (timePart.includes(':')) {
+      const [hours, minutes] = timePart.split(':').map(Number);
+      if (!isNaN(hours) && !isNaN(minutes)) {
+        return hours * 60 + minutes;
+      }
     }
   }
   
-  // 2. Fallback: Käytä Date-objektin aikaa, jos merkkijono puuttuu tai on rikki
+  // Fallback: Käytä Date-objektin aikaa vain jos merkkijono puuttuu kokonaan
   const eventDate = new Date(event.date);
   return eventDate.getHours() * 60 + eventDate.getMinutes();
 };
 
-// Apufunktio tapahtumien asettelun laskemiseen
+// Layout-laskenta, joka käyttää yllä olevaa parannettua funktiota
 const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[]) => {
   return useMemo(() => {
     const layoutMap = new Map<string, (Event & { layout: { top: number; height: number; left: string; width: string } })[]>();
@@ -33,44 +38,42 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
     displayDates.forEach(date => {
       const dayKey = date.toISOString().split('T')[0];
       const timedEvents = (eventsByDay.get(dayKey) || [])
-        .filter(e => !!e.start_time || new Date(e.date).getHours() !== 0) // Näytä jos start_time on tai Date-objektissa on aika
-        .sort((a, b) => {
-          const minA = getMinutesFromEvent(a);
-          const minB = getMinutesFromEvent(b);
-          return minA - minB;
-        });
+        .filter(e => !!e.start_time || new Date(e.date).getHours() !== 0)
+        .sort((a, b) => getMinutesFromEvent(a) - getMinutesFromEvent(b));
 
       if (timedEvents.length === 0) {
         layoutMap.set(dayKey, []);
         return;
       }
 
-      // Muunnetaan tapahtumat minuuteiksi päivän alusta
       const eventsWithMinutes = timedEvents.map(event => {
         const startMinutes = getMinutesFromEvent(event);
 
         let endMinutes;
-        if (event.end_time && event.end_time.includes(':')) {
-          const [endHour, endMinute] = event.end_time.split(':').map(Number);
-          endMinutes = endHour * 60 + endMinute;
+        if (event.end_time && typeof event.end_time === 'string') {
+           const timePart = event.end_time.includes('T') ? event.end_time.split('T')[1] : event.end_time;
+           if (timePart.includes(':')) {
+              const [endHour, endMinute] = timePart.split(':').map(Number);
+              endMinutes = endHour * 60 + endMinute;
+           } else {
+              endMinutes = startMinutes + 60;
+           }
         } else {
-          endMinutes = startMinutes + 60; // Oletuskesto 60 min
+          endMinutes = startMinutes + 60;
         }
         
-        // Varmistetaan, että loppuaika on alkuaikaa myöhemmin
-        if (endMinutes <= startMinutes) endMinutes = startMinutes + 30;
+        if (endMinutes <= startMinutes) endMinutes = startMinutes + 45; // Minimi kesto
 
         return { ...event, startMinutes, endMinutes };
       });
 
-      // Ryhmitellään päällekkäiset tapahtumat (Cluster logic)
+      // Ryhmittely (Cluster logic) päällekkäisille tapahtumille
       const clusters: (typeof eventsWithMinutes)[] = [];
       if (eventsWithMinutes.length > 0) {
         let currentCluster = [eventsWithMinutes[0]];
         for (let i = 1; i < eventsWithMinutes.length; i++) {
           const event = eventsWithMinutes[i];
           const lastEventInCluster = currentCluster[currentCluster.length - 1];
-          // Jos tapahtuma alkaa ennen kuin edellinen loppuu (pieni puskuri visuaalisuuden vuoksi)
           if (event.startMinutes < lastEventInCluster.endMinutes) {
             currentCluster.push(event);
           } else {
@@ -110,7 +113,7 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
               ...event,
               layout: {
                 top,
-                height: Math.max(height, 24), // Minimikorkeus jotta teksti mahtuu
+                height: Math.max(height, 24),
                 width: `calc(${100 / totalColumns}% - 2px)`,
                 left: `calc(${(colIndex / totalColumns) * 100}% + 1px)`,
               }
@@ -126,7 +129,6 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
   }, [eventsByDay, displayDates]);
 };
 
-
 export default function WeekView() {
   const { state, dispatch } = useApp();
   const { selectedDate, events } = state;
@@ -135,15 +137,13 @@ export default function WeekView() {
   
   const [showWeekend, setShowWeekend] = useState(false);
 
-  // Scrollaa automaattisesti nykyhetkeen tai klo 08:00
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
       const currentHour = currentTime.getHours();
-      // Jos kello on yöllä (00-06), näytä aamu (08:00). Muuten näytä nykyhetki miinus 1 tunti.
       const hourToShow = (currentHour > 6 && isToday(selectedDate)) ? currentHour - 1 : 7;
       scrollContainerRef.current.scrollTop = Math.max(0, hourToShow * HOUR_HEIGHT);
     }
-  }, [state.selectedDate, state.currentView, showWeekend]); // Poistettu currentTime riippuvuudesta ettei se hypi jatkuvasti
+  }, [state.selectedDate, state.currentView, showWeekend]);
 
   const getMondayOfWeek = (date: Date) => {
     const d = new Date(date);
@@ -201,7 +201,6 @@ export default function WeekView() {
   const getWeekRange = () => {
     const startDate = weekDates[0]; 
     const endDate = weekDates[6];  
-
     if (startDate.getMonth() === endDate.getMonth()) {
       return `${startDate.getDate()}. - ${endDate.getDate()}. ${startDate.toLocaleDateString('fi-FI', { month: 'long', year: 'numeric' })}`;
     } else {
@@ -214,10 +213,8 @@ export default function WeekView() {
   const renderCurrentTimeIndicator = () => {
     const todayIndex = displayDates.findIndex(date => isToday(date));
     if (todayIndex === -1) return null;
-
-    // Lasketaan sijainti tarkasti minuuttien mukaan
     const topPosition = (currentTime.getHours() * HOUR_HEIGHT) + (currentTime.getMinutes() * HOUR_HEIGHT / 60);
-    const gridColumnStart = todayIndex + 2; // +1 grid-linjalle, +1 koska aikasarake on eka
+    const gridColumnStart = todayIndex + 2;
 
     return (
         <div style={{ gridColumn: `${gridColumnStart} / span 1`, position: 'relative', height: 0, zIndex: 50 }}>
@@ -243,7 +240,6 @@ export default function WeekView() {
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative">
-        {/* Header row */}
         <div className="sticky top-0 bg-white z-20 shadow-sm">
             <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: gridColumns }}>
               <div className="py-4 px-2 text-center bg-gray-50 border-r border-gray-100"></div>
@@ -254,8 +250,6 @@ export default function WeekView() {
                 </div>
               ))}
             </div>
-
-            {/* All-day events row */}
             <div className="grid border-b border-gray-200 bg-white" style={{ gridTemplateColumns: gridColumns }}>
                 <div className="py-2 px-2 text-xs font-medium text-gray-400 text-right flex items-center justify-end bg-gray-50 border-r border-gray-100">koko pv</div>
                 {displayDates.map((date, index) => {
@@ -279,9 +273,7 @@ export default function WeekView() {
             </div>
         </div>
 
-        {/* Scrollable Grid */}
         <div className="relative min-h-full">
-            {/* Grid Lines */}
             <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
                 <div className="col-start-1 bg-gray-50 border-r border-gray-200">
                     {timeSlots.map((time, i) => (
@@ -291,7 +283,6 @@ export default function WeekView() {
                     ))}
                 </div>
                 <div className="col-start-2 col-span-full grid relative" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)` }}>
-                    {/* Background Grid Lines */}
                     {displayDates.map((_, dateIndex) => (
                          <div key={dateIndex} className="border-r border-gray-100 last:border-r-0">
                              {timeSlots.map((time, i) => (
@@ -302,10 +293,9 @@ export default function WeekView() {
                 </div>
             </div>
             
-            {/* Events Overlay */}
             <div className="absolute top-0 left-0 w-full h-full grid pointer-events-none" style={{ gridTemplateColumns: gridColumns }}>
                 {renderCurrentTimeIndicator()}
-                <div className="col-start-1"></div> {/* Empty spacer for time column */}
+                <div className="col-start-1"></div>
                  {displayDates.map((date, dateIndex) => {
                     const timedEvents = laidOutEventsByDay.get(date.toISOString().split('T')[0]) || [];
                     return (
@@ -315,27 +305,27 @@ export default function WeekView() {
                                     <div
                                         key={event.id}
                                         onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                        className="absolute rounded px-2 py-1 cursor-pointer hover:opacity-90 transition-all text-xs z-10 border-l-4 shadow-sm hover:shadow-md flex flex-col overflow-hidden"
+                                        // 2. TYYLIN PALAUTUS
+                                        // Poistettu border-l-4 ja muutettu taustaväri solidiksi/tummemmaksi + valkoinen teksti
+                                        // Poistettu flex-col overflow-hidden, jotta teksti käyttäytyy normaalisti
+                                        className="absolute rounded px-2 py-1 cursor-pointer hover:opacity-90 transition-all text-xs z-10 shadow-sm hover:shadow-md truncate leading-tight"
                                         style={{
                                             top: `${event.layout.top}px`,
                                             height: `${event.layout.height}px`,
                                             left: event.layout.left,
                                             width: event.layout.width,
-                                            backgroundColor: event.color + '15', // Hieman vaaleampi tausta
-                                            borderColor: event.color,
-                                            color: '#1f2937'
+                                            backgroundColor: event.color, // Käytetään suoraan väriä taustana
+                                            color: '#ffffff', // Valkoinen teksti
+                                            opacity: 0.85 // Hieman läpinäkyvyyttä
                                         }}
                                     >
-                                        <div className="font-semibold truncate leading-tight">{event.title}</div>
+                                        <span className="font-semibold mr-1">{event.title}</span>
                                         {event.start_time && (
-                                          <div className="text-[10px] opacity-75 mt-0.5 font-medium truncate">
+                                          <span className="opacity-90">
                                             {formatTimeString(event.start_time)}
-                                            {event.end_time && ` - ${formatTimeString(event.end_time)}`}
-                                          </div>
+                                          </span>
                                         )}
-                                        {event.description && event.layout.height > 40 && (
-                                          <div className="text-[10px] text-gray-500 mt-1 line-clamp-2 leading-tight">{event.description}</div>
-                                        )}
+                                        {/* Kuvaus poistettu renderöinnistä kokonaan */}
                                     </div>
                                 );
                             })}
