@@ -8,11 +8,34 @@ import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { useCurrentTime } from '../../hooks/useCurrentTime';
 import TimeIndicator from '../Shared/TimeIndicator';
 
-const HOUR_HEIGHT = 48; 
+const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille
 
-// Yksinkertaistettu ajan laskenta uusille start_at -kentille
-const getMinutesFromDate = (date: Date): number => {
-  return date.getHours() * 60 + date.getMinutes();
+// TÄRKEÄ KORJAUS: Tämä funktio pakottaa lukemaan ajan suoraan merkkijonosta (esim. "08:10:00")
+// Ohittaa kokonaan Date-objektien ja aikavyöhykkeiden aiheuttamat virheet.
+const getMinutesFromEvent = (event: Event): number => {
+  // 1. Ensisijainen tapa: Lue "start_time" -merkkijono (esim. "08:10")
+  if (event.start_time && typeof event.start_time === 'string') {
+    // Poistetaan mahdolliset sekunnit ja päivämäärät, otetaan vain HH:MM
+    const timePart = event.start_time.includes('T') ? event.start_time.split('T')[1] : event.start_time;
+    const [hoursStr, minutesStr] = timePart.split(':');
+    
+    const hours = parseInt(hoursStr, 10);
+    const minutes = parseInt(minutesStr, 10);
+
+    if (!isNaN(hours) && !isNaN(minutes)) {
+      return hours * 60 + minutes;
+    }
+  }
+  
+  // 2. Hätävara: Jos stringiä ei ole, kokeile start_at (uusi sarake)
+  if (event.start_at) {
+      const d = new Date(event.start_at);
+      return d.getHours() * 60 + d.getMinutes();
+  }
+
+  // 3. Viimeinen oljenkorsi: date-sarake
+  const eventDate = new Date(event.date);
+  return eventDate.getHours() * 60 + eventDate.getMinutes();
 };
 
 const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[]) => {
@@ -22,31 +45,10 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
     displayDates.forEach(date => {
       const dayKey = date.toISOString().split('T')[0];
       
-      // Suodatetaan tapahtumat
+      // Haetaan päivän tapahtumat
       const timedEvents = (eventsByDay.get(dayKey) || [])
-        .filter(e => {
-          // Näytetään jos start_at on olemassa TAI vanha start_time on olemassa
-          return e.start_at || e.start_time;
-        })
-        .map(e => {
-           // Normalisoidaan: Jos start_at puuttuu, rakennetaan se vanhoista tiedoista lennossa (fallback)
-           if (!e.start_at && e.start_time && e.date) {
-             const [h, m] = e.start_time.split(':').map(Number);
-             const d = new Date(e.date);
-             d.setHours(h, m);
-             return { ...e, start_at: d };
-           }
-           // Varmistetaan että start_at on Date-objekti (Supabase palauttaa stringin)
-           if (e.start_at && typeof e.start_at === 'string') {
-             return { ...e, start_at: new Date(e.start_at), end_at: e.end_at ? new Date(e.end_at) : undefined };
-           }
-           return e;
-        })
-        .sort((a, b) => {
-           const dateA = a.start_at || new Date(a.date);
-           const dateB = b.start_at || new Date(b.date);
-           return dateA.getTime() - dateB.getTime();
-        });
+        .filter(e => !!e.start_time || !!e.start_at) // Näytä jos jompikumpi aika löytyy
+        .sort((a, b) => getMinutesFromEvent(a) - getMinutesFromEvent(b));
 
       if (timedEvents.length === 0) {
         layoutMap.set(dayKey, []);
@@ -54,28 +56,27 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
       }
 
       const eventsWithMinutes = timedEvents.map(event => {
-        // Käytetään nyt start_at tietoa, joka on luotettava timestamptz
-        const eventStart = event.start_at || new Date(event.date);
-        const startMinutes = getMinutesFromDate(eventStart);
+        const startMinutes = getMinutesFromEvent(event);
 
-        let endMinutes;
-        if (event.end_at) {
-          const eventEnd = new Date(event.end_at);
-          endMinutes = getMinutesFromDate(eventEnd);
-        } else if (event.end_time) {
-           // Fallback vanhalle
-           const [h, m] = event.end_time.split(':').map(Number);
-           endMinutes = h * 60 + m;
-        } else {
-          endMinutes = startMinutes + 60;
+        // Lasketaan loppuaika samalla "raalla" logiikalla
+        let endMinutes = startMinutes + 60; // Oletus: 60min
+        
+        if (event.end_time && typeof event.end_time === 'string') {
+           const timePart = event.end_time.includes('T') ? event.end_time.split('T')[1] : event.end_time;
+           const [h, m] = timePart.split(':').map(Number);
+           if (!isNaN(h)) endMinutes = h * 60 + m;
+        } else if (event.end_at) {
+           const d = new Date(event.end_at);
+           endMinutes = d.getHours() * 60 + d.getMinutes();
         }
         
-        if (endMinutes <= startMinutes) endMinutes = startMinutes + 45;
+        // Varmistetaan minimikorkeus (30min) ettei laatikko katoa
+        if (endMinutes <= startMinutes) endMinutes = startMinutes + 30;
 
         return { ...event, startMinutes, endMinutes };
       });
 
-      // --- Cluster Logic (Pysyy samana) ---
+      // Ryhmitellään päällekkäiset tapahtumat sarakkeisiin
       const clusters: (typeof eventsWithMinutes)[] = [];
       if (eventsWithMinutes.length > 0) {
         let currentCluster = [eventsWithMinutes[0]];
@@ -129,7 +130,6 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
           });
         });
       });
-      // --- End Cluster Logic ---
 
       layoutMap.set(dayKey, dayLayoutEvents);
     });
@@ -143,6 +143,7 @@ export default function WeekView() {
   const { selectedDate, events } = state;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const currentTime = useCurrentTime();
+  
   const [showWeekend, setShowWeekend] = useState(false);
 
   useLayoutEffect(() => {
@@ -159,15 +160,20 @@ export default function WeekView() {
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     return new Date(d.setDate(diff));
   };
+
   const monday = useMemo(() => getMondayOfWeek(selectedDate), [selectedDate]);
+
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => {
     const date = new Date(monday);
     date.setDate(monday.getDate() + i);
     return date;
   }), [monday]);
+
   const weekDays = ['Ma', 'Ti', 'Ke', 'To', 'Pe', 'La', 'Su'];
+  
   const displayDates = useMemo(() => showWeekend ? weekDates : weekDates.slice(0, 5), [showWeekend, weekDates]);
   const displayDays = useMemo(() => showWeekend ? weekDays : weekDays.slice(0, 5), [showWeekend]);
+
   const gridColumns = `60px repeat(${displayDates.length}, 1fr)`;
 
   const eventsByDay = useMemo(() => {
@@ -183,7 +189,9 @@ export default function WeekView() {
 
   const handleEventClick = (event: Event) => {
     if (event.type === 'deadline' && event.project_id) {
-      if (event.project_id === GENERAL_TASKS_PROJECT_ID) return; 
+      if (event.project_id === GENERAL_TASKS_PROJECT_ID) {
+        return; 
+      }
       dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id });
     } else {
       dispatch({ type: 'TOGGLE_EVENT_DETAILS_MODAL', payload: event });
@@ -194,7 +202,11 @@ export default function WeekView() {
     const newDate = addDays(selectedDate, direction === 'next' ? 7 : -7);
     dispatch({ type: 'SET_SELECTED_DATE', payload: newDate });
   };
-  const goToThisWeek = () => dispatch({ type: 'SET_SELECTED_DATE', payload: new Date() });
+
+  const goToThisWeek = () => {
+    dispatch({ type: 'SET_SELECTED_DATE', payload: new Date() });
+  };
+
   const getWeekRange = () => {
     const startDate = weekDates[0]; 
     const endDate = weekDates[6];  
@@ -204,6 +216,7 @@ export default function WeekView() {
       return `${startDate.toLocaleDateString('fi-FI', { day: 'numeric', month: 'short' })}. - ${endDate.toLocaleDateString('fi-FI', { day: 'numeric', month: 'short', year: 'numeric' })}.`;
     }
   };
+
   const timeSlots = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
   
   const renderCurrentTimeIndicator = () => {
@@ -211,6 +224,7 @@ export default function WeekView() {
     if (todayIndex === -1) return null;
     const topPosition = (currentTime.getHours() * HOUR_HEIGHT) + (currentTime.getMinutes() * HOUR_HEIGHT / 60);
     const gridColumnStart = todayIndex + 2;
+
     return (
         <div style={{ gridColumn: `${gridColumnStart} / span 1`, position: 'relative', height: 0, zIndex: 50 }}>
              <TimeIndicator top={topPosition} currentTime={currentTime} />
@@ -248,15 +262,16 @@ export default function WeekView() {
             <div className="grid border-b border-gray-200 bg-white" style={{ gridTemplateColumns: gridColumns }}>
                 <div className="py-2 px-2 text-xs font-medium text-gray-400 text-right flex items-center justify-end bg-gray-50 border-r border-gray-100">koko pv</div>
                 {displayDates.map((date, index) => {
-                    const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time && !e.start_at);
+                    // Näytetään täällä vain tapahtumat joilla EI ole aikoja (merkkijonona)
+                    const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
                     return (
                         <div key={`allday-${index}`} className="p-1 border-r border-gray-100 min-h-[32px] space-y-1">
                             {allDayEvents.map(event => (
                                 <div
                                     key={event.id}
                                     onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                    className="text-xs px-2 py-1 rounded cursor-pointer hover:opacity-80 transition-shadow shadow-sm truncate font-medium"
-                                    style={{ backgroundColor: event.color + '20', color: event.color, borderLeft: `3px solid ${event.color}` }}
+                                    className="text-xs px-2 py-1 rounded border-l-4 cursor-pointer hover:opacity-80 transition-shadow shadow-sm truncate font-medium"
+                                    style={{ backgroundColor: event.color + '20', color: event.color, borderColor: event.color }}
                                     title={event.title}
                                 >
                                     {event.title}
@@ -296,14 +311,12 @@ export default function WeekView() {
                     return (
                         <div key={dateIndex} className="relative h-full pointer-events-auto">
                              {timedEvents.map((event) => {
-                                // Apufunktio ajan näyttämiseen
+                                // Näytetään aika alkuperäisen merkkijonon perusteella
                                 const displayTime = () => {
-                                    if (event.start_at) {
-                                        const s = new Date(event.start_at);
-                                        const e = event.end_at ? new Date(event.end_at) : null;
-                                        return `${formatTimeString(s.toTimeString().slice(0,5))}${e ? ` - ${formatTimeString(e.toTimeString().slice(0,5))}` : ''}`;
-                                    }
-                                    return `${formatTimeString(event.start_time)}${event.end_time ? ` - ${formatTimeString(event.end_time)}` : ''}`;
+                                   if (event.start_time) {
+                                      return `${formatTimeString(event.start_time)}${event.end_time ? ` - ${formatTimeString(event.end_time)}` : ''}`;
+                                   }
+                                   return '';
                                 };
 
                                 return (
