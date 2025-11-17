@@ -30,13 +30,13 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
 
       // Muunnetaan tapahtumat minuuteiksi päivän alusta
       const eventsWithMinutes = timedEvents.map(event => {
-        // KORJAUS: Lasketaan minuutit start_time-merkkijonosta, ei Date-objektista
+        // KORJAUS: Lasketaan minuutit AINA start_time-merkkijonosta
         let startMinutes = 0;
         if (event.start_time) {
             const [hours, minutes] = event.start_time.split(':').map(Number);
             startMinutes = hours * 60 + minutes;
         } else {
-            // Fallback, jos start_time puuttuu (epätodennäköistä tässä filtteröinnissä)
+            // Fallback vain jos start_time puuttuu kokonaan
             const eventDate = new Date(event.date);
             startMinutes = eventDate.getHours() * 60 + eventDate.getMinutes();
         }
@@ -170,7 +170,6 @@ export default function WeekView() {
       }
       dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id });
     } else {
-      // MUUTETTU: Avataan nyt inforuutu suoran muokkauksen sijaan
       dispatch({ type: 'TOGGLE_EVENT_DETAILS_MODAL', payload: event });
     }
   };
@@ -185,8 +184,8 @@ export default function WeekView() {
   };
 
   const getWeekRange = () => {
-    const startDate = weekDates[0]; // Käytetään aina koko viikon ensimmäistä päivää
-    const endDate = weekDates[6];   // Käytetään aina koko viikon viimeistä päivää (sunnuntai)
+    const startDate = weekDates[0]; 
+    const endDate = weekDates[6];  
 
     if (startDate.getMonth() === endDate.getMonth()) {
       return `${startDate.getDate()}. - ${endDate.getDate()}. ${startDate.toLocaleDateString('fi-FI', { month: 'long', year: 'numeric' })}`;
@@ -202,10 +201,9 @@ export default function WeekView() {
     if (todayIndex === -1) return null;
 
     const topPosition = (currentTime.getHours() * 48) + (currentTime.getMinutes() * 48 / 60);
-    const gridColumnStart = todayIndex + 2; // +1 for time column, +1 for 1-based index
+    const gridColumnStart = todayIndex + 2;
 
     return (
-        // Tämä säiliö asettaa indikaattorin oikean päivän sarakkeeseen
         <div style={{ gridColumn: `${gridColumnStart} / span 1`, position: 'relative' }}>
              <TimeIndicator top={topPosition} currentTime={currentTime} />
         </div>
