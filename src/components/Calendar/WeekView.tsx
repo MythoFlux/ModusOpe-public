@@ -10,32 +10,19 @@ import TimeIndicator from '../Shared/TimeIndicator';
 
 const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille
 
-// TÄRKEÄ KORJAUS: Tämä funktio pakottaa lukemaan ajan suoraan merkkijonosta (esim. "08:10:00")
-// Ohittaa kokonaan Date-objektien ja aikavyöhykkeiden aiheuttamat virheet.
-const getMinutesFromEvent = (event: Event): number => {
-  // 1. Ensisijainen tapa: Lue "start_time" -merkkijono (esim. "08:10")
-  if (event.start_time && typeof event.start_time === 'string') {
-    // Poistetaan mahdolliset sekunnit ja päivämäärät, otetaan vain HH:MM
-    const timePart = event.start_time.includes('T') ? event.start_time.split('T')[1] : event.start_time;
-    const [hoursStr, minutesStr] = timePart.split(':');
-    
-    const hours = parseInt(hoursStr, 10);
-    const minutes = parseInt(minutesStr, 10);
-
-    if (!isNaN(hours) && !isNaN(minutes)) {
-      return hours * 60 + minutes;
-    }
-  }
+// TÄRKEÄ: Tämä funktio laskee minuutit vain ja ainoastaan "HH:MM" merkkijonosta.
+// Se estää aikavyöhykevirheet ja Date-objektin sekoilut.
+const getMinutesFromTimeString = (timeString: string | undefined | null): number | null => {
+  if (!timeString || typeof timeString !== 'string') return null;
   
-  // 2. Hätävara: Jos stringiä ei ole, kokeile start_at (uusi sarake)
-  if (event.start_at) {
-      const d = new Date(event.start_at);
-      return d.getHours() * 60 + d.getMinutes();
+  // Etsitään ensimmäinen "numerot:numerot" esiintymä (esim. "08:10")
+  const match = timeString.match(/(\d{1,2}):(\d{2})/);
+  if (match) {
+    const hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    return hours * 60 + minutes;
   }
-
-  // 3. Viimeinen oljenkorsi: date-sarake
-  const eventDate = new Date(event.date);
-  return eventDate.getHours() * 60 + eventDate.getMinutes();
+  return null;
 };
 
 const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[]) => {
@@ -45,10 +32,14 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
     displayDates.forEach(date => {
       const dayKey = date.toISOString().split('T')[0];
       
-      // Haetaan päivän tapahtumat
       const timedEvents = (eventsByDay.get(dayKey) || [])
-        .filter(e => !!e.start_time || !!e.start_at) // Näytä jos jompikumpi aika löytyy
-        .sort((a, b) => getMinutesFromEvent(a) - getMinutesFromEvent(b));
+        // Näytetään vain jos start_time löytyy merkkijonona (koska luotamme siihen nyt)
+        .filter(e => !!e.start_time)
+        .sort((a, b) => {
+           const minA = getMinutesFromTimeString(a.start_time) || 0;
+           const minB = getMinutesFromTimeString(b.start_time) || 0;
+           return minA - minB;
+        });
 
       if (timedEvents.length === 0) {
         layoutMap.set(dayKey, []);
@@ -56,23 +47,17 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
       }
 
       const eventsWithMinutes = timedEvents.map(event => {
-        const startMinutes = getMinutesFromEvent(event);
+        // Käytetään pakotettua string-parsintaa
+        const startMinutes = getMinutesFromTimeString(event.start_time) || 0;
 
-        // Lasketaan loppuaika samalla "raalla" logiikalla
-        let endMinutes = startMinutes + 60; // Oletus: 60min
+        // Lasketaan loppuaika samalla logiikalla
+        let endMinutes = getMinutesFromTimeString(event.end_time);
         
-        if (event.end_time && typeof event.end_time === 'string') {
-           const timePart = event.end_time.includes('T') ? event.end_time.split('T')[1] : event.end_time;
-           const [h, m] = timePart.split(':').map(Number);
-           if (!isNaN(h)) endMinutes = h * 60 + m;
-        } else if (event.end_at) {
-           const d = new Date(event.end_at);
-           endMinutes = d.getHours() * 60 + d.getMinutes();
+        // Jos loppuaikaa ei ole tai se on väärin, oletetaan 60min kesto
+        if (endMinutes === null || endMinutes <= startMinutes) {
+            endMinutes = startMinutes + 60;
         }
         
-        // Varmistetaan minimikorkeus (30min) ettei laatikko katoa
-        if (endMinutes <= startMinutes) endMinutes = startMinutes + 30;
-
         return { ...event, startMinutes, endMinutes };
       });
 
@@ -262,7 +247,7 @@ export default function WeekView() {
             <div className="grid border-b border-gray-200 bg-white" style={{ gridTemplateColumns: gridColumns }}>
                 <div className="py-2 px-2 text-xs font-medium text-gray-400 text-right flex items-center justify-end bg-gray-50 border-r border-gray-100">koko pv</div>
                 {displayDates.map((date, index) => {
-                    // Näytetään täällä vain tapahtumat joilla EI ole aikoja (merkkijonona)
+                    // Näytetään koko päivän alueella vain jos kellonaikaa EI OLE
                     const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
                     return (
                         <div key={`allday-${index}`} className="p-1 border-r border-gray-100 min-h-[32px] space-y-1">
@@ -311,7 +296,7 @@ export default function WeekView() {
                     return (
                         <div key={dateIndex} className="relative h-full pointer-events-auto">
                              {timedEvents.map((event) => {
-                                // Näytetään aika alkuperäisen merkkijonon perusteella
+                                // Muotoillaan aika näyttöön samasta lähteestä kuin layout
                                 const displayTime = () => {
                                    if (event.start_time) {
                                       return `${formatTimeString(event.start_time)}${event.end_time ? ` - ${formatTimeString(event.end_time)}` : ''}`;
@@ -333,6 +318,8 @@ export default function WeekView() {
                                             borderLeft: `3px solid ${event.color}`,
                                             color: '#1f2937'
                                         }}
+                                        // Debug-tieto hoverissa:
+                                        title={`${event.title} (Raakadata: ${event.start_time})`}
                                     >
                                         <span className="font-semibold mr-1">{event.title}</span>
                                         <span className="opacity-75 text-[10px]">{displayTime()}</span>
