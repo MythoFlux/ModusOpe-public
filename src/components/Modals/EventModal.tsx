@@ -38,21 +38,26 @@ export default function EventModal() {
 
   const [files, setFiles] = useState<FileAttachment[]>([]);
 
-  const isDeadlineEvent = selectedEvent?.id.startsWith('project-deadline-') || selectedEvent?.id.startsWith('task-deadline-');
+  // KORJAUS 1: Tarkistetaan onko id olemassa ennen startsWith-kutsua
+  const isDeadlineEvent = selectedEvent?.id && (
+      selectedEvent.id.startsWith('project-deadline-') || 
+      selectedEvent.id.startsWith('task-deadline-')
+  );
 
   useEffect(() => {
     if (selectedEvent) {
       const eventDate = new Date(selectedEvent.date);
       setFormData({
-        title: selectedEvent.title,
+        // KORJAUS 2: Käytetään oletuksena tyhjää merkkijonoa, jos kenttä puuttuu (esim. uusi template)
+        title: selectedEvent.title || '',
         description: selectedEvent.description || '',
         more_info: selectedEvent.more_info || '',
         date: eventDate.toISOString().split('T')[0],
         start_time: selectedEvent.start_time || '',
         end_time: selectedEvent.end_time || '',
-        type: selectedEvent.type,
+        type: selectedEvent.type || 'class',
         project_id: selectedEvent.project_id || '',
-        color: selectedEvent.color
+        color: selectedEvent.color || DEFAULT_COLOR
       });
       setFiles(selectedEvent.files || []);
       setDateRange({
@@ -98,6 +103,7 @@ export default function EventModal() {
     }
 
     const eventData: Event = {
+      // Jos id puuttuu (uusi template), käytetään tyhjää
       id: selectedEvent?.id || '',
       title: formData.title,
       description: formData.description,
@@ -113,13 +119,15 @@ export default function EventModal() {
     };
 
     try {
-        if (selectedEvent) {
+        // KORJAUS 3: Tarkistetaan onko kyseessä oikeasti olemassa oleva tapahtuma (id löytyy)
+        if (selectedEvent && selectedEvent.id) {
             const updateOptions = {
                 scope: updateScope,
                 range: dateRange,
             };
             await services.updateEvent(eventData, updateOptions);
         } else {
+            // Jos id puuttuu, kyseessä on uusi tapahtuma (vaikka se tuli selectedEventin kautta)
             const { id, ...newEventData } = eventData;
             await services.addEvent(newEventData);
         }
@@ -132,7 +140,8 @@ export default function EventModal() {
   };
 
   const handleDelete = async () => {
-    if (!selectedEvent) return;
+    // KORJAUS: Ei voi poistaa, jos id:tä ei ole
+    if (!selectedEvent || !selectedEvent.id) return;
 
     let message = `Haluatko varmasti poistaa tapahtuman "${selectedEvent.title}"? Toimintoa ei voi perua.`;
     let title = 'Vahvista poisto';
@@ -167,13 +176,16 @@ export default function EventModal() {
   };
 
   if (!showEventModal) return null;
+  
+  // Määritellään onko kyseessä muokkaus vai uusi (id:n perusteella)
+  const isEditing = selectedEvent && selectedEvent.id;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
           <h2 className="text-lg font-semibold text-gray-900">
-            {selectedEvent ? 'Muokkaa tapahtumaa' : 'Luo tapahtuma'}
+            {isEditing ? 'Muokkaa tapahtumaa' : 'Luo tapahtuma'}
           </h2>
           <button onClick={() => dispatch({ type: 'CLOSE_MODALS' })} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X className="w-5 h-5" />
@@ -203,7 +215,7 @@ export default function EventModal() {
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Tapahtuman otsikko"
-                  disabled={isDeadlineEvent}
+                  disabled={Boolean(isDeadlineEvent)}
                 />
                 <FormTextarea
                   id="event-more-info"
@@ -213,7 +225,7 @@ export default function EventModal() {
                   onChange={(e) => setFormData({ ...formData, more_info: e.target.value })}
                   rows={2}
                   placeholder="Lisää linkkejä tai muuta tärkeää tietoa"
-                  disabled={isDeadlineEvent}
+                  disabled={Boolean(isDeadlineEvent)}
                 />
                 <FormTextarea
                   id="event-description"
@@ -223,7 +235,7 @@ export default function EventModal() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
                   placeholder="Tapahtuman kuvaus"
-                  disabled={isDeadlineEvent}
+                  disabled={Boolean(isDeadlineEvent)}
                 />
                 <FormInput
                   id="event-date"
@@ -233,7 +245,7 @@ export default function EventModal() {
                   required
                   value={formData.date}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  disabled={isDeadlineEvent || updateScope !== 'single'}
+                  disabled={Boolean(isDeadlineEvent) || updateScope !== 'single'}
                 />
                 <div className="grid grid-cols-2 gap-4">
                   <FormInput
@@ -243,7 +255,7 @@ export default function EventModal() {
                     type="time"
                     value={formData.start_time}
                     onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                    disabled={isDeadlineEvent || updateScope !== 'single'}
+                    disabled={Boolean(isDeadlineEvent) || updateScope !== 'single'}
                   />
                   <FormInput
                     id="end_time"
@@ -251,7 +263,7 @@ export default function EventModal() {
                     type="time"
                     value={formData.end_time}
                     onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                    disabled={isDeadlineEvent || updateScope !== 'single'}
+                    disabled={Boolean(isDeadlineEvent) || updateScope !== 'single'}
                   />
                 </div>
                 <FormSelect
@@ -259,7 +271,7 @@ export default function EventModal() {
                   label="Tyyppi"
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value as Event['type'] })}
-                  disabled={isDeadlineEvent}
+                  disabled={Boolean(isDeadlineEvent)}
                 >
                   <option value="class">Tunti</option>
                   <option value="meeting">Kokous</option>
@@ -277,7 +289,7 @@ export default function EventModal() {
                   label="Projekti (valinnainen)"
                   value={formData.project_id}
                   onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                  disabled={isDeadlineEvent}
+                  disabled={Boolean(isDeadlineEvent)}
                 >
                   <option value="">Ei projektia</option>
                   {[...projects]
@@ -289,7 +301,7 @@ export default function EventModal() {
                   ))}
                 </FormSelect>
 
-                {selectedEvent?.type === 'class' && selectedEvent.project_id && (
+                {selectedEvent?.type === 'class' && selectedEvent.project_id && isEditing && (
                   <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
                       <div className="flex items-start">
                           <div className="flex-shrink-0">
@@ -341,7 +353,7 @@ export default function EventModal() {
           </div>
         </form>
         <div className="flex justify-between p-6 border-t border-gray-200 flex-shrink-0 bg-gray-50">
-            {selectedEvent && (
+            {isEditing && (
               <button
                 type="button"
                 onClick={handleDelete}
@@ -362,11 +374,11 @@ export default function EventModal() {
               <button
                 type="submit"
                 form="event-details-form"
-                disabled={isLoading || isDeadlineEvent}
+                disabled={isLoading || Boolean(isDeadlineEvent)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
               >
                 {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                {selectedEvent ? 'Päivitä' : 'Luo'}
+                {isEditing ? 'Päivitä' : 'Luo'}
               </button>
             </div>
         </div>
