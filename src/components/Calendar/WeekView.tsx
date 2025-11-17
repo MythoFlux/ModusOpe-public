@@ -10,27 +10,27 @@ import TimeIndicator from '../Shared/TimeIndicator';
 
 const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille
 
-// 1. PARANNETTU AJAN LASKENTA
-// Tämä funktio varmistaa, että "08:10" tulkitaan aina oikein, eikä sekoa päivämääräobjektin aikavyöhykkeisiin
+// 1. VARMEMPI AIKALASKURI
+// Tämä käyttää Regexiä poimimaan tunnit ja minuutit mistä tahansa merkkijonosta.
+// Esim. "08:10:00" -> 8, 10. 
 const getMinutesFromEvent = (event: Event): number => {
-  if (event.start_time && typeof event.start_time === 'string') {
-    // Varmistetaan, että otetaan vain kellonaikaosa, jos mukana on pvm (esim. ISO-string)
-    const timePart = event.start_time.includes('T') ? event.start_time.split('T')[1] : event.start_time;
-    
-    if (timePart.includes(':')) {
-      const [hours, minutes] = timePart.split(':').map(Number);
-      if (!isNaN(hours) && !isNaN(minutes)) {
-        return hours * 60 + minutes;
-      }
-    }
-  }
+  // Muutetaan stringiksi varmuuden vuoksi ja trimmataan
+  const timeStr = String(event.start_time || '');
   
-  // Fallback: Käytä Date-objektin aikaa vain jos merkkijono puuttuu kokonaan
+  // Etsitään mallia "numerot:numerot" (esim. 08:10 tai 8:10)
+  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+  
+  if (match) {
+    const hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    return hours * 60 + minutes;
+  }
+
+  // Hätävara: Käytä Date-objektin aikaa vain jos merkkijonoa ei saada luettua
   const eventDate = new Date(event.date);
   return eventDate.getHours() * 60 + eventDate.getMinutes();
 };
 
-// Layout-laskenta, joka käyttää yllä olevaa parannettua funktiota
 const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[]) => {
   return useMemo(() => {
     const layoutMap = new Map<string, (Event & { layout: { top: number; height: number; left: string; width: string } })[]>();
@@ -38,6 +38,7 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
     displayDates.forEach(date => {
       const dayKey = date.toISOString().split('T')[0];
       const timedEvents = (eventsByDay.get(dayKey) || [])
+        // Näytetään tapahtuma, jos start_time löytyy TAI date-objektissa on aika
         .filter(e => !!e.start_time || new Date(e.date).getHours() !== 0)
         .sort((a, b) => getMinutesFromEvent(a) - getMinutesFromEvent(b));
 
@@ -49,25 +50,24 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
       const eventsWithMinutes = timedEvents.map(event => {
         const startMinutes = getMinutesFromEvent(event);
 
-        let endMinutes;
-        if (event.end_time && typeof event.end_time === 'string') {
-           const timePart = event.end_time.includes('T') ? event.end_time.split('T')[1] : event.end_time;
-           if (timePart.includes(':')) {
-              const [endHour, endMinute] = timePart.split(':').map(Number);
-              endMinutes = endHour * 60 + endMinute;
-           } else {
-              endMinutes = startMinutes + 60;
-           }
-        } else {
-          endMinutes = startMinutes + 60;
+        // Lasketaan loppuaika samalla logiikalla
+        let endMinutes = startMinutes + 60; // Oletus: 60min
+        const endTimeStr = String(event.end_time || '');
+        const endMatch = endTimeStr.match(/(\d{1,2}):(\d{2})/);
+
+        if (endMatch) {
+           const endH = parseInt(endMatch[1], 10);
+           const endM = parseInt(endMatch[2], 10);
+           endMinutes = endH * 60 + endM;
         }
         
-        if (endMinutes <= startMinutes) endMinutes = startMinutes + 45; // Minimi kesto
+        // Varmistetaan, että laatikolla on joku minimikorkeus (30min)
+        if (endMinutes <= startMinutes) endMinutes = startMinutes + 30;
 
         return { ...event, startMinutes, endMinutes };
       });
 
-      // Ryhmittely (Cluster logic) päällekkäisille tapahtumille
+      // Ryhmitellään päällekkäiset tapahtumat
       const clusters: (typeof eventsWithMinutes)[] = [];
       if (eventsWithMinutes.length > 0) {
         let currentCluster = [eventsWithMinutes[0]];
@@ -305,27 +305,25 @@ export default function WeekView() {
                                     <div
                                         key={event.id}
                                         onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                        // 2. TYYLIN PALAUTUS
-                                        // Poistettu border-l-4 ja muutettu taustaväri solidiksi/tummemmaksi + valkoinen teksti
-                                        // Poistettu flex-col overflow-hidden, jotta teksti käyttäytyy normaalisti
+                                        // 2. TYYLIN PALAUTUS: Yksinkertaisempi ilme ilman kuvausta
                                         className="absolute rounded px-2 py-1 cursor-pointer hover:opacity-90 transition-all text-xs z-10 shadow-sm hover:shadow-md truncate leading-tight"
                                         style={{
                                             top: `${event.layout.top}px`,
                                             height: `${event.layout.height}px`,
                                             left: event.layout.left,
                                             width: event.layout.width,
-                                            backgroundColor: event.color, // Käytetään suoraan väriä taustana
-                                            color: '#ffffff', // Valkoinen teksti
-                                            opacity: 0.85 // Hieman läpinäkyvyyttä
+                                            backgroundColor: event.color + '15', // Vaalea tausta
+                                            borderLeft: `3px solid ${event.color}`, // Värillinen reunus
+                                            color: '#1f2937' // Tumma teksti luettavuuden vuoksi
                                         }}
                                     >
                                         <span className="font-semibold mr-1">{event.title}</span>
                                         {event.start_time && (
-                                          <span className="opacity-90">
+                                          <span className="opacity-75 text-[10px]">
                                             {formatTimeString(event.start_time)}
+                                            {event.end_time && ` - ${formatTimeString(event.end_time)}`}
                                           </span>
                                         )}
-                                        {/* Kuvaus poistettu renderöinnistä kokonaan */}
                                     </div>
                                 );
                             })}
