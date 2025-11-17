@@ -8,27 +8,11 @@ import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { useCurrentTime } from '../../hooks/useCurrentTime';
 import TimeIndicator from '../Shared/TimeIndicator';
 
-const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille
+const HOUR_HEIGHT = 48; 
 
-// 1. VARMEMPI AIKALASKURI
-// Tämä käyttää Regexiä poimimaan tunnit ja minuutit mistä tahansa merkkijonosta.
-// Esim. "08:10:00" -> 8, 10. 
-const getMinutesFromEvent = (event: Event): number => {
-  // Muutetaan stringiksi varmuuden vuoksi ja trimmataan
-  const timeStr = String(event.start_time || '');
-  
-  // Etsitään mallia "numerot:numerot" (esim. 08:10 tai 8:10)
-  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
-  
-  if (match) {
-    const hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    return hours * 60 + minutes;
-  }
-
-  // Hätävara: Käytä Date-objektin aikaa vain jos merkkijonoa ei saada luettua
-  const eventDate = new Date(event.date);
-  return eventDate.getHours() * 60 + eventDate.getMinutes();
+// Yksinkertaistettu ajan laskenta uusille start_at -kentille
+const getMinutesFromDate = (date: Date): number => {
+  return date.getHours() * 60 + date.getMinutes();
 };
 
 const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[]) => {
@@ -37,10 +21,32 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
 
     displayDates.forEach(date => {
       const dayKey = date.toISOString().split('T')[0];
+      
+      // Suodatetaan tapahtumat
       const timedEvents = (eventsByDay.get(dayKey) || [])
-        // Näytetään tapahtuma, jos start_time löytyy TAI date-objektissa on aika
-        .filter(e => !!e.start_time || new Date(e.date).getHours() !== 0)
-        .sort((a, b) => getMinutesFromEvent(a) - getMinutesFromEvent(b));
+        .filter(e => {
+          // Näytetään jos start_at on olemassa TAI vanha start_time on olemassa
+          return e.start_at || e.start_time;
+        })
+        .map(e => {
+           // Normalisoidaan: Jos start_at puuttuu, rakennetaan se vanhoista tiedoista lennossa (fallback)
+           if (!e.start_at && e.start_time && e.date) {
+             const [h, m] = e.start_time.split(':').map(Number);
+             const d = new Date(e.date);
+             d.setHours(h, m);
+             return { ...e, start_at: d };
+           }
+           // Varmistetaan että start_at on Date-objekti (Supabase palauttaa stringin)
+           if (e.start_at && typeof e.start_at === 'string') {
+             return { ...e, start_at: new Date(e.start_at), end_at: e.end_at ? new Date(e.end_at) : undefined };
+           }
+           return e;
+        })
+        .sort((a, b) => {
+           const dateA = a.start_at || new Date(a.date);
+           const dateB = b.start_at || new Date(b.date);
+           return dateA.getTime() - dateB.getTime();
+        });
 
       if (timedEvents.length === 0) {
         layoutMap.set(dayKey, []);
@@ -48,26 +54,28 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
       }
 
       const eventsWithMinutes = timedEvents.map(event => {
-        const startMinutes = getMinutesFromEvent(event);
+        // Käytetään nyt start_at tietoa, joka on luotettava timestamptz
+        const eventStart = event.start_at || new Date(event.date);
+        const startMinutes = getMinutesFromDate(eventStart);
 
-        // Lasketaan loppuaika samalla logiikalla
-        let endMinutes = startMinutes + 60; // Oletus: 60min
-        const endTimeStr = String(event.end_time || '');
-        const endMatch = endTimeStr.match(/(\d{1,2}):(\d{2})/);
-
-        if (endMatch) {
-           const endH = parseInt(endMatch[1], 10);
-           const endM = parseInt(endMatch[2], 10);
-           endMinutes = endH * 60 + endM;
+        let endMinutes;
+        if (event.end_at) {
+          const eventEnd = new Date(event.end_at);
+          endMinutes = getMinutesFromDate(eventEnd);
+        } else if (event.end_time) {
+           // Fallback vanhalle
+           const [h, m] = event.end_time.split(':').map(Number);
+           endMinutes = h * 60 + m;
+        } else {
+          endMinutes = startMinutes + 60;
         }
         
-        // Varmistetaan, että laatikolla on joku minimikorkeus (30min)
-        if (endMinutes <= startMinutes) endMinutes = startMinutes + 30;
+        if (endMinutes <= startMinutes) endMinutes = startMinutes + 45;
 
         return { ...event, startMinutes, endMinutes };
       });
 
-      // Ryhmitellään päällekkäiset tapahtumat
+      // --- Cluster Logic (Pysyy samana) ---
       const clusters: (typeof eventsWithMinutes)[] = [];
       if (eventsWithMinutes.length > 0) {
         let currentCluster = [eventsWithMinutes[0]];
@@ -121,6 +129,7 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
           });
         });
       });
+      // --- End Cluster Logic ---
 
       layoutMap.set(dayKey, dayLayoutEvents);
     });
@@ -134,7 +143,6 @@ export default function WeekView() {
   const { selectedDate, events } = state;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const currentTime = useCurrentTime();
-  
   const [showWeekend, setShowWeekend] = useState(false);
 
   useLayoutEffect(() => {
@@ -151,20 +159,15 @@ export default function WeekView() {
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     return new Date(d.setDate(diff));
   };
-
   const monday = useMemo(() => getMondayOfWeek(selectedDate), [selectedDate]);
-
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => {
     const date = new Date(monday);
     date.setDate(monday.getDate() + i);
     return date;
   }), [monday]);
-
   const weekDays = ['Ma', 'Ti', 'Ke', 'To', 'Pe', 'La', 'Su'];
-  
   const displayDates = useMemo(() => showWeekend ? weekDates : weekDates.slice(0, 5), [showWeekend, weekDates]);
   const displayDays = useMemo(() => showWeekend ? weekDays : weekDays.slice(0, 5), [showWeekend]);
-
   const gridColumns = `60px repeat(${displayDates.length}, 1fr)`;
 
   const eventsByDay = useMemo(() => {
@@ -180,9 +183,7 @@ export default function WeekView() {
 
   const handleEventClick = (event: Event) => {
     if (event.type === 'deadline' && event.project_id) {
-      if (event.project_id === GENERAL_TASKS_PROJECT_ID) {
-        return; 
-      }
+      if (event.project_id === GENERAL_TASKS_PROJECT_ID) return; 
       dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id });
     } else {
       dispatch({ type: 'TOGGLE_EVENT_DETAILS_MODAL', payload: event });
@@ -193,11 +194,7 @@ export default function WeekView() {
     const newDate = addDays(selectedDate, direction === 'next' ? 7 : -7);
     dispatch({ type: 'SET_SELECTED_DATE', payload: newDate });
   };
-
-  const goToThisWeek = () => {
-    dispatch({ type: 'SET_SELECTED_DATE', payload: new Date() });
-  };
-
+  const goToThisWeek = () => dispatch({ type: 'SET_SELECTED_DATE', payload: new Date() });
   const getWeekRange = () => {
     const startDate = weekDates[0]; 
     const endDate = weekDates[6];  
@@ -207,7 +204,6 @@ export default function WeekView() {
       return `${startDate.toLocaleDateString('fi-FI', { day: 'numeric', month: 'short' })}. - ${endDate.toLocaleDateString('fi-FI', { day: 'numeric', month: 'short', year: 'numeric' })}.`;
     }
   };
-
   const timeSlots = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
   
   const renderCurrentTimeIndicator = () => {
@@ -215,7 +211,6 @@ export default function WeekView() {
     if (todayIndex === -1) return null;
     const topPosition = (currentTime.getHours() * HOUR_HEIGHT) + (currentTime.getMinutes() * HOUR_HEIGHT / 60);
     const gridColumnStart = todayIndex + 2;
-
     return (
         <div style={{ gridColumn: `${gridColumnStart} / span 1`, position: 'relative', height: 0, zIndex: 50 }}>
              <TimeIndicator top={topPosition} currentTime={currentTime} />
@@ -253,15 +248,15 @@ export default function WeekView() {
             <div className="grid border-b border-gray-200 bg-white" style={{ gridTemplateColumns: gridColumns }}>
                 <div className="py-2 px-2 text-xs font-medium text-gray-400 text-right flex items-center justify-end bg-gray-50 border-r border-gray-100">koko pv</div>
                 {displayDates.map((date, index) => {
-                    const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
+                    const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time && !e.start_at);
                     return (
                         <div key={`allday-${index}`} className="p-1 border-r border-gray-100 min-h-[32px] space-y-1">
                             {allDayEvents.map(event => (
                                 <div
                                     key={event.id}
                                     onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                    className="text-xs px-2 py-1 rounded border-l-4 cursor-pointer hover:opacity-80 transition-shadow shadow-sm truncate font-medium"
-                                    style={{ backgroundColor: event.color + '20', color: event.color, borderColor: event.color }}
+                                    className="text-xs px-2 py-1 rounded cursor-pointer hover:opacity-80 transition-shadow shadow-sm truncate font-medium"
+                                    style={{ backgroundColor: event.color + '20', color: event.color, borderLeft: `3px solid ${event.color}` }}
                                     title={event.title}
                                 >
                                     {event.title}
@@ -301,29 +296,33 @@ export default function WeekView() {
                     return (
                         <div key={dateIndex} className="relative h-full pointer-events-auto">
                              {timedEvents.map((event) => {
+                                // Apufunktio ajan näyttämiseen
+                                const displayTime = () => {
+                                    if (event.start_at) {
+                                        const s = new Date(event.start_at);
+                                        const e = event.end_at ? new Date(event.end_at) : null;
+                                        return `${formatTimeString(s.toTimeString().slice(0,5))}${e ? ` - ${formatTimeString(e.toTimeString().slice(0,5))}` : ''}`;
+                                    }
+                                    return `${formatTimeString(event.start_time)}${event.end_time ? ` - ${formatTimeString(event.end_time)}` : ''}`;
+                                };
+
                                 return (
                                     <div
                                         key={event.id}
                                         onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                        // 2. TYYLIN PALAUTUS: Yksinkertaisempi ilme ilman kuvausta
                                         className="absolute rounded px-2 py-1 cursor-pointer hover:opacity-90 transition-all text-xs z-10 shadow-sm hover:shadow-md truncate leading-tight"
                                         style={{
                                             top: `${event.layout.top}px`,
                                             height: `${event.layout.height}px`,
                                             left: event.layout.left,
                                             width: event.layout.width,
-                                            backgroundColor: event.color + '15', // Vaalea tausta
-                                            borderLeft: `3px solid ${event.color}`, // Värillinen reunus
-                                            color: '#1f2937' // Tumma teksti luettavuuden vuoksi
+                                            backgroundColor: event.color + '15',
+                                            borderLeft: `3px solid ${event.color}`,
+                                            color: '#1f2937'
                                         }}
                                     >
                                         <span className="font-semibold mr-1">{event.title}</span>
-                                        {event.start_time && (
-                                          <span className="opacity-75 text-[10px]">
-                                            {formatTimeString(event.start_time)}
-                                            {event.end_time && ` - ${formatTimeString(event.end_time)}`}
-                                          </span>
-                                        )}
+                                        <span className="opacity-75 text-[10px]">{displayTime()}</span>
                                     </div>
                                 );
                             })}
