@@ -15,8 +15,6 @@ export default function DayView() {
 
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
-      // Vieritetään näkymä oletuksena klo 8:aan, mutta jos nykyinen aika on näkyvissä,
-      // vieritetään siihen.
       const hourToShow = isToday(selectedDate) ? currentTime.getHours() : 8;
       scrollContainerRef.current.scrollTop = (hourToShow - 1) * 48;
     }
@@ -51,7 +49,6 @@ export default function DayView() {
       }
       dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id });
     } else {
-      // MUUTETTU
       dispatch({ type: 'TOGGLE_EVENT_DETAILS_MODAL', payload: event });
     }
   };
@@ -137,17 +134,26 @@ export default function DayView() {
             {renderCurrentTimeIndicator()}
 
             {timedEvents.map((event) => {
-              const eventDate = new Date(event.date);
-              const startHour = eventDate.getHours();
-              const startMinute = eventDate.getMinutes();
+              // KORJAUS: Sama logiikka kuin WeekView:ssä
+              let startHour = 0;
+              let startMinute = 0;
+              if (event.start_time) {
+                 const [h, m] = event.start_time.split(':').map(Number);
+                 startHour = h;
+                 startMinute = m;
+              } else {
+                 const d = new Date(event.date);
+                 startHour = d.getHours();
+                 startMinute = d.getMinutes();
+              }
               
               const top = (startHour * 48) + (startMinute * 48 / 60);
               
               let height = 48;
               if (event.end_time && event.start_time) {
                 const [endHour, endMinute] = event.end_time.split(':').map(Number);
-                const [startHourTime, startMinuteTime] = event.start_time.split(':').map(Number) || [startHour, startMinute];
-                const duration = (endHour - startHourTime) + ((endMinute - startMinuteTime) / 60);
+                // Käytetään samoja lukuja keston laskemiseen
+                const duration = (endHour - startHour) + ((endMinute - startMinute) / 60);
                 height = duration * 48;
               }
 
