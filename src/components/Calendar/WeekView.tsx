@@ -30,8 +30,17 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
 
       // Muunnetaan tapahtumat minuuteiksi päivän alusta
       const eventsWithMinutes = timedEvents.map(event => {
-        const eventDate = new Date(event.date);
-        const startMinutes = eventDate.getHours() * 60 + eventDate.getMinutes();
+        // KORJAUS: Lasketaan minuutit start_time-merkkijonosta, ei Date-objektista
+        let startMinutes = 0;
+        if (event.start_time) {
+            const [hours, minutes] = event.start_time.split(':').map(Number);
+            startMinutes = hours * 60 + minutes;
+        } else {
+            // Fallback, jos start_time puuttuu (epätodennäköistä tässä filtteröinnissä)
+            const eventDate = new Date(event.date);
+            startMinutes = eventDate.getHours() * 60 + eventDate.getMinutes();
+        }
+
         let endMinutes;
         if (event.end_time) {
           const [endHour, endMinute] = event.end_time.split(':').map(Number);
@@ -161,7 +170,7 @@ export default function WeekView() {
       }
       dispatch({ type: 'TOGGLE_PROJECT_MODAL', payload: event.project_id });
     } else {
-      // MUUTETTU
+      // MUUTETTU: Avataan nyt inforuutu suoran muokkauksen sijaan
       dispatch({ type: 'TOGGLE_EVENT_DETAILS_MODAL', payload: event });
     }
   };
