@@ -10,26 +10,18 @@ import TimeIndicator from '../Shared/TimeIndicator';
 
 const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille
 
-// KORJATTU: Käytetään regexiä varmistamaan, että saamme varmasti tunnit ja minuutit oikein
-// Tämä estää virheet, jos merkkijono onkin muotoa "2023-01-01T08:10:00" tai sisältää roskaa
+// Yksinkertainen jäsennys, joka vastaa DayView-näkymän logiikkaa
 const getMinutesFromTimeString = (timeString: string | undefined | null): number | null => {
-  if (!timeString || typeof timeString !== 'string') return null;
+  if (!timeString) return null;
+  const parts = timeString.split(':');
+  if (parts.length < 2) return null;
   
-  // Etsitään muotoa HH:MM (tai H:MM)
-  const match = timeString.match(/(\d{1,2}):(\d{2})/);
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
   
-  if (match) {
-    const hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    
-    if (!isNaN(hours) && !isNaN(minutes)) {
-      // Varmistetaan, ettei tunnit ylitä 23
-      const safeHours = Math.min(Math.max(0, hours), 23);
-      const safeMinutes = Math.min(Math.max(0, minutes), 59);
-      return safeHours * 60 + safeMinutes;
-    }
-  }
-  return null;
+  if (isNaN(hours) || isNaN(minutes)) return null;
+  
+  return Math.max(0, Math.min(23, hours)) * 60 + Math.max(0, Math.min(59, minutes));
 };
 
 const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[]) => {
@@ -133,7 +125,6 @@ export default function WeekView() {
   
   const [showWeekend, setShowWeekend] = useState(false);
 
-  // Apufunktio: Etsi viikon aikaisin tapahtuma skrollauksen kohdistamiseksi
   const getEarliestEventHour = (currentEvents: Event[], dates: Date[]) => {
       let minHour = 24;
       dates.forEach(date => {
@@ -147,17 +138,12 @@ export default function WeekView() {
               }
           });
       });
-      return minHour === 24 ? 8 : minHour; // Oletus klo 8, jos ei tapahtumia
+      return minHour === 24 ? 8 : minHour;
   };
 
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
       const currentHour = currentTime.getHours();
-      
-      // UX PARANNUS:
-      // Jos on nykyinen päivä, yritetään näyttää nykyinen aika.
-      // Mutta jos päivän ensimmäinen tapahtuma on aiemmin, varmistetaan että se näkyy.
-      // Jos ei ole "tänään", näytetään aikaisin tapahtuma tai klo 8.
       
       const earliestEventHour = getEarliestEventHour(events, showWeekend ? 
         Array.from({length: 7}, (_, i) => addDays(getMondayOfWeek(selectedDate), i)) : 
@@ -167,16 +153,12 @@ export default function WeekView() {
       let hourToShow = 8;
 
       if (isToday(selectedDate)) {
-          // Jos kello on enemmän kuin aikaisin tapahtuma, näytä aikaisin tapahtuma - 1h padding
-          // Muuten näytä nykyhetki - 1h
           hourToShow = Math.min(currentHour, earliestEventHour);
       } else {
           hourToShow = earliestEventHour;
       }
 
-      // Vähennetään 1 tunti "paddingiksi", mutta ei mennä alle nollan
       const scrollHour = Math.max(0, hourToShow - 1);
-      
       scrollContainerRef.current.scrollTop = scrollHour * HOUR_HEIGHT;
     }
   }, [state.selectedDate, state.currentView, showWeekend]);
@@ -223,30 +205,19 @@ export default function WeekView() {
     }
   };
 
-  const handleGridClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!gridRef.current) return;
-
-    const rect = gridRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
+  const handleGridClick = (e: React.MouseEvent<HTMLDivElement>, date: Date) => {
+    const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
     
-    const gridWidth = rect.width - 60;
-    const columnWidth = gridWidth / displayDates.length;
-    
-    const columnIndex = Math.floor((x - 60) / columnWidth);
-    
-    if (columnIndex < 0 || columnIndex >= displayDates.length) return;
-
     const clickedHour = Math.floor(y / HOUR_HEIGHT);
     const clickedMinutes = Math.floor((y % HOUR_HEIGHT) / (HOUR_HEIGHT / 2)) * 30;
 
-    const clickedDate = displayDates[columnIndex];
     const startTimeString = `${clickedHour.toString().padStart(2, '0')}:${clickedMinutes.toString().padStart(2, '0')}`;
     const endHour = clickedHour + 1;
     const endTimeString = `${endHour.toString().padStart(2, '0')}:${clickedMinutes.toString().padStart(2, '0')}`;
 
     const newEventTemplate = {
-        date: clickedDate,
+        date: date,
         start_time: startTimeString,
         end_time: endTimeString,
         type: 'class'
@@ -276,21 +247,15 @@ export default function WeekView() {
 
   const timeSlots = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
   
-  const renderCurrentTimeIndicator = () => {
-    const todayIndex = displayDates.findIndex(date => isToday(date));
-    if (todayIndex === -1) return null;
+  const renderCurrentTimeIndicator = (date: Date) => {
+    if (!isToday(date)) return null;
     const topPosition = (currentTime.getHours() * HOUR_HEIGHT) + (currentTime.getMinutes() * HOUR_HEIGHT / 60);
-    const gridColumnStart = todayIndex + 2;
-
-    return (
-        <div style={{ gridColumn: `${gridColumnStart} / span 1`, position: 'relative', height: 0, zIndex: 50 }}>
-             <TimeIndicator top={topPosition} currentTime={currentTime} />
-        </div>
-    );
+    return <TimeIndicator top={topPosition} currentTime={currentTime} />;
   };
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-full">
+      {/* Header */}
       <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0 bg-white z-30 rounded-t-lg">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
@@ -305,99 +270,98 @@ export default function WeekView() {
         </button>
       </div>
 
+      {/* Scrollable Content */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative">
-        <div className="sticky top-0 bg-white z-20 shadow-sm">
-            <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: gridColumns }}>
-              <div className="py-4 px-2 text-center bg-gray-50 border-r border-gray-100"></div>
-              {displayDates.map((date, index) => (
-                <div key={`header-${index}`} className={`py-2 px-2 text-center border-r border-gray-100 last:border-r-0 ${isToday(date) ? 'bg-blue-50' : 'bg-white'}`}>
-                  <div className={`text-sm font-medium ${isToday(date) ? 'text-blue-600' : 'text-gray-600'}`}>{displayDays[index]}</div>
-                  <div className={`text-lg font-semibold mt-1 inline-flex items-center justify-center w-8 h-8 rounded-full ${isToday(date) ? 'bg-blue-600 text-white' : 'text-gray-900'}`}>{date.getDate()}</div>
-                </div>
-              ))}
-            </div>
-            <div className="grid border-b border-gray-200 bg-white" style={{ gridTemplateColumns: gridColumns }}>
-                <div className="py-2 px-2 text-xs font-medium text-gray-400 text-right flex items-center justify-end bg-gray-50 border-r border-gray-100">koko pv</div>
-                {displayDates.map((date, index) => {
-                    const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
-                    return (
-                        <div key={`allday-${index}`} className="p-1 border-r border-gray-100 min-h-[32px] space-y-1">
-                            {allDayEvents.map(event => (
-                                <div
-                                    key={event.id}
-                                    onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                    className="text-xs px-2 py-1 rounded border-l-4 cursor-pointer hover:opacity-80 transition-shadow shadow-sm truncate font-medium"
-                                    style={{ backgroundColor: event.color + '20', color: event.color, borderColor: event.color }}
-                                    title={event.title}
-                                >
-                                    {event.title}
-                                </div>
-                            ))}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-
-        <div className="relative min-h-full" ref={gridRef} onClick={handleGridClick}>
+        <div className="relative min-h-full" ref={gridRef}>
             <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
-                <div className="col-start-1 bg-gray-50 border-r border-gray-200">
+                
+                {/* Time Labels Column */}
+                <div className="col-start-1 bg-gray-50 border-r border-gray-200 sticky left-0 z-20">
+                    {/* Header empty cell */}
+                    <div className="h-[65px] border-b border-gray-200 bg-gray-50 sticky top-0 z-30"></div>
+                    {/* Time slots */}
                     {timeSlots.map((time, i) => (
                         <div key={time} className="h-12 text-xs font-medium text-gray-400 pr-2 text-right flex items-start pt-1 relative" style={{ height: `${HOUR_HEIGHT}px` }}>
                              <span className="-mt-2">{i === 0 ? '' : time}</span>
                         </div>
                     ))}
                 </div>
-                <div className="col-start-2 col-span-full grid relative" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)` }}>
-                    {displayDates.map((_, dateIndex) => (
-                         <div key={dateIndex} className="border-r border-gray-100 last:border-r-0 cursor-pointer hover:bg-gray-50/30 transition-colors">
-                             {timeSlots.map((time, i) => (
-                                 <div key={time} className="border-b border-gray-100" style={{ height: `${HOUR_HEIGHT}px` }} />
-                             ))}
-                         </div>
-                    ))}
-                </div>
-            </div>
-            
-            <div className="absolute top-0 left-0 w-full h-full grid pointer-events-none" style={{ gridTemplateColumns: gridColumns }}>
-                {renderCurrentTimeIndicator()}
-                <div className="col-start-1"></div>
-                 {displayDates.map((date, dateIndex) => {
-                    const timedEvents = laidOutEventsByDay.get(date.toISOString().split('T')[0]) || [];
-                    return (
-                        <div key={dateIndex} className="relative h-full pointer-events-auto">
-                             {timedEvents.map((event) => {
-                                const displayTime = () => {
-                                   if (event.start_time) {
-                                      return `${formatTimeString(event.start_time)}${event.end_time ? ` - ${formatTimeString(event.end_time)}` : ''}`;
-                                   }
-                                   return '';
-                                };
 
-                                return (
-                                    <div
-                                        key={event.id}
-                                        onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                        className="absolute rounded px-2 py-1 cursor-pointer hover:opacity-90 transition-all text-xs z-10 shadow-sm hover:shadow-md truncate leading-tight"
-                                        style={{
-                                            top: `${event.layout.top}px`,
-                                            height: `${event.layout.height}px`,
-                                            left: event.layout.left,
-                                            width: event.layout.width,
-                                            backgroundColor: event.color + '15',
-                                            borderLeft: `3px solid ${event.color}`,
-                                            color: '#1f2937'
-                                        }}
-                                        title={`${event.title} (${displayTime()})`}
-                                    >
-                                        <span className="font-semibold mr-1">{event.title}</span>
-                                        <span className="opacity-75 text-[10px]">{displayTime()}</span>
+                {/* Days Columns Container */}
+                <div className="col-start-2 col-span-full grid" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)` }}>
+                    {displayDates.map((date, index) => {
+                        const timedEvents = laidOutEventsByDay.get(date.toISOString().split('T')[0]) || [];
+                        const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
+                        
+                        return (
+                            <div key={index} className="border-r border-gray-100 last:border-r-0 flex flex-col relative">
+                                {/* Day Header (Sticky) */}
+                                <div className="sticky top-0 bg-white z-20 border-b border-gray-200">
+                                    <div className={`py-2 px-2 text-center ${isToday(date) ? 'bg-blue-50' : 'bg-white'}`}>
+                                        <div className={`text-sm font-medium ${isToday(date) ? 'text-blue-600' : 'text-gray-600'}`}>{displayDays[index]}</div>
+                                        <div className={`text-lg font-semibold mt-1 inline-flex items-center justify-center w-8 h-8 rounded-full ${isToday(date) ? 'bg-blue-600 text-white' : 'text-gray-900'}`}>{date.getDate()}</div>
                                     </div>
-                                );
-                            })}
-                        </div>
-                    );
-                 })}
+                                    {/* All Day Events Area */}
+                                    <div className="py-1 px-1 bg-white min-h-[8px] border-t border-gray-50">
+                                        {allDayEvents.map(event => (
+                                            <div
+                                                key={event.id}
+                                                onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
+                                                className="text-[10px] px-1 py-0.5 rounded border-l-2 cursor-pointer hover:opacity-80 transition-shadow shadow-sm truncate font-medium mb-0.5"
+                                                style={{ backgroundColor: event.color + '20', color: event.color, borderColor: event.color }}
+                                                title={event.title}
+                                            >
+                                                {event.title}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Grid and Events Area */}
+                                <div className="relative flex-1" onClick={(e) => handleGridClick(e, date)}>
+                                    {/* Grid Lines */}
+                                    {timeSlots.map((time, i) => (
+                                        <div key={time} className="border-b border-gray-100 pointer-events-none" style={{ height: `${HOUR_HEIGHT}px` }} />
+                                    ))}
+
+                                    {/* Current Time Indicator */}
+                                    {renderCurrentTimeIndicator(date)}
+
+                                    {/* Events */}
+                                    {timedEvents.map((event) => {
+                                        const displayTime = () => {
+                                           if (event.start_time) {
+                                              return `${formatTimeString(event.start_time)}${event.end_time ? ` - ${formatTimeString(event.end_time)}` : ''}`;
+                                           }
+                                           return '';
+                                        };
+
+                                        return (
+                                            <div
+                                                key={event.id}
+                                                onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
+                                                className="absolute rounded px-2 py-1 cursor-pointer hover:opacity-90 transition-all text-xs z-10 shadow-sm hover:shadow-md truncate leading-tight"
+                                                style={{
+                                                    top: `${event.layout.top}px`,
+                                                    height: `${event.layout.height}px`,
+                                                    left: event.layout.left,
+                                                    width: event.layout.width,
+                                                    backgroundColor: event.color + '15',
+                                                    borderLeft: `3px solid ${event.color}`,
+                                                    color: '#1f2937'
+                                                }}
+                                                title={`${event.title} (${displayTime()})`}
+                                            >
+                                                <span className="font-semibold mr-1">{event.title}</span>
+                                                <span className="opacity-75 text-[10px]">{displayTime()}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
         </div>
       </div>
