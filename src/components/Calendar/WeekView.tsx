@@ -282,11 +282,11 @@ export default function WeekView() {
                     {/* Time slots */}
                     {timeSlots.map((time, i) => (
                         <div key={time} className="relative" style={{ height: `${HOUR_HEIGHT}px` }}>
-                             {/* Näytetään aika vain jos ei ole 00:00, jotta ei mene otsikon päälle */}
+                             {/* KORJAUS: Asetettu top: -1px kompensoimaan reunaviivan paksuus ja right-2 paremman visuaalisen yhteyden saamiseksi */}
                              {i !== 0 && (
                                 <span 
-                                  className="absolute right-3 text-[11px] font-medium text-gray-500 -translate-y-1/2 bg-gray-50 px-1"
-                                  style={{ top: 0 }}
+                                  className="absolute right-2 text-xs font-medium text-gray-500 -translate-y-1/2 bg-gray-50 px-1"
+                                  style={{ top: '-1px' }}
                                 >
                                   {time}
                                 </span>
