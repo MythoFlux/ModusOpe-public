@@ -281,8 +281,16 @@ export default function WeekView() {
                     <div className="h-[65px] border-b border-gray-200 bg-gray-50 sticky top-0 z-30"></div>
                     {/* Time slots */}
                     {timeSlots.map((time, i) => (
-                        <div key={time} className="h-12 text-xs font-medium text-gray-400 pr-2 text-right flex items-start pt-1 relative" style={{ height: `${HOUR_HEIGHT}px` }}>
-                             <span className="-mt-2">{i === 0 ? '' : time}</span>
+                        <div key={time} className="relative" style={{ height: `${HOUR_HEIGHT}px` }}>
+                             {/* Näytetään aika vain jos ei ole 00:00, jotta ei mene otsikon päälle */}
+                             {i !== 0 && (
+                                <span 
+                                  className="absolute right-3 text-[11px] font-medium text-gray-500 -translate-y-1/2 bg-gray-50 px-1"
+                                  style={{ top: 0 }}
+                                >
+                                  {time}
+                                </span>
+                             )}
                         </div>
                     ))}
                 </div>
