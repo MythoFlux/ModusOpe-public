@@ -10,17 +10,23 @@ import TimeIndicator from '../Shared/TimeIndicator';
 
 const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille
 
-// KORJATTU: Tämä funktio käyttää nyt splitiä regexin sijaan, kuten DayView.
+// KORJATTU: Käytetään regexiä varmistamaan, että saamme varmasti tunnit ja minuutit oikein
+// Tämä estää virheet, jos merkkijono onkin muotoa "2023-01-01T08:10:00" tai sisältää roskaa
 const getMinutesFromTimeString = (timeString: string | undefined | null): number | null => {
   if (!timeString || typeof timeString !== 'string') return null;
   
-  const parts = timeString.split(':');
-  if (parts.length >= 2) {
-    const hours = parseInt(parts[0], 10);
-    const minutes = parseInt(parts[1], 10);
+  // Etsitään muotoa HH:MM (tai H:MM)
+  const match = timeString.match(/(\d{1,2}):(\d{2})/);
+  
+  if (match) {
+    const hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
     
     if (!isNaN(hours) && !isNaN(minutes)) {
-      return hours * 60 + minutes;
+      // Varmistetaan, ettei tunnit ylitä 23
+      const safeHours = Math.min(Math.max(0, hours), 23);
+      const safeMinutes = Math.min(Math.max(0, minutes), 59);
+      return safeHours * 60 + safeMinutes;
     }
   }
   return null;
@@ -51,7 +57,7 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
         let endMinutes = getMinutesFromTimeString(event.end_time);
         
         if (endMinutes === null || endMinutes <= startMinutes) {
-            endMinutes = startMinutes + 60;
+            endMinutes = startMinutes + 60; // Oletuskesto 60min
         }
         
         return { ...event, startMinutes, endMinutes };
@@ -127,11 +133,51 @@ export default function WeekView() {
   
   const [showWeekend, setShowWeekend] = useState(false);
 
+  // Apufunktio: Etsi viikon aikaisin tapahtuma skrollauksen kohdistamiseksi
+  const getEarliestEventHour = (currentEvents: Event[], dates: Date[]) => {
+      let minHour = 24;
+      dates.forEach(date => {
+          const dateKey = date.toISOString().split('T')[0];
+          const daysEvents = currentEvents.filter(e => isSameDay(new Date(e.date), date) && e.start_time);
+          daysEvents.forEach(e => {
+              const mins = getMinutesFromTimeString(e.start_time);
+              if (mins !== null) {
+                  const h = Math.floor(mins / 60);
+                  if (h < minHour) minHour = h;
+              }
+          });
+      });
+      return minHour === 24 ? 8 : minHour; // Oletus klo 8, jos ei tapahtumia
+  };
+
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
       const currentHour = currentTime.getHours();
-      const hourToShow = (currentHour > 6 && isToday(selectedDate)) ? currentHour - 1 : 7;
-      scrollContainerRef.current.scrollTop = Math.max(0, hourToShow * HOUR_HEIGHT);
+      
+      // UX PARANNUS:
+      // Jos on nykyinen päivä, yritetään näyttää nykyinen aika.
+      // Mutta jos päivän ensimmäinen tapahtuma on aiemmin, varmistetaan että se näkyy.
+      // Jos ei ole "tänään", näytetään aikaisin tapahtuma tai klo 8.
+      
+      const earliestEventHour = getEarliestEventHour(events, showWeekend ? 
+        Array.from({length: 7}, (_, i) => addDays(getMondayOfWeek(selectedDate), i)) : 
+        Array.from({length: 5}, (_, i) => addDays(getMondayOfWeek(selectedDate), i))
+      );
+
+      let hourToShow = 8;
+
+      if (isToday(selectedDate)) {
+          // Jos kello on enemmän kuin aikaisin tapahtuma, näytä aikaisin tapahtuma - 1h padding
+          // Muuten näytä nykyhetki - 1h
+          hourToShow = Math.min(currentHour, earliestEventHour);
+      } else {
+          hourToShow = earliestEventHour;
+      }
+
+      // Vähennetään 1 tunti "paddingiksi", mutta ei mennä alle nollan
+      const scrollHour = Math.max(0, hourToShow - 1);
+      
+      scrollContainerRef.current.scrollTop = scrollHour * HOUR_HEIGHT;
     }
   }, [state.selectedDate, state.currentView, showWeekend]);
 
@@ -150,10 +196,8 @@ export default function WeekView() {
     return date;
   }), [monday]);
 
-  const weekDays = ['Ma', 'Ti', 'Ke', 'To', 'Pe', 'La', 'Su'];
-  
   const displayDates = useMemo(() => showWeekend ? weekDates : weekDates.slice(0, 5), [showWeekend, weekDates]);
-  const displayDays = useMemo(() => showWeekend ? weekDays : weekDays.slice(0, 5), [showWeekend]);
+  const displayDays = useMemo(() => ['Ma', 'Ti', 'Ke', 'To', 'Pe', 'La', 'Su'].slice(0, displayDates.length), [displayDates]);
 
   const gridColumns = `60px repeat(${displayDates.length}, 1fr)`;
 
@@ -179,51 +223,34 @@ export default function WeekView() {
     }
   };
 
-  // KÄYTETTÄVYYS: Käsittelijä tyhjän kohdan klikkaukselle
   const handleGridClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!gridRef.current) return;
 
     const rect = gridRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const scrollTop = scrollContainerRef.current?.scrollTop || 0;
     
-    // Vähennetään aikasarake (60px) leveydestä
     const gridWidth = rect.width - 60;
     const columnWidth = gridWidth / displayDates.length;
     
-    // Lasketaan sarake (päivä)
     const columnIndex = Math.floor((x - 60) / columnWidth);
     
-    // Jos klikkaus on aikasarakkeessa (vasen reuna), ei tehdä mitään
     if (columnIndex < 0 || columnIndex >= displayDates.length) return;
 
-    // Lasketaan aika Y-koordinaatista
-    // Y on suhteessa viewportiin, joten lisätään scrollaus
-    // Kuitenkin tässä klikkaus tulee suhteessa `relative` containeriin, 
-    // joten meidän ei tarvitse huolehtia scrollTopista, jos kuuntelija on oikeassa divissä.
-    // Tarkistetaan mihin elementtiin kuuntelija on kiinnitetty.
-    // Tässä tapauksessa kuuntelija on scrollattavan alueen sisällä olevassa divissä.
-    
     const clickedHour = Math.floor(y / HOUR_HEIGHT);
-    // Pyöristetään minuutit 00 tai 30
     const clickedMinutes = Math.floor((y % HOUR_HEIGHT) / (HOUR_HEIGHT / 2)) * 30;
 
     const clickedDate = displayDates[columnIndex];
-    
     const startTimeString = `${clickedHour.toString().padStart(2, '0')}:${clickedMinutes.toString().padStart(2, '0')}`;
-    
-    // Lasketaan loppuaika (oletus 1h)
     const endHour = clickedHour + 1;
     const endTimeString = `${endHour.toString().padStart(2, '0')}:${clickedMinutes.toString().padStart(2, '0')}`;
 
-    // Luodaan "tyhjä" tapahtuma pohjaksi modaalille
     const newEventTemplate = {
         date: clickedDate,
         start_time: startTimeString,
         end_time: endTimeString,
-        type: 'class' // oletustyyppi
-    } as any; // Käytetään any tässä vain ohittamaan tiukat tyyppitarkistukset modaalin avauksessa
+        type: 'class'
+    } as any;
 
     dispatch({ type: 'TOGGLE_EVENT_MODAL', payload: newEventTemplate });
   };
@@ -292,7 +319,6 @@ export default function WeekView() {
             <div className="grid border-b border-gray-200 bg-white" style={{ gridTemplateColumns: gridColumns }}>
                 <div className="py-2 px-2 text-xs font-medium text-gray-400 text-right flex items-center justify-end bg-gray-50 border-r border-gray-100">koko pv</div>
                 {displayDates.map((date, index) => {
-                    // Näytetään koko päivän alueella vain jos kellonaikaa EI OLE
                     const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
                     return (
                         <div key={`allday-${index}`} className="p-1 border-r border-gray-100 min-h-[32px] space-y-1">
@@ -325,7 +351,6 @@ export default function WeekView() {
                 <div className="col-start-2 col-span-full grid relative" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)` }}>
                     {displayDates.map((_, dateIndex) => (
                          <div key={dateIndex} className="border-r border-gray-100 last:border-r-0 cursor-pointer hover:bg-gray-50/30 transition-colors">
-                             {/* KORJAUS: Poistettu paksumpi viiva i === 12 kohdalta */}
                              {timeSlots.map((time, i) => (
                                  <div key={time} className="border-b border-gray-100" style={{ height: `${HOUR_HEIGHT}px` }} />
                              ))}
