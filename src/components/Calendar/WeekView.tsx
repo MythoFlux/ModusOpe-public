@@ -10,7 +10,6 @@ import TimeIndicator from '../Shared/TimeIndicator';
 
 const HOUR_HEIGHT = 48; // Pikselikorkeus yhdelle tunnille
 
-// Yksinkertainen jäsennys, joka vastaa DayView-näkymän logiikkaa
 const getMinutesFromTimeString = (timeString: string | undefined | null): number | null => {
   if (!timeString) return null;
   const parts = timeString.split(':');
@@ -49,7 +48,7 @@ const useEventLayout = (eventsByDay: Map<string, Event[]>, displayDates: Date[])
         let endMinutes = getMinutesFromTimeString(event.end_time);
         
         if (endMinutes === null || endMinutes <= startMinutes) {
-            endMinutes = startMinutes + 60; // Oletuskesto 60min
+            endMinutes = startMinutes + 60;
         }
         
         return { ...event, startMinutes, endMinutes };
@@ -275,24 +274,27 @@ export default function WeekView() {
         <div className="relative min-h-full" ref={gridRef}>
             <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
                 
-                {/* Time Labels Column */}
-                <div className="col-start-1 bg-gray-50 border-r border-gray-200 sticky left-0 z-20">
+                {/* Time Labels Column - KORJATTU: Käytetään absoluuttista sijoittelua */}
+                <div className="col-start-1 bg-gray-50 border-r border-gray-200 sticky left-0 z-20 relative">
                     {/* Header empty cell */}
                     <div className="h-[65px] border-b border-gray-200 bg-gray-50 sticky top-0 z-30"></div>
-                    {/* Time slots */}
-                    {timeSlots.map((time, i) => (
-                        <div key={time} className="relative" style={{ height: `${HOUR_HEIGHT}px` }}>
-                             {/* KORJAUS: Asetettu top: -1px kompensoimaan reunaviivan paksuus ja right-2 paremman visuaalisen yhteyden saamiseksi */}
-                             {i !== 0 && (
-                                <span 
-                                  className="absolute right-2 text-xs font-medium text-gray-500 -translate-y-1/2 bg-gray-50 px-1"
-                                  style={{ top: '-1px' }}
-                                >
-                                  {time}
-                                </span>
-                             )}
-                        </div>
-                    ))}
+                    
+                    {/* Time labels container */}
+                    <div className="relative" style={{ height: `${24 * HOUR_HEIGHT}px` }}>
+                        {timeSlots.map((time, i) => (
+                            <div 
+                                key={time} 
+                                className="absolute w-full text-right pr-2 text-xs font-medium text-gray-500 transform -translate-y-1/2 pointer-events-none"
+                                style={{ top: `${i * HOUR_HEIGHT}px` }}
+                            >
+                                {i !== 0 && (
+                                    <span className="bg-gray-50 px-1">
+                                        {time}
+                                    </span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Days Columns Container */}
