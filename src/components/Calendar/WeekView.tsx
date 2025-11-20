@@ -127,7 +127,6 @@ export default function WeekView() {
   const getEarliestEventHour = (currentEvents: Event[], dates: Date[]) => {
       let minHour = 24;
       dates.forEach(date => {
-          const dateKey = date.toISOString().split('T')[0];
           const daysEvents = currentEvents.filter(e => isSameDay(new Date(e.date), date) && e.start_time);
           daysEvents.forEach(e => {
               const mins = getMinutesFromTimeString(e.start_time);
@@ -193,6 +192,21 @@ export default function WeekView() {
 
   const laidOutEventsByDay = useEventLayout(eventsByDay, displayDates);
 
+  // Lasketaan maksimimäärä koko päivän tapahtumia yhdelle päivälle, jotta headerin korkeus on sama kaikille
+  const maxAllDayEvents = useMemo(() => {
+    let max = 0;
+    displayDates.forEach(date => {
+        const count = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time).length;
+        if (count > max) max = count;
+    });
+    return max;
+  }, [displayDates, eventsByDay]);
+
+  // HEADERIN KORKEUS: Otsikko (n. 45px) + padding (8px) + tapahtumat (26px per tapahtuma) + border
+  // Tämä luku pitää olla sama vasemmalle sarakkeelle (tyhjä) ja oikealle (sisältö)
+  const HEADER_HEIGHT = 50 + (Math.max(maxAllDayEvents, 0) * 26); 
+
+
   const handleEventClick = (event: Event) => {
     if (event.type === 'deadline' && event.project_id) {
       if (event.project_id === GENERAL_TASKS_PROJECT_ID) {
@@ -253,8 +267,8 @@ export default function WeekView() {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-full">
-      {/* Header */}
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden">
+      {/* Header Controls */}
       <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0 bg-white z-30 rounded-t-lg">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
@@ -269,105 +283,116 @@ export default function WeekView() {
         </button>
       </div>
 
-      {/* Scrollable Content */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative">
-        <div className="relative min-h-full" ref={gridRef}>
-            <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
-                
-                {/* Time Labels Column - KORJATTU: Käytetään absoluuttista sijoittelua */}
-                <div className="col-start-1 bg-gray-50 border-r border-gray-200 sticky left-0 z-20 relative">
-                    {/* Header empty cell */}
-                    <div className="h-[65px] border-b border-gray-200 bg-gray-50 sticky top-0 z-30"></div>
-                    
-                    {/* Time labels container */}
-                    <div className="relative" style={{ height: `${24 * HOUR_HEIGHT}px` }}>
-                        {timeSlots.map((time, i) => (
-                            <div 
-                                key={time} 
-                                className="absolute w-full text-right pr-2 text-xs font-medium text-gray-500 transform -translate-y-1/2 pointer-events-none"
-                                style={{ top: `${i * HOUR_HEIGHT}px` }}
-                            >
-                                {i !== 0 && (
-                                    <span className="bg-gray-50 px-1">
-                                        {time}
-                                    </span>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
+      {/* Calendar Content */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative flex flex-col">
+        
+        {/* Sticky Header Row (Dates & All Day Events) */}
+        <div className="sticky top-0 z-30 bg-white shadow-sm flex border-b border-gray-200" style={{ minHeight: `${HEADER_HEIGHT}px` }}>
+            {/* Top-Left Corner (Empty) */}
+            <div className="w-[60px] border-r border-gray-200 bg-gray-50 flex-shrink-0"></div>
 
-                {/* Days Columns Container */}
-                <div className="col-start-2 col-span-full grid" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)` }}>
+            {/* Days Header */}
+            <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)` }}>
+                {displayDates.map((date, index) => {
+                    const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
+                    return (
+                        <div key={index} className="border-r border-gray-100 last:border-r-0 flex flex-col">
+                             <div className={`py-2 px-2 text-center ${isToday(date) ? 'bg-blue-50' : 'bg-white'}`}>
+                                <div className={`text-sm font-medium ${isToday(date) ? 'text-blue-600' : 'text-gray-600'}`}>{displayDays[index]}</div>
+                                <div className={`text-lg font-semibold mt-1 inline-flex items-center justify-center w-8 h-8 rounded-full ${isToday(date) ? 'bg-blue-600 text-white' : 'text-gray-900'}`}>{date.getDate()}</div>
+                            </div>
+                            {/* All Day Events Area */}
+                            <div className="flex-1 px-1 pb-1 space-y-1">
+                                {allDayEvents.map(event => (
+                                    <div
+                                        key={event.id}
+                                        onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
+                                        className="text-[10px] px-1 py-0.5 rounded border-l-2 cursor-pointer hover:opacity-80 transition-shadow shadow-sm truncate font-medium"
+                                        style={{ backgroundColor: event.color + '20', color: event.color, borderColor: event.color, height: '24px' }}
+                                        title={event.title}
+                                    >
+                                        {event.title}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+
+        {/* Scrollable Grid Area */}
+        <div className="flex flex-1 relative min-h-0">
+             {/* Time Labels Column */}
+             <div className="w-[60px] bg-gray-50 border-r border-gray-200 flex-shrink-0 relative h-full">
+                <div className="relative h-full" style={{ height: `${24 * HOUR_HEIGHT}px` }}>
+                    {timeSlots.map((time, i) => (
+                        <div 
+                            key={time} 
+                            className="absolute w-full text-right pr-2 text-xs font-medium text-gray-500 transform -translate-y-1/2 pointer-events-none z-10"
+                            style={{ top: `${i * HOUR_HEIGHT}px` }}
+                        >
+                            {i !== 0 && (
+                                <span className="bg-gray-50 px-1">
+                                    {time}
+                                </span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Main Grid */}
+            <div className="flex-1 relative min-h-full" ref={gridRef}>
+                <div className="grid h-full" style={{ gridTemplateColumns: `repeat(${displayDates.length}, 1fr)`, height: `${24 * HOUR_HEIGHT}px` }}>
                     {displayDates.map((date, index) => {
                         const timedEvents = laidOutEventsByDay.get(date.toISOString().split('T')[0]) || [];
-                        const allDayEvents = (eventsByDay.get(date.toISOString().split('T')[0]) || []).filter(e => !e.start_time);
                         
                         return (
-                            <div key={index} className="border-r border-gray-100 last:border-r-0 flex flex-col relative">
-                                {/* Day Header (Sticky) */}
-                                <div className="sticky top-0 bg-white z-20 border-b border-gray-200">
-                                    <div className={`py-2 px-2 text-center ${isToday(date) ? 'bg-blue-50' : 'bg-white'}`}>
-                                        <div className={`text-sm font-medium ${isToday(date) ? 'text-blue-600' : 'text-gray-600'}`}>{displayDays[index]}</div>
-                                        <div className={`text-lg font-semibold mt-1 inline-flex items-center justify-center w-8 h-8 rounded-full ${isToday(date) ? 'bg-blue-600 text-white' : 'text-gray-900'}`}>{date.getDate()}</div>
-                                    </div>
-                                    {/* All Day Events Area */}
-                                    <div className="py-1 px-1 bg-white min-h-[8px] border-t border-gray-50">
-                                        {allDayEvents.map(event => (
-                                            <div
-                                                key={event.id}
-                                                onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                                className="text-[10px] px-1 py-0.5 rounded border-l-2 cursor-pointer hover:opacity-80 transition-shadow shadow-sm truncate font-medium mb-0.5"
-                                                style={{ backgroundColor: event.color + '20', color: event.color, borderColor: event.color }}
-                                                title={event.title}
-                                            >
-                                                {event.title}
-                                            </div>
-                                        ))}
-                                    </div>
+                            <div key={index} className="border-r border-gray-100 last:border-r-0 relative h-full">
+                                {/* Grid Lines Background */}
+                                <div className="absolute inset-0 pointer-events-none">
+                                     {timeSlots.map((time, i) => (
+                                        <div key={time} className="border-b border-gray-100" style={{ height: `${HOUR_HEIGHT}px` }} />
+                                     ))}
                                 </div>
 
-                                {/* Grid and Events Area */}
-                                <div className="relative flex-1" onClick={(e) => handleGridClick(e, date)}>
-                                    {/* Grid Lines */}
-                                    {timeSlots.map((time, i) => (
-                                        <div key={time} className="border-b border-gray-100 pointer-events-none" style={{ height: `${HOUR_HEIGHT}px` }} />
-                                    ))}
+                                {/* Click Area */}
+                                <div className="absolute inset-0 z-0" onClick={(e) => handleGridClick(e, date)}></div>
 
-                                    {/* Current Time Indicator */}
-                                    {renderCurrentTimeIndicator(date)}
+                                {/* Current Time Indicator */}
+                                {renderCurrentTimeIndicator(date)}
 
-                                    {/* Events */}
-                                    {timedEvents.map((event) => {
-                                        const displayTime = () => {
-                                           if (event.start_time) {
-                                              return `${formatTimeString(event.start_time)}${event.end_time ? ` - ${formatTimeString(event.end_time)}` : ''}`;
-                                           }
-                                           return '';
-                                        };
+                                {/* Events */}
+                                {timedEvents.map((event) => {
+                                    const displayTime = () => {
+                                        if (event.start_time) {
+                                            return `${formatTimeString(event.start_time)}${event.end_time ? ` - ${formatTimeString(event.end_time)}` : ''}`;
+                                        }
+                                        return '';
+                                    };
 
-                                        return (
-                                            <div
-                                                key={event.id}
-                                                onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                                                className="absolute rounded px-2 py-1 cursor-pointer hover:opacity-90 transition-all text-xs z-10 shadow-sm hover:shadow-md truncate leading-tight"
-                                                style={{
-                                                    top: `${event.layout.top}px`,
-                                                    height: `${event.layout.height}px`,
-                                                    left: event.layout.left,
-                                                    width: event.layout.width,
-                                                    backgroundColor: event.color + '15',
-                                                    borderLeft: `3px solid ${event.color}`,
-                                                    color: '#1f2937'
-                                                }}
-                                                title={`${event.title} (${displayTime()})`}
-                                            >
-                                                <span className="font-semibold mr-1">{event.title}</span>
-                                                <span className="opacity-75 text-[10px]">{displayTime()}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                                    return (
+                                        <div
+                                            key={event.id}
+                                            onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
+                                            className="absolute rounded px-2 py-1 cursor-pointer hover:opacity-90 transition-all text-xs z-10 shadow-sm hover:shadow-md truncate leading-tight"
+                                            style={{
+                                                top: `${event.layout.top}px`,
+                                                height: `${event.layout.height}px`,
+                                                left: event.layout.left,
+                                                width: event.layout.width,
+                                                backgroundColor: event.color + '15',
+                                                borderLeft: `3px solid ${event.color}`,
+                                                color: '#1f2937'
+                                            }}
+                                            title={`${event.title} (${displayTime()})`}
+                                        >
+                                            <span className="font-semibold mr-1">{event.title}</span>
+                                            <span className="opacity-75 text-[10px]">{displayTime()}</span>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         );
                     })}
