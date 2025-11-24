@@ -71,7 +71,7 @@ export interface AppState {
   currentView: CalendarView;
   selectedDate: Date;
   showEventModal: boolean;
-  showEventDetailsModal: boolean; // LISÄTTY
+  showEventDetailsModal: boolean; 
   showProjectModal: boolean;
   showCourseModal: boolean;
   showScheduleTemplateModal: boolean;
@@ -111,8 +111,8 @@ export type AppAction =
   | { type: 'SET_VIEW'; payload: CalendarView }
   | { type: 'SET_SELECTED_DATE'; payload: Date }
   | { type: 'TOGGLE_EVENT_MODAL'; payload?: Event }
-  | { type: 'TOGGLE_EVENT_DETAILS_MODAL'; payload?: Event } // LISÄTTY
-  | { type: 'OPEN_EVENT_EDIT_MODAL' } // LISÄTTY
+  | { type: 'TOGGLE_EVENT_DETAILS_MODAL'; payload?: Event } 
+  | { type: 'OPEN_EVENT_EDIT_MODAL' } 
   | { type: 'TOGGLE_PROJECT_MODAL'; payload?: string }
   | { type: 'TOGGLE_COURSE_MODAL'; payload?: { id?: string } }
   | { type: 'TOGGLE_SCHEDULE_TEMPLATE_MODAL'; payload?: ScheduleTemplate }
@@ -146,7 +146,7 @@ const initialState: AppState = {
   currentView: 'month',
   selectedDate: new Date(),
   showEventModal: false,
-  showEventDetailsModal: false, // LISÄTTY
+  showEventDetailsModal: false, 
   showProjectModal: false,
   showCourseModal: false,
   showScheduleTemplateModal: false,
@@ -226,11 +226,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addProject: useCallback(async (projectPayload: AddProjectPayload) => {
         const { template_group_name, ...projectDataFromForm } = projectPayload;
         
-        // Varmistetaan, että files on olemassa, vaikka se olisi tyhjä
         const projectDataWithFiles = { ...projectDataFromForm, files: projectDataFromForm.files || [] };
-        
         const { id, files, tasks, ...dbData } = projectDataWithFiles;
-        
         const dataToInsert = { ...dbData, columns: DEFAULT_KANBAN_COLUMNS, user_id: state.session?.user.id, files };
 
         const { data: newProjectData, error } = await supabase.from('projects').insert([dataToInsert]).select().single();
@@ -272,7 +269,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     updateProject: useCallback(async (project: Project) => {
         const { tasks, ...dbData } = project;
-        // Varmistetaan, että files-kenttä on mukana, vaikka se olisi tyhjä
         const dbDataWithFiles = { ...dbData, files: dbData.files || [] };
         
         const { data, error } = await supabase.from('projects').update(dbDataWithFiles).match({ id: project.id }).select().single();
@@ -294,7 +290,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
     
       const results = await Promise.all(updatePromises);
-    
       const firstError = results.find(res => res.error);
       if (firstError) {
         throw firstError.error;
@@ -473,10 +468,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, []),
   };
 
+  // KORJATTU EFFECT: Lisätty virheenkäsittely getSessionille
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      dispatch({ type: 'SET_SESSION', payload: session });
-    });
+    supabase.auth.getSession()
+        .then(({ data: { session } }) => {
+            dispatch({ type: 'SET_SESSION', payload: session });
+        })
+        .catch((err) => {
+            console.error("Failed to get session:", err);
+            // Jos istunnon haku epäonnistuu (esim. CORS), varmistetaan että käyttäjä on "uloskirjattu" tilassa
+            dispatch({ type: 'SET_SESSION', payload: null });
+        });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       dispatch({ type: 'SET_SESSION', payload: session });
     });
@@ -497,6 +500,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
       if (projectsRes.error || templatesRes.error || eventsRes.error || tasksRes.error) {
         console.error('Error fetching data:', projectsRes.error || templatesRes.error || eventsRes.error || tasksRes.error);
+        // Vaikka datahaku epäonnistuisi, alustetaan tyhjällä, jotta sovellus ei kaadu
         dispatch({ type: 'INITIALIZE_DATA', payload: { projects: [], scheduleTemplates: [], manualEvents: [], tasks: [] } });
         return;
       }
