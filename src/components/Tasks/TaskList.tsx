@@ -23,16 +23,15 @@ export default function TaskList() {
   const completedTasks = useMemo(() => allTasks.filter(task => task.completed), [allTasks]);
   const pendingTasks = useMemo(() => allTasks.filter(task => !task.completed), [allTasks]);
 
-  // KORJATTU: Avaa nyt Details-modaalin (katselu)
+  // KORJATTU: Tämä avaa nyt katseluikkunan (Details)
   const handleTaskClick = (taskWithProjectInfo: Task & { client_project_id: string, project_name: string, project_color: string }) => {
     const { client_project_id, project_name, project_color, ...originalTask } = taskWithProjectInfo;
     dispatch({ type: 'TOGGLE_TASK_DETAILS_MODAL', payload: originalTask as Task });
   };
 
-  // Suora muokkaus kynä-ikonista
+  // LISÄTTY: Tämä avaa suoraan muokkausikkunan (Edit)
   const handleEditClick = (e: React.MouseEvent, task: Task) => {
     e.stopPropagation();
-    // Poistetaan ylimääräiset kentät jos niitä on tarttunut mukaan
     const { client_project_id, project_name, project_color, ...cleanTask } = task as any;
     dispatch({ type: 'TOGGLE_TASK_MODAL', payload: cleanTask });
   };
@@ -105,6 +104,7 @@ export default function TaskList() {
                           <h3 className="font-medium text-gray-900">{task.title}</h3>
                           {getPriorityIcon(task.priority)}
                         </div>
+                        {/* Kynä-ikoni suoraa muokkausta varten */}
                         <button 
                             onClick={(e) => handleEditClick(e, task)}
                             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
