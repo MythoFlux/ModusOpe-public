@@ -56,6 +56,7 @@ const TaskCard = ({ task, dragHandleListeners }: { task: Task, dragHandleListene
     }
   };
 
+  // KORJATTU: Avaa katselumodaali (details) suoran muokkauksen sijaan
   const handleCardClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     dispatch({ type: 'TOGGLE_TASK_DETAILS_MODAL', payload: task });
@@ -267,7 +268,6 @@ export default function KanbanView() {
   const otherProjects = useMemo(() => projects.filter(p => p.type !== 'course' && p.id !== GENERAL_TASKS_PROJECT_ID), [projects]);
   const generalProject = useMemo(() => projects.find(p => p.id === GENERAL_TASKS_PROJECT_ID), [projects]);
 
-  // UUSI: Lista kaikista järjesteltävistä projekteista
   const reorderableProjects = useMemo(() => 
     projects.filter(p => p.id !== GENERAL_TASKS_PROJECT_ID), 
     [projects]
@@ -335,7 +335,6 @@ export default function KanbanView() {
     const overId = String(over.id);
     if (activeId === overId) return;
 
-    // KORJATTU JA LAAJENNETTU LOGIIKKA
     const activeIsProject = reorderableProjects.some(p => p.id === activeId);
     const overIsProject = reorderableProjects.some(p => p.id === overId);
 
@@ -432,7 +431,6 @@ export default function KanbanView() {
                   </ul>
                 </div>
               )}
-              {/* LISÄTTY SortableContext-KÄÄRE */}
               <SortableContext items={reorderableProjects.map(p => p.id)} strategy={verticalListSortingStrategy}>
                 <KanbanSidebarProjectList
                     title="Kurssit"
