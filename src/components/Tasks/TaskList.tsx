@@ -23,13 +23,13 @@ export default function TaskList() {
   const completedTasks = useMemo(() => allTasks.filter(task => task.completed), [allTasks]);
   const pendingTasks = useMemo(() => allTasks.filter(task => !task.completed), [allTasks]);
 
-  // MUUTETTU: Avaa nyt Details-modaalin
+  // KORJATTU: Avaa nyt Details-modaalin (katselu)
   const handleTaskClick = (taskWithProjectInfo: Task & { client_project_id: string, project_name: string, project_color: string }) => {
     const { client_project_id, project_name, project_color, ...originalTask } = taskWithProjectInfo;
     dispatch({ type: 'TOGGLE_TASK_DETAILS_MODAL', payload: originalTask as Task });
   };
 
-  // LISÄTTY: Suora muokkaus
+  // Suora muokkaus kynä-ikonista
   const handleEditClick = (e: React.MouseEvent, task: Task) => {
     e.stopPropagation();
     // Poistetaan ylimääräiset kentät jos niitä on tarttunut mukaan
