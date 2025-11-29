@@ -20,11 +20,9 @@ export function uiReducerLogic(state: AppState, action: AppAction): AppState {
     case 'TOGGLE_EVENT_MODAL':
       return { ...state, showEventModal: !state.showEventModal, selectedEvent: action.payload };
     
-    // LISÄTTY
     case 'TOGGLE_EVENT_DETAILS_MODAL':
       return { ...state, showEventDetailsModal: !state.showEventDetailsModal, selectedEvent: action.payload };
     
-    // LISÄTTY
     case 'OPEN_EVENT_EDIT_MODAL':
       return {
         ...state,
@@ -42,27 +40,40 @@ export function uiReducerLogic(state: AppState, action: AppAction): AppState {
     case 'TOGGLE_SCHEDULE_TEMPLATE_MODAL':
       return { ...state, showScheduleTemplateModal: !state.showScheduleTemplateModal, selectedScheduleTemplate: action.payload };
     
-    // Tässä tiedostossa ei ole 'TOGGLE_RECURRING_CLASS_MODAL', mutta lisään sen silti CLOSE_MODALS-osioon varmuuden vuoksi
-    // (Se oli uiReducer.ts-tiedostossasi, mutta ei AppContext.tsx:ssä, joten oletan sen olevan virhe ja poistan sen täältäkin)
-    
     case 'TOGGLE_TASK_MODAL':
       return { ...state, showTaskModal: !state.showTaskModal, selectedTask: action.payload };
+
+    // UUSI: Tehtävän katselumodaalin hallinta
+    case 'TOGGLE_TASK_DETAILS_MODAL':
+      return { 
+        ...state, 
+        showTaskDetailsModal: !state.showTaskDetailsModal, 
+        selectedTask: action.payload 
+      };
+
+    // UUSI: Siirtyminen katselutilasta muokkaustilaan
+    case 'OPEN_TASK_EDIT_MODAL':
+      return {
+        ...state,
+        showTaskDetailsModal: false,
+        showTaskModal: true
+        // selectedTask säilyy tilassa
+      };
       
     case 'CLOSE_MODALS':
       return {
         ...state,
         showEventModal: false,
-        showEventDetailsModal: false, // LISÄTTY
+        showEventDetailsModal: false,
         showProjectModal: false,
         showCourseModal: false,
         showScheduleTemplateModal: false,
-        // showRecurringClassModal: false, // Poistettu, koska puuttuu actioneista
         showTaskModal: false,
+        showTaskDetailsModal: false, // UUSI
         selectedEvent: undefined,
         selectedProjectId: undefined,
         courseModalInfo: undefined,
         selectedScheduleTemplate: undefined,
-        // selectedRecurringClass: undefined, // Poistettu
         selectedTask: undefined,
       };
 
