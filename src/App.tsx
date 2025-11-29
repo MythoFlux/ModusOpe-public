@@ -26,28 +26,17 @@ function AppContent() {
 
   const [isFabMenuOpen, setFabMenuOpen] = useState(false);
 
-  // KÄYTETTÄVYYS: Sulje modaalit Escape-näppäimellä
+  // LISÄTTY: Sulje modaalit Escape-näppäimellä
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // Tarkistetaan onko jokin modaali auki ennen dispatchausta turhien renderöintien välttämiseksi
-        if (
-          state.showEventModal || 
-          state.showEventDetailsModal || 
-          state.showTaskModal || 
-          state.showTaskDetailsModal || 
-          state.showProjectModal || 
-          state.showCourseModal || 
-          state.showScheduleTemplateModal
-        ) {
-          dispatch({ type: 'CLOSE_MODALS' });
-        }
+        dispatch({ type: 'CLOSE_MODALS' });
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state, dispatch]);
+  }, [dispatch]);
 
   if (!session) {
     return <Auth />;
