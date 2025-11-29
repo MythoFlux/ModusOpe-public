@@ -20,7 +20,8 @@ export default function Dashboard() {
   } = useDashboardStats({ events, projects });
 
   const handleTaskClick = (task: Task) => {
-    dispatch({ type: 'TOGGLE_TASK_MODAL', payload: task });
+    // KORJATTU: Avataan nyt katselumodaali (details) suoran muokkauksen sijaan
+    dispatch({ type: 'TOGGLE_TASK_DETAILS_MODAL', payload: task });
   };
 
   return (
