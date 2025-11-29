@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
 import Sidebar from './components/Layout/Sidebar';
 import Dashboard from './components/Dashboard/Dashboard';
@@ -9,7 +9,7 @@ import CourseList from './components/Courses/CourseList';
 import TaskList from './components/Tasks/TaskList';
 import EventModal from './components/Modals/EventModal';
 import EventDetailsModal from './components/Modals/EventDetailsModal';
-import TaskDetailsModal from './components/Modals/TaskDetailsModal'; // LISÄTTY
+import TaskDetailsModal from './components/Modals/TaskDetailsModal';
 import ProjectModal from './components/Modals/ProjectModal';
 import CourseModal from './components/Modals/CourseModal';
 import ScheduleTemplateModal from './components/Modals/ScheduleTemplateModal';
@@ -25,6 +25,29 @@ function AppContent() {
   const { isMobileMenuOpen, session } = state;
 
   const [isFabMenuOpen, setFabMenuOpen] = useState(false);
+
+  // KÄYTETTÄVYYS: Sulje modaalit Escape-näppäimellä
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Tarkistetaan onko jokin modaali auki ennen dispatchausta turhien renderöintien välttämiseksi
+        if (
+          state.showEventModal || 
+          state.showEventDetailsModal || 
+          state.showTaskModal || 
+          state.showTaskDetailsModal || 
+          state.showProjectModal || 
+          state.showCourseModal || 
+          state.showScheduleTemplateModal
+        ) {
+          dispatch({ type: 'CLOSE_MODALS' });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [state, dispatch]);
 
   if (!session) {
     return <Auth />;
@@ -109,7 +132,7 @@ function AppContent() {
       </div>
 
       <EventDetailsModal />
-      <TaskDetailsModal /> {/* LISÄTTY */}
+      <TaskDetailsModal />
       <EventModal />
       <ProjectModal />
       <CourseModal />
