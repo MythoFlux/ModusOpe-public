@@ -10,7 +10,6 @@ export default function Dashboard() {
   const { state, dispatch } = useApp();
   const { events, projects } = state;
 
-  // Käytetään uutta hookia datan hakemiseen ja laskentaan
   const { 
     todayEvents, 
     activeProjects, 
@@ -20,7 +19,7 @@ export default function Dashboard() {
   } = useDashboardStats({ events, projects });
 
   const handleTaskClick = (task: Task) => {
-    // KORJATTU: Avataan nyt katselumodaali (details) suoran muokkauksen sijaan
+    // KORJATTU: Avataan katselumodaali (details) suoran muokkauksen sijaan
     dispatch({ type: 'TOGGLE_TASK_DETAILS_MODAL', payload: task });
   };
 
