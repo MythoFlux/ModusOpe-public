@@ -1,10 +1,10 @@
 // src/components/Tasks/TaskList.tsx
 import React, { useMemo } from 'react';
 import { useApp, useAppServices } from '../../contexts/AppContext'; 
-import { CheckSquare, Circle, Calendar, AlertCircle, Plus } from 'lucide-react';
+import { CheckSquare, Circle, Calendar, AlertCircle, Plus, Pencil } from 'lucide-react';
 import { formatDate } from '../../utils/dateUtils';
 import { Task } from '../../types';
-import { KANBAN_COLUMN_IDS } from '../../constants/kanbanConstants'; // MUUTOS: Tuotu vakiot
+import { KANBAN_COLUMN_IDS } from '../../constants/kanbanConstants';
 
 export default function TaskList() {
   const { state, dispatch } = useApp();
@@ -23,9 +23,18 @@ export default function TaskList() {
   const completedTasks = useMemo(() => allTasks.filter(task => task.completed), [allTasks]);
   const pendingTasks = useMemo(() => allTasks.filter(task => !task.completed), [allTasks]);
 
+  // MUUTETTU: Avaa nyt Details-modaalin
   const handleTaskClick = (taskWithProjectInfo: Task & { client_project_id: string, project_name: string, project_color: string }) => {
     const { client_project_id, project_name, project_color, ...originalTask } = taskWithProjectInfo;
-    dispatch({ type: 'TOGGLE_TASK_MODAL', payload: originalTask as Task });
+    dispatch({ type: 'TOGGLE_TASK_DETAILS_MODAL', payload: originalTask as Task });
+  };
+
+  // LISÄTTY: Suora muokkaus
+  const handleEditClick = (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation();
+    // Poistetaan ylimääräiset kentät jos niitä on tarttunut mukaan
+    const { client_project_id, project_name, project_color, ...cleanTask } = task as any;
+    dispatch({ type: 'TOGGLE_TASK_MODAL', payload: cleanTask });
   };
 
   const toggleTask = (e: React.MouseEvent, clientProjectId: string, taskId: string, completed: boolean) => {
@@ -34,11 +43,9 @@ export default function TaskList() {
     const task = project?.tasks.find(t => t.id === taskId);
     
     if (task) {
-      // MUUTOS: Käytetään vakioita
       const newColumnId = completed ? KANBAN_COLUMN_IDS.DONE : KANBAN_COLUMN_IDS.TODO;
       services.updateTask({ ...task, completed, column_id: newColumnId }).catch((err: any) => {
         console.error("Failed to toggle task:", err);
-        // Tässä voisi näyttää virheilmoituksen käyttäjälle
       });
     }
   };
@@ -87,15 +94,24 @@ export default function TaskList() {
             </div>
             <div className="divide-y divide-gray-200">
               {pendingTasks.map((task) => (
-                <div key={task.id} className="p-6 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => handleTaskClick(task)}>
+                <div key={task.id} className="p-6 hover:bg-gray-50 transition-colors cursor-pointer group" onClick={() => handleTaskClick(task)}>
                   <div className="flex items-start space-x-4">
                     <button onClick={(e) => toggleTask(e, task.client_project_id, task.id, true)} className="mt-1 text-gray-400 hover:text-blue-600 transition-colors z-10 relative">
                       <Circle className="w-5 h-5" />
                     </button>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="font-medium text-gray-900">{task.title}</h3>
-                        {getPriorityIcon(task.priority)}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-3">
+                          <h3 className="font-medium text-gray-900">{task.title}</h3>
+                          {getPriorityIcon(task.priority)}
+                        </div>
+                        <button 
+                            onClick={(e) => handleEditClick(e, task)}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                            title="Muokkaa tehtävää"
+                        >
+                            <Pencil className="w-4 h-4" />
+                        </button>
                       </div>
                       {task.description && (<p className="text-sm text-gray-600 mb-2">{task.description}</p>)}
                       {task.subtasks && task.subtasks.length > 0 && (
