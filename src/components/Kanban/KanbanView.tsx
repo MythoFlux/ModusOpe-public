@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useApp, useAppServices } from '../../contexts/AppContext';
 import { Project, Task, KanbanColumn } from '../../types';
-import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical, Eye, EyeOff, CheckSquare, Circle } from 'lucide-react';
+import { BookOpen, ClipboardCheck, Info, AlertCircle, Calendar, Plus, MoreHorizontal, Edit, Trash2, Lock, Inbox, GripVertical, Eye, EyeOff, CheckSquare, Circle, Pencil } from 'lucide-react';
 import { formatDate } from '../../utils/dateUtils';
 import { GENERAL_TASKS_PROJECT_ID } from '../../contexts/AppContext';
 import { v4 as uuidv4 } from 'uuid';
@@ -58,16 +58,30 @@ const TaskCard = ({ task, dragHandleListeners }: { task: Task, dragHandleListene
 
   const handleCardClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    dispatch({ type: 'TOGGLE_TASK_DETAILS_MODAL', payload: task });
+  };
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     dispatch({ type: 'TOGGLE_TASK_MODAL', payload: task });
   };
 
   return (
     <div
       onClick={handleCardClick}
-      className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer"
+      className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer group relative hover:shadow-md transition-shadow"
     >
       <div className="flex justify-between items-start mb-2">
-        <h4 className="font-semibold text-gray-800 text-sm flex-1">{task.title}</h4>
+        <h4 className="font-semibold text-gray-800 text-sm flex-1 mr-6">{task.title}</h4>
+        
+        <button 
+            onClick={handleEditClick}
+            className="absolute top-2 right-8 p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10"
+            title="Muokkaa"
+        >
+            <Pencil className="w-3.5 h-3.5" />
+        </button>
+
         <div className="flex items-center space-x-2">
             {getPriorityIcon(task.priority)}
             <div {...dragHandleListeners} className="cursor-grab active:cursor-grabbing p-1">
